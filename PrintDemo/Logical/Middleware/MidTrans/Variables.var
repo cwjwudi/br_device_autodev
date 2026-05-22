@@ -1,0 +1,10 @@
+VAR
+	udiIdx : UDINT;
+	strHexStrBuffer : STRING[ST_DATA_LEN_DOUBLE];
+	stOldHmiInput : HMI_Input_typ;
+	rSinValue : REAL;
+	udiSinPhase : UDINT;
+	bSimTemp : BOOL;
+	fbCfgGetIPAddr : CfgGetIPAddr;
+	strTemp : STRING[32];
+END_VAR

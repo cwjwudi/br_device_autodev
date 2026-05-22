@@ -1,0 +1,153 @@
+<svg width="306" height="738" viewBox="0 0 306 738"
+     xmlns="http://www.w3.org/2000/svg">
+
+  <defs>
+    <!-- 灰色渐变，用于圆柱和圆形 -->
+    <linearGradient id="barGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#b8b8b8"/>
+      <stop offset="35%" stop-color="#6f6f6f"/>
+      <stop offset="70%" stop-color="#eeeeee"/>
+      <stop offset="100%" stop-color="#8a8a8a"/>
+    </linearGradient>
+
+    <radialGradient id="circleGrad" cx="45%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#d0d0d0"/>
+      <stop offset="100%" stop-color="#9a9a9a"/>
+    </radialGradient>
+
+    <linearGradient id="plateGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#111"/>
+      <stop offset="100%" stop-color="#000"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 顶部横线 -->
+  <path d="M0 41 L91 41 L104 55"
+        fill="none"
+        stroke="#8d8d8d"
+        stroke-width="5"
+        stroke-linejoin="round"/>
+
+  <path d="M306 41 L159 41 L151 49"
+        fill="none"
+        stroke="#8d8d8d"
+        stroke-width="5"
+        stroke-linejoin="round"/>
+
+  <!-- 左侧六边形 E -->
+  <g id="emergency" transform="translate(0 0)" fill="#9d9d9d" >
+    <polygon points="76,75 92,49 123,49 140,75 123,103 92,103"/>
+  </g>
+  
+  <text x="107" y="89"
+    text-anchor="middle"
+    font-family="Arial, Helvetica, sans-serif"
+    font-size="40"
+    fill="#e8e8e8"
+    font-weight="bold">E</text>
+  <!-- 主框架外轮廓 -->
+  <path d="M107 103
+           L107 416"
+        fill="none"
+        stroke="#8d8d8d"
+        stroke-width="5"
+        stroke-linejoin="round"
+        stroke-linecap="round"/>
+  
+  <path d="M229 416
+           L229 354
+           L150 100
+           L150 50"
+        fill="none"
+        stroke="#8d8d8d"
+        stroke-width="5"
+        stroke-linejoin="round"
+        stroke-linecap="round"/>
+        
+  <g id="line_1">
+   <path d="M107 416
+           L135 443
+           L202 443
+           L229 416"
+        fill="none"
+        stroke="#8d8d8d"
+        stroke-width="5"
+        stroke-linejoin="round"
+        stroke-linecap="round"/>   
+  </g>
+  
+  <g id="line_2">
+   <path d="M107 416
+           L145 490
+           L190 490
+           L229 416"
+        fill="none"
+        stroke="#8d8d8d"
+        stroke-width="5"
+        stroke-linejoin="round"
+        stroke-linecap="round"/>   
+  </g>
+
+  <!-- 右侧短矩形 -->
+  <rect x="243" y="371" width="36" height="29" rx="3"
+        fill="#a9a9a9"/>
+
+  <!-- 顶部风扇/花形 -->
+      <g transform="translate(207 76)">
+            <g id="fan1" fill="#9d9d9d">
+            <circle cx="0" cy="0" r="8"/>
+            <ellipse cx="0" cy="-19" rx="10" ry="13"/>
+            <ellipse cx="0" cy="19" rx="10" ry="13"/>
+            <ellipse cx="-19" cy="0" rx="10" ry="13"/>
+            <ellipse cx="19" cy="0" rx="10" ry="13"/>
+            </g>
+      </g>
+
+  <!-- 内部左倾斜长条 -->
+  <g transform="translate(168 239) rotate(-17.5)">
+    <rect x="-15" y="-118" width="31" height="239"
+          fill="url(#barGrad)"/>
+  </g>
+
+  <!-- 内部右倾斜长条 -->
+  <g transform="translate(212 225) rotate(-17.5)">
+    <rect x="-15" y="-118" width="31" height="239"
+          fill="url(#barGrad)"/>
+  </g>
+
+  <!-- 底部框内圆 -->
+  <g id="roller_up" transform="translate(168 425)" fill="url(#circleGrad)" stroke="#777" stroke-width="2" >
+    <circle id="roller_up_1" cx="0" cy="0" r="30"/>
+  </g>
+  <!-- 中间灰色斜片 -->
+  <polygon points="78,525 140,516 101,535"
+           fill="#8f8f8f"/>
+
+  <!-- 下方托盘外轮廓 -->
+  <path d="M87 573 L130 616 L236 616 L278 574"
+        fill="none"
+        stroke="#777"
+        stroke-width="4"
+        stroke-linejoin="round"
+        stroke-linecap="round"/>
+
+  <!-- 黑色槽 -->
+   <g id="color_box" fill="#d2d2d2"> 
+      <polygon points="100,589 126,613 237,613 263,589"/>
+   </g> 
+  <!-- 下方大圆 -->
+  <g id="roller_down" transform="translate(173 556)" fill="url(#circleGrad)"> 
+    <circle cx="0" cy="0" r="54"/>
+  </g> 
+  <!-- 下方小圆 -->
+  <g id="roller_down_2" transform="translate(240 575)" fill="#d2d2d2" stroke="#707070" stroke-width="2"> 
+     <circle cx="0" cy="0" r="17"/>
+  </g> 
+  <!-- 底部数字 -->
+  <text x="171" y="704"
+        text-anchor="middle"
+        font-family="Arial, Helvetica, sans-serif"
+        font-size="90"
+        fill="#000">1</text>
+
+</svg>

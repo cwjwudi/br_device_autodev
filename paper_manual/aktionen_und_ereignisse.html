@@ -1,0 +1,380 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+    <head>
+        <!-- Generator:SMC BookVersion="1.28" DocVersion="1.22" -->
+        <title>Actions and events </title>
+        <meta content="IE=EDGE" http-equiv="x-ua-compatible" />
+        <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />
+        <script language="javascript" src="../../../../../../../help/js/jquery.js" type="text/javascript"></script>
+        <script language="javascript" src="../../../../../../../help/js/codebox.js" type="text/javascript"></script>
+        <link href="../../../../../../../help/help.css" rel="stylesheet" type="text/css" />
+        <link href="../../../../../../../help/as_config/editor.css" rel="stylesheet" type="text/css" />
+        <script type="text/javascript">
+				function toggleDropDownBlock(elem) {
+					var cls = elem.parentNode.className;
+					var closedCls = "closed";
+					var closedIdx = cls.indexOf(closedCls);
+					if (closedIdx > 0) {
+						elem.parentNode.className = cls.substring(0, closedIdx) + cls.substring(closedIdx + closedCls.length);
+					} else {
+						elem.parentNode.className += " " + closedCls;
+					}
+				}
+	</script>
+    </head>
+    <body>
+        <div class="ManualTitle">mapp View V5.24</div>
+        <h1 class="headline-content">Actions and events</h1>
+        <div class="blockRule block-description"><a name="N10B778_N10B787"></a><p class="par0">The following section describes the possible actions and events of the widget. </p>
+        </div>
+        <div class="dropdown-ct"><a name="N10B778_N10B799"></a>
+            <h2 class="dropdown-title" onclick="toggleDropDownBlock(this)"><span class="dropdown-title-text">Actions</span>
+            </h2>
+            <div class="dropdown-body"><a name="N10B778_N10B79F"></a>
+                <table class="parameter_tab font-std">
+                    <tbody>
+                        <tr class="table-row">
+                            <th class="content-level0 odd"><p>Name</p>
+                            </th>
+                            <th class="content-level0 odd"><p>Description</p>
+                            </th>
+                            <th class="content-level0 odd"><p>Arguments</p>
+                            </th>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 odd"><p>ZoomIn</p>
+                            </td>
+                            <td class="content-level0 odd"><p>Displays the current drawing area zoomed in by 20%.</p>
+                            </td>
+                            <td class="content-level0 odd"> </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 even"><p>ZoomOut</p>
+                            </td>
+                            <td class="content-level0 even"><p>Displays the current drawing area zoomed out by 20%.</p>
+                            </td>
+                            <td class="content-level0 even"> </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 odd"><p>ZoomReset</p>
+                            </td>
+                            <td class="content-level0 odd"><p>Rests the zoom for the characters to the standard view.</p>
+                            </td>
+                            <td class="content-level0 odd"> </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 even"><p>SetVisible</p>
+                            </td>
+                            <td class="content-level0 even"><p>Controls the visibility of the widget.</p>
+                            </td>
+                            <td class="content-level0 even">
+                                <ul class="container-enum enum-standard standard"><li class="enum-element" id="N10B778_N10B82F"><p>value: <a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeBoolean">Boolean</a></p><p>Visible if the value is <span class="codeinline">true</span>. Otherwise, invisible.</p></li>
+                                </ul>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 odd"><p>SetEnable</p>
+                            </td>
+                            <td class="content-level0 odd"><p> Controls the usability of the widget.</p>
+                            </td>
+                            <td class="content-level0 odd">
+                                <ul class="container-enum enum-standard standard"><li class="enum-element" id="N10B778_N10B869"><p>value: <a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeBoolean">Boolean</a></p><p>Enabled if the value is <span class="codeinline">true</span>. Otherwise, disabled.</p></li>
+                                </ul>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 even"><p>SetStyle</p>
+                            </td>
+                            <td class="content-level0 even"><p>Applies a predefined style to the widget.</p>
+                            </td>
+                            <td class="content-level0 even">
+                                <ul class="container-enum enum-standard standard"><li class="enum-element" id="N10B778_N10B8A3"><p>value: <a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeStyleReference">StyleReference</a></p></li>
+                                </ul>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 odd"><p>ShowTooltip</p>
+                            </td>
+                            <td class="content-level0 odd"><p>This action can be used to enable tooltip mode for the widget. When enabled, a tooltip indicator is displayed inside the widget. For this, a text must be configured on property "tooltip". This text is displayed when the indicator is selected. Any other operation of a widget exits tooltip mode.</p>
+                            </td>
+                            <td class="content-level0 odd"> </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 even"><p>Focus</p>
+                            </td>
+                            <td class="content-level0 even"><p>Sets the focus to the widget when keyboard operation is enabled.</p>
+                            </td>
+                            <td class="content-level0 even"> </td>
+                        </tr>
+                    </tbody>
+                    <caption align="bottom"><p class="table_desc"><b>Table: </b>Actions</p>
+                    </caption>
+                </table>
+            </div>
+        </div>
+        <div class="dropdown-ct"><a name="N10B778_N10B904"></a>
+            <h2 class="dropdown-title" onclick="toggleDropDownBlock(this)"><span class="dropdown-title-text">Events</span>
+            </h2>
+            <div class="dropdown-body"><a name="N10B778_N10B90A"></a>
+                <table class="parameter_tab font-std">
+                    <tbody>
+                        <tr class="table-row">
+                            <th class="content-level0 odd"><p>Name</p>
+                            </th>
+                            <th class="content-level0 odd"><p>Description</p>
+                            </th>
+                            <th class="content-level0 odd"><p>Arguments</p>
+                            </th>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 odd"><p>TransformDone</p>
+                            </td>
+                            <td class="content-level0 odd"><p>Triggered when the current transformation is completed.</p>
+                            </td>
+                            <td class="content-level0 odd">
+                                <ul class="container-enum enum-standard standard"><li class="enum-element" id="N10B778_N10B940"><p>select: <a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeString">String</a></p><p>"select" returns parameter "select" of the "transform" value that was the trigger for this event.</p></li>
+                                </ul>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 even"><p>Click</p>
+                            </td>
+                            <td class="content-level0 even"><p>Triggered when the widget is clicked.</p>
+                            </td>
+                            <td class="content-level0 even">
+                                <ul class="container-enum enum-standard standard"><li class="enum-element" id="N10B778_N10B977"><p>x: <a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeInteger">Integer</a></p><p>Returns the x-coordinate of the click.</p></li><li class="enum-element" id="N10B778_N10B991"><p>y: <a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeInteger">Integer</a></p><p>Returns the y-coordinate of the click.</p></li><li class="enum-element" id="N10B778_N10B9AB"><p>elementId: <a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeString">String</a></p><p>Returns the ID of an SVG element when clicked.</p></li><li class="enum-element" id="N10B778_N10B9C5"><p>origin: <a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeString">String</a></p><p>"origin" contains the ID of the widget that triggers the click event.</p></li>
+                                </ul>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 odd"><p>DisabledClick</p>
+                            </td>
+                            <td class="content-level0 odd"><p>Triggered when the disabled widget is clicked.</p>
+                            </td>
+                            <td class="content-level0 odd">
+                                <ul class="container-enum enum-standard standard"><li class="enum-element" id="1520211031755_N10BA00"><p>origin: <a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeString">String</a></p><p>"origin" contains the ID of the widget that triggers the click event.</p></li>
+                                </ul>
+                                <ul class="container-enum enum-standard standard"><li class="enum-element" id="1520211031755_N10BA1E"><p> hasPermission: <a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeBoolean">Boolean</a></p><p> hasPermission defines whether the current user has the required rights to access it.</p></li><li class="enum-element" id="1520211031755_N10BA39"><p>horizontalPos: <a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeString">String</a></p><p>horizontalPos contains the horizontal position from event DisabledClick in pixels (e.g. 10px starting from the <a class="link link-url" href="https://developer.mozilla.org/en-US/docs/Web/CSS/Viewport_concepts" target="NEW_WIN">viewport</a>).</p></li><li class="enum-element" id="1520211031755_N10BA6B"><p>verticalPos: <a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeString">String</a></p><p>verticalPos contains the vertical position from event DisabledClick in pixels (e.g. 10px starting from the <a class="link link-url" href="https://developer.mozilla.org/en-US/docs/Web/CSS/Viewport_concepts" target="NEW_WIN">viewport</a>). </p></li>
+                                </ul>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 even"><p>EnableChanged</p>
+                            </td>
+                            <td class="content-level0 even"><p>Triggered when the usability of the widget is modified.   This can be modified in different ways: <br />1) With property <span class="emphasis">enable</span> (binding or via widget action <span class="italics">SetEnable</span>)<br />2) With property <span class="emphasis">permissionOperate</span> <br />3) With the usability properties (enable, permissionOperate, OPC UA variable) of the surrounding <span class="emphasis">container widget </span> <br />4) With a bound <span class="emphasis">OPC UA variable</span> whose write permissions are changed.</p>
+                            </td>
+                            <td class="content-level0 even">
+                                <ul class="container-enum enum-standard standard"><li class="enum-element" id="1549212484205_N10BADD"><p>value: <a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeBoolean">Boolean</a></p><p> "value" defines the usability of the widget. If <span class="codeinline">true</span> is returned, the widget can be operated; if <span class="codeinline">false</span>, it cannot be operated.</p></li>
+                                </ul>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 odd"><p>VisibleChanged</p>
+                            </td>
+                            <td class="content-level0 odd"><p>Triggered when the visibility of the widget is modified. This can be modified in different ways: <br />1) With property <span class="emphasis">visible</span> (binding or via widget action <span class="italics">SetVisible</span>)<br />2) With property <span class="emphasis">permissionView</span> <br />3) With the visibility properties (visible, permissionView) of the surrounding <span class="emphasis">container widget </span> </p>
+                            </td>
+                            <td class="content-level0 odd">
+                                <ul class="container-enum enum-standard standard"><li class="enum-element" id="1549212484240_N10BB39"><p>value: <a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeBoolean">Boolean</a></p><p> "value" defines the visibility of the widget. If <span class="codeinline">true</span> is returned, the widget is displayed; if <span class="codeinline">false</span>, it is not displayed.</p></li>
+                                </ul>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 even"><p>OnDragEnter</p>
+                            </td>
+                            <td class="content-level0 even"><p>Triggered when a dragged widget is moved over the target widget.</p>
+                            </td>
+                            <td class="content-level0 even">
+                                <ul class="container-enum enum-standard standard"><li class="enum-element" id="1549212486985_N10BB83"><p>widgetId: <a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeString">String</a></p><p>widgetId contains the ID of the widget that performed the drag operation.</p></li>
+                                </ul>
+                                <ul class="container-enum enum-standard standard"><li class="enum-element" id="1549212486985_N10BBA1"><p> contentId: <a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeString">String</a></p><p>contentId contains the ID of the piece of content from whose widget the drag operation was performed.</p></li>
+                                </ul>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 odd"><p>OnDragLeave</p>
+                            </td>
+                            <td class="content-level0 odd"><p>Triggered when a dragged widget is dragged away from the target widget.</p>
+                            </td>
+                            <td class="content-level0 odd">
+                                <ul class="container-enum enum-standard standard"><li class="enum-element" id="1549212486985_N10BBE5"><p>widgetId: <a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeString">String</a></p><p>widgetId contains the ID of the widget that performed the drag operation.</p></li>
+                                </ul>
+                                <ul class="container-enum enum-standard standard"><li class="enum-element" id="1549212486985_N10BC03"><p> contentId: <a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeString">String</a></p><p>contentId contains the ID of the piece of content from whose widget the drag operation was performed.</p></li>
+                                </ul>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 even"><p>OnDrop</p>
+                            </td>
+                            <td class="content-level0 even"><p>Triggered when a dragged widget is released on the target widget. The definition of drag-and-drop and how these events can be used is explained <a class="link link-xref" href="../../../../../visualization/mappview/widgets/zusatzliche_information/definition_von_drag_und_drop.html">here</a>.</p>
+                            </td>
+                            <td class="content-level0 even">
+                                <ul class="container-enum enum-standard standard"><li class="enum-element" id="1549212486985_N10BC56"><p>widgetId: <a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeString">String</a></p><p>widgetId contains the ID of the widget that performed the drag operation.</p></li>
+                                </ul>
+                                <ul class="container-enum enum-standard standard"><li class="enum-element" id="1549212486985_N10BC74"><p> contentId: <a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeString">String</a></p><p>contentId contains the ID of the piece of content from whose widget the drag operation was performed.</p></li>
+                                </ul>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 odd"><p>FocusIn</p>
+                            </td>
+                            <td class="content-level0 odd"><p>Triggered when a widget gets the focus. </p>
+                            </td>
+                            <td class="content-level0 odd"> </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 even"><p>FocusOut</p>
+                            </td>
+                            <td class="content-level0 even"><p>Triggered when a widget loses the focus.</p>
+                            </td>
+                            <td class="content-level0 even"> </td>
+                        </tr>
+                    </tbody>
+                    <caption align="bottom"><p class="table_desc"><b>Table: </b>Events</p>
+                    </caption>
+                </table>
+                <script type="text/javascript">			
+var ascArrow = "&#9650";
+var descArrow = "&#9660";
+			
+$(document).ready(function(){
+	var allTables = $("table");
+	
+	var headerLink = $(allTables[0]).find("th").first().find('a');
+		var start=0;
+		if(headerLink.length == 1){
+		    start=1;
+		}
+	
+	for (var i = start; i < allTables.length; i+=1) {
+		var firstTableColumnHeader = $(allTables[i]).find("th").first();
+		
+		if(firstTableColumnHeader[0]){
+			var headerPargraph = firstTableColumnHeader[0].getElementsByTagName("p")[0];
+			headerPargraph.innerHTML = headerPargraph.innerHTML +" "+ascArrow+" "+descArrow;
+			firstTableColumnHeader.attr("clickCount", 0);
+			firstTableColumnHeader.attr("onclick", "sortTable()");
+		}
+
+		var allRows = $(allTables[i]).find("tr");
+		
+		for (var j = 0; j < allRows.length; j+=1) {
+			$(allRows[j]).attr("originalIndex", j);
+		}	
+	}		
+});
+
+function sortTable() {
+	var clickCount = parseInt(arguments.callee.caller.arguments[0].currentTarget.getAttribute("clickCount"))
+	clickCount += 1;
+	arguments.callee.caller.arguments[0].currentTarget.setAttribute("clickCount", clickCount);
+
+	if(clickCount % 3 === 0){
+		restoreOriginalSort(arguments.callee.caller.arguments[0].currentTarget);
+		arguments.callee.caller.arguments[0].currentTarget.setAttribute("clickCount", 0);
+	} else{
+		sortAscOrDesc(arguments.callee.caller.arguments[0].currentTarget);
+	}
+	
+}
+
+function restoreOriginalSort(target) {
+	var rows, keepSwitching, i, currentRow, nextRow, switchNeeded, 
+		switchCounter = 0,
+		currentTarget = target,
+		table = $(currentTarget).closest("table")[0],
+		headerRow = table.getElementsByTagName("TR")[0].getElementsByTagName("TH")[0],
+		rowParagraph = headerRow.getElementsByTagName("p")[0],
+		paragraphInnerHTML = rowParagraph.innerHTML.split(" ")[0];
+		
+		rowParagraph.innerHTML = paragraphInnerHTML +" "+ascArrow+" "+descArrow;
+
+		keepSwitching = true; 
+		
+	while (keepSwitching) {
+		keepSwitching = false;
+		rows = table.getElementsByTagName("TR");
+		// Loop over table rows(except header)
+		for (i = 0; i < (rows.length-1); i++) {
+		  switchNeeded = false;
+		  currentRow = rows[i];
+		  nextRow = rows[i + 1];
+			if (parseInt(currentRow.getAttribute("originalIndex")) > parseInt(nextRow.getAttribute("originalIndex"))) {
+			  // switch is needed based on desired direction
+			  switchNeeded = true;
+			  break;
+			}
+		}
+		
+		if (switchNeeded) {
+			rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+			keepSwitching = true;
+			switchCounter ++; 
+		} else {
+			keepSwitching = false;
+		}
+	}
+	
+	rowParagraph.innerHTML = paragraphInnerHTML +" "+ascArrow+" "+descArrow;
+}
+
+function sortAscOrDesc(target){
+	var rows, keepSwitching, i, currentRow, nextRow, switchNeeded, direction, 
+		switchCounter = 0,
+		currentTarget = target,
+		table = $(currentTarget).closest("table")[0],
+		headerRow = table.getElementsByTagName("TR")[0].getElementsByTagName("TH")[0],
+		rowParagraph = headerRow.getElementsByTagName("p")[0],
+		paragraphInnerHTML = rowParagraph.innerHTML.split(" ")[0];
+		
+		rowParagraph.innerHTML = paragraphInnerHTML +" "+ascArrow+" "+descArrow;
+
+	keepSwitching = true;
+	direction = "ascending"; 
+	//Loop until switching is done
+	while (keepSwitching) {
+		keepSwitching = false;
+		rows = table.getElementsByTagName("TR");
+		// Loop over table rows(except header)
+		for (i = 1; i < (rows.length - 1); i++) {
+		  switchNeeded = false;
+		  currentRow = rows[i].getElementsByTagName("TD")[0];
+		  nextRow = rows[i + 1].getElementsByTagName("TD")[0];
+		  if (direction == "ascending") {
+			if (currentRow.innerText.toLowerCase() > nextRow.innerText.toLowerCase()) {
+			  // switch is needed based on desired direction
+			  switchNeeded= true;
+			  break;
+			}
+		  } else if (direction == "descending") {
+			if (currentRow.innerText.toLowerCase() < nextRow.innerText.toLowerCase()) {
+			  // switch is needed based on desired direction
+			  switchNeeded= true;
+			  break;
+			}
+		  }
+		}
+		
+		
+		if (switchNeeded) {
+		  rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+		  keepSwitching = true;
+		  switchCounter ++; 
+		} else {
+		  if (switchCounter == 0 && direction == "ascending") {
+			direction = "descending";
+			keepSwitching = true;
+		  }
+		}
+	}
+	
+	if(direction === "ascending"){
+		rowParagraph.innerHTML = paragraphInnerHTML +" "+ascArrow;
+	} else if(direction === "descending"){
+		rowParagraph.innerHTML = paragraphInnerHTML +" "+descArrow;
+	} 
+}
+</script>
+            </div>
+        </div>
+    </body>
+</html>

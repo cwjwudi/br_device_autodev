@@ -1,0 +1,3 @@
+tools/.generated/
+tools/*.log
+PrintDemo/Binaries/**/pvi_download_*.log

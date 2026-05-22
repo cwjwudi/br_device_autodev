@@ -1,0 +1,56 @@
+Manual Paper transform test commands
+====================================
+
+Write any one of these complete JSON strings to SVG:strTransform for a single-part test.
+Set SVG:astSvgPu[0].stCmd.bManualTestMode = 1 before writing these commands, otherwise ProgramCyclic will overwrite strTransform.
+Set SVG:astSvgPu[0].stCmd.bManualTestMode = 0 to return to automatic command-bit control.
+
+1. emergency - red  修改
+[{"select":"#emergency","duration":0,"style":"fill:3"}]
+
+
+2. emergency - normal gray  修改
+[{"select":"#emergency","duration":0,"style":"fill:1"}]
+
+3. line_1 - show 通过
+[{"select":"#line_1","duration":0,"style":"display:inline"}]
+
+
+4. line_1 - hide 通过
+[{"select":"#line_1","duration":0,"style":"display:none"}]
+
+5. line_2 - show  通过
+[{"select":"#line_2","duration":0,"style":"display:inline"}]
+
+6. line_2 - hide 通过
+[{"select":"#line_2","duration":0,"style":"display:none"}]
+
+7. fan1 - rotate once around local center (0,0)   通过
+[{"select":"#fan1","duration":1000,"spin":[360,0,0]}]
+
+8. fan1 - stop/no rotation command   通过
+[{"select":"#fan1","duration":0,"spin":[0,0,0]}]
+
+9. roller_up - move down 20 units 修改
+[{"select":"#roller_up","duration":1000,"translate":[168, 470]}]
+
+10. roller_up - return home 修改
+[{"select":"#roller_up","duration":1000,"translate":[168, 425]}]
+
+11. roller_down - green outline 修改
+[{"select":"#roller_down","duration":0,"style":"fill:1"}]
+
+12. roller_down - normal 修改
+[{"select":"#roller_down","duration":0,"style":"fill:2"}]
+
+13. color_box - yellow 修改
+[{"select":"#color_box","duration":0,"style":"fill:0"}]
+
+14. color_box - normal 修改
+[{"select":"#color_box","duration":0,"style":"fill:3"}]
+
+15. all active  (根据以上修改)
+[{"select":"#emergency","duration":0,"style":"fill:#ff0000"},{"select":"#line_1","duration":0,"style":"display:none"},{"select":"#line_2","duration":0,"style":"display:none"},{"select":"#fan1","duration":1000,"spin":[360,0,0]},{"select":"#roller_up","duration":1000,"translate":[0,20]},{"select":"#roller_down","duration":0,"style":"fill:url(#circleGrad);stroke:#00c853;stroke-width:5px"},{"select":"#color_box","duration":0,"style":"fill:#ffd400"}]
+
+16. all normal （根据以上修改）
+[{"select":"#emergency","duration":0,"style":"fill:#9d9d9d"},{"select":"#line_1","duration":0,"style":"display:inline"},{"select":"#line_2","duration":0,"style":"display:inline"},{"select":"#fan1","duration":0,"spin":[0,0,0]},{"select":"#roller_up","duration":1000,"translate":[0,0]},{"select":"#roller_down","duration":0,"style":"fill:url(#circleGrad);stroke:#777777;stroke-width:0px"},{"select":"#color_box","duration":0,"style":"fill:#d2d2d2"}]

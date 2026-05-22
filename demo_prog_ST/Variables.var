@@ -1,0 +1,27 @@
+VAR CONSTANT
+	WAIT_TIME : TIME := T#1S;
+END_VAR
+VAR
+	TIMER_TON : TON := (0); (*TON timer for mixing water with color*)
+	boolStart : BOOL := 0;
+	MachineState : STATE := STATE_WAIT;
+	svgContent : STRING[1000000];
+	svgFilePath : STRING[1000000];
+	transform : STRING[100000];
+	transitionTime : UINT := 0;
+	SkiState : STATE_SKI := STATE_SKI_WAIT;
+	SKI_TIMER : TON := (0); (*TON timer for mixing water with color*)
+	SKI_WAIT_TIME : {REDUND_UNREPLICABLE} TIME := T#2.8S;
+	startSkiLift : BOOL := FALSE;
+	transformSki : STRING[100000] := '';
+	startBoxLift : BOOL := 0;
+	BOX_COUNTER : USINT := 0;
+END_VAR
+VAR CONSTANT
+	WAIT_TIME_LIFT : TIME := T#1S;
+END_VAR
+VAR
+	TIMER_TON_LIFT : TON := (0); (*TON timer for mixing water with color*)
+	transformLift : STRING[100000];
+	LiftState : STATE_BOX := STATE_INIT;
+END_VAR

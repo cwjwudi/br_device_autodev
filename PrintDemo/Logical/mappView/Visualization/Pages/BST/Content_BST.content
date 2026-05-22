@@ -1,0 +1,44 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Content id="Content_BST" guid="e723921f-0062-4c69-9b60-747fb90785b4" height="900" width="1920" xmlns="http://www.br-automation.com/iat2015/contentDefinition/v2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Widgets>
+    <Widget xsi:type="widgets.brease.Login" id="Login1" top="60" left="1530" zIndex="0" />
+    <Widget xsi:type="widgets.brease.ToggleButton" id="ToggleButton1" top="20" left="20" width="160" height="75" zIndex="1" text="PU1" cornerRadius="12px 0px 0px 12px" fontSize="20px" />
+    <Widget xsi:type="widgets.brease.ToggleButton" id="ToggleButton2" top="20" left="180" width="160" height="75" zIndex="2" text="PU2" cornerRadius="0px" fontSize="20px" />
+    <Widget xsi:type="widgets.brease.ToggleButton" id="ToggleButton3" top="20" left="340" width="160" height="75" zIndex="3" text="PU3" cornerRadius="0px" fontSize="20px" />
+    <Widget xsi:type="widgets.brease.ToggleButton" id="ToggleButton4" top="20" left="500" width="160" height="75" zIndex="4" text="PU4" cornerRadius="0px 12px 12px 0px" fontSize="20px" />
+    <Widget xsi:type="widgets.brease.WebViewer" id="WebViewer1" top="101" left="21" width="1387" height="509" zIndex="5" host="http://192.168.50.233" path="/color01.html" port="82" borderWidth="0px" cornerRadius="12px" />
+    <Widget xsi:type="widgets.brease.GroupBox" id="GroupBox1" top="730" left="21" width="361" zIndex="6" text="锁标窗口" cornerRadius="12px" fontSize="20px">
+      <Widgets>
+        <Widget xsi:type="widgets.brease.MomentaryPushButton" id="MomentaryPushButton3" top="19" left="9" width="160" height="75" zIndex="0" text="左移" cornerRadius="12px" fontSize="20px" />
+        <Widget xsi:type="widgets.brease.MomentaryPushButton" id="MomentaryPushButton4" top="19" left="188" width="160" height="75" zIndex="1" text="右移" cornerRadius="12px" fontSize="20px" />
+      </Widgets>
+    </Widget>
+    <Widget xsi:type="widgets.brease.NumericInput" id="NumericInput1" top="790" left="1248" width="160" height="75" zIndex="7" format="{'metric':{'decimalPlaces':0,'minimumIntegerDigits':1},'imperial':{'decimalPlaces':1,'minimumIntegerDigits':1},'imperial-us':{'decimalPlaces':1,'minimumIntegerDigits':1}}" cornerRadius="12px" />
+    <Widget xsi:type="widgets.brease.Label" id="Label1" top="728" left="1278" width="130" zIndex="8" text="锁边框宽度" fontSize="20px" italic="false" />
+    <Widget xsi:type="widgets.brease.MomentaryPushButton" id="MomentaryPushButton5" top="600" left="30" width="160" height="75" zIndex="9" text="锁标" cornerRadius="12px" fontSize="20px" />
+    <Widget xsi:type="widgets.brease.GroupBox" id="GroupBox2" top="650" left="1530" width="300" height="207" zIndex="10" text="来自主控（临时）" cornerRadius="12px" fontSize="20px">
+      <Widgets>
+        <Widget xsi:type="widgets.brease.NumericInput" id="NumericInput2" top="20" left="140" width="130" height="60" zIndex="0" format="{'metric':{'decimalPlaces':0,'minimumIntegerDigits':1},'imperial':{'decimalPlaces':1,'minimumIntegerDigits':1},'imperial-us':{'decimalPlaces':1,'minimumIntegerDigits':1}}" maxValue="1000" cornerRadius="12px" />
+        <Widget xsi:type="widgets.brease.Label" id="Label3" top="40" left="20" width="130" zIndex="1" text="版周长度" fontSize="20px" italic="false" />
+        <Widget xsi:type="widgets.brease.Label" id="Label4" top="110" left="20" width="130" zIndex="2" text="绘图模式" fontSize="20px" italic="false" />
+        <Widget xsi:type="widgets.brease.NumericInput" id="NumericInput3" top="90" left="140" width="130" height="60" zIndex="3" format="{'metric':{'decimalPlaces':0,'minimumIntegerDigits':1},'imperial':{'decimalPlaces':1,'minimumIntegerDigits':1},'imperial-us':{'decimalPlaces':1,'minimumIntegerDigits':1}}" maxValue="11" minValue="10" cornerRadius="12px" />
+      </Widgets>
+    </Widget>
+    <Widget xsi:type="widgets.brease.NumericOutput" id="NumericOutput2" top="45" left="1050" width="120" height="50" zIndex="11" format="{'metric':{'decimalPlaces':0,'minimumIntegerDigits':1},'imperial':{'decimalPlaces':1,'minimumIntegerDigits':1},'imperial-us':{'decimalPlaces':1,'minimumIntegerDigits':1}}" cornerRadius="12px" />
+    <Widget xsi:type="widgets.brease.Label" id="Label5" top="17" left="1040" width="130" zIndex="12" text="当前色组(+1)" fontSize="20px" italic="false" />
+    <Widget xsi:type="widgets.brease.NumericOutput" id="NumericOutput1" top="45" left="1210" width="120" height="50" zIndex="13" format="{'metric':{'decimalPlaces':0,'minimumIntegerDigits':1},'imperial':{'decimalPlaces':1,'minimumIntegerDigits':1},'imperial-us':{'decimalPlaces':1,'minimumIntegerDigits':1}}" cornerRadius="12px" />
+    <Widget xsi:type="widgets.brease.Label" id="Label2" top="17" left="1200" width="130" zIndex="14" text="版周长度" fontSize="20px" italic="false" />
+    <Widget xsi:type="widgets.brease.MomentaryPushButton" id="MomentaryPushButton8" top="20" left="850" width="162" height="75" zIndex="15" text="刷新模拟数据" cornerRadius="12px" fontSize="20px" />
+    <Widget xsi:type="widgets.brease.GroupBox" id="GroupBox4" top="650" left="590" width="426" height="229" zIndex="16" text="前色与首色窗口" cornerRadius="12px" fontSize="20px">
+      <Widgets>
+        <Widget xsi:type="widgets.brease.Label" id="Label6" top="30" left="10" width="130" zIndex="0" text="前色" textColor="rgba(255, 0, 0, 1)" fontSize="20px" />
+        <Widget xsi:type="widgets.brease.NumericInput" id="NumericInput4" top="10" left="130" width="130" height="60" zIndex="1" format="{'metric':{'decimalPlaces':0,'minimumIntegerDigits':1},'imperial':{'decimalPlaces':1,'minimumIntegerDigits':1},'imperial-us':{'decimalPlaces':1,'minimumIntegerDigits':1}}" maxValue="10" minValue="-10" cornerRadius="12px" />
+        <Widget xsi:type="widgets.brease.Label" id="Label7" top="100" left="10" width="130" zIndex="2" text="首色" textColor="rgba(0, 128, 0, 1)" fontSize="20px" italic="false" />
+        <Widget xsi:type="widgets.brease.NumericInput" id="NumericInput5" top="80" left="130" width="130" height="60" zIndex="3" format="{'metric':{'decimalPlaces':0,'minimumIntegerDigits':1},'imperial':{'decimalPlaces':1,'minimumIntegerDigits':1},'imperial-us':{'decimalPlaces':1,'minimumIntegerDigits':1}}" maxValue="10" minValue="-10" cornerRadius="12px" />
+        <Widget xsi:type="widgets.brease.CheckBox" id="CheckBox1" top="10" left="290" width="159" zIndex="4" text="本色" textColor="rgba(0, 0, 0, 1)" />
+        <Widget xsi:type="widgets.brease.CheckBox" id="CheckBox2" top="60" left="290" width="159" zIndex="5" text="前色" textColor="rgba(255, 0, 0, 1)" />
+        <Widget xsi:type="widgets.brease.CheckBox" id="CheckBox3" top="110" left="290" width="159" zIndex="6" text="首色" textColor="rgba(0, 128, 0, 1)" />
+      </Widgets>
+    </Widget>
+  </Widgets>
+</Content>

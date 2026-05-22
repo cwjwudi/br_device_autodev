@@ -1,0 +1,647 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+    <head>
+        <!-- Generator:SMC BookVersion="1.28" DocVersion="1.29" -->
+        <title>Paper </title>
+        <meta content="IE=EDGE" http-equiv="x-ua-compatible" />
+        <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />
+        <script language="javascript" src="../../../../../../../help/js/jquery.js" type="text/javascript"></script>
+        <script language="javascript" src="../../../../../../../help/js/codebox.js" type="text/javascript"></script>
+        <link href="../../../../../../../help/help.css" rel="stylesheet" type="text/css" />
+        <link href="../../../../../../../help/as_config/editor.css" rel="stylesheet" type="text/css" />
+        <script type="text/javascript">
+				function toggleDropDownBlock(elem) {
+					var cls = elem.parentNode.className;
+					var closedCls = "closed";
+					var closedIdx = cls.indexOf(closedCls);
+					if (closedIdx > 0) {
+						elem.parentNode.className = cls.substring(0, closedIdx) + cls.substring(closedIdx + closedCls.length);
+					} else {
+						elem.parentNode.className += " " + closedCls;
+					}
+				}
+	</script>
+    </head>
+    <body onload="DomcatInitialize()">
+        <script language="javascript" src="../../../../../../../as/glossary/glossary.js" type="text/javascript"></script>
+        <script language="javascript" src="../../../../../../../as/domcat/Domcat.js" type="text/javascript"></script>
+        <div class="ManualTitle">mapp View V5.24</div>
+        <h1 class="headline-content">Paper</h1>
+        <div class="blockRule block-description"><a name="N10A6EF_N10A6FE"></a><p class="par0">Widget "Paper" provides an area that can be used to display and modify SVG elements.</p><p class="par0">It can be used, for example, to visualize a complete machine process (on an injection molding machine, for example).</p>
+        </div>
+        <div class="blockRule block-description"><a name="N10A6EF_N10A706"></a><a name="N10A6EF_N10A708"></a>
+            <table class="parameter_tab font-std">
+                <col width="20%" />
+                <col width="20%" />
+                <col width="20%" />
+                <col width="20%" />
+                <col width="20%" />
+                <tbody>
+                    <tr class="table-row">
+                        <th align="center" class="content-level0 odd center"><p><a class="link link-xref" href="../../../../../visualization/mappview/guides/performanceguides/common_hardwareguidance.html">Widget class</a></p>
+                        </th>
+                        <th align="center" class="content-level0 odd center"><p>Use in <a class="link link-xref" href="../../../../../visualization/mappview/engineering/lv_customwidgets/lv_customwidgets_compound/lv_customwidgets_compound.html">Compound widget</a></p>
+                        </th>
+                        <th align="center" class="content-level0 odd center"><p>Support for <a class="link link-xref" href="../../../../../visualization/mappview/guides/faq/faq_keyboardoperation/keyboardoperation_faq.html">Keyboard operation</a></p>
+                        </th>
+                        <th align="center" class="content-level0 odd center"><p>Supports widget size in <a class="link link-xref" href="../../../../../visualization/mappview/widgets/zusatzliche_information/verhalten_von_auto-size.html">%</a></p>
+                        </th>
+                        <th align="center" class="content-level0 odd center"><p><a class="link link-xref" href="../../../../../visualization/mappview/common/licensing.html">Licensing model</a> </p>
+                        </th>
+                    </tr>
+                    <tr class="table-row">
+                        <td align="center" class="content-level0 odd center"><p>C</p>
+                        </td>
+                        <td align="center" class="content-level0 odd center"><p><a name="N10A6EF_N10A7B1"></a><span style="width:22px;">
+                                    <img border="0" height="16" origHeight="16" origWidth="16" src="images/check.png" width="16" /></span></p>
+                        </td>
+                        <td align="center" class="content-level0 odd center"><p><a name="N10A6EF_N10A828"></a><span style="width:22px;">
+                                    <img border="0" height="16" origHeight="16" origWidth="16" src="images/delete.png" width="16" /></span></p>
+                        </td>
+                        <td align="center" class="content-level0 odd center"><p><a name="N10A6EF_N10A89F"></a><span style="width:22px;">
+                                    <img border="0" height="16" origHeight="16" origWidth="16" src="images/check.png" width="16" /></span></p>
+                        </td>
+                        <td align="center" class="content-level0 odd center"><p>Premium</p>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="blockRule block-description"><a name="N10A6EF_N10A92A"></a>
+            <div class="notice info no-title"><p class="par0">The following properties <span class="underline">cannot</span> be used in a compound widget mapping:<br /> zIndex, left, top, height, width</p>
+            </div>
+        </div>
+        <div class="blockRule block-description"><a name="N10A6EF_N10A945"></a>
+            <h2>Appearance</h2><a name="N10A6EF_N10A94A"></a>
+            <table class="nolines_tab font-std">
+                <col width="50%" />
+                <col width="50%" />
+                <tbody>
+                    <tr class="table-row">
+                        <td align="center" class="content-level0 odd center"><p><a name="N10A6EF_N10A962"></a><span style="width:791px;">
+                                    <img border="0" height="270" origHeight="270" origWidth="785" src="images/paper_editor.png" width="785" /></span></p>
+                        </td>
+                        <td align="center" class="content-level0 odd center"><p><a name="N10A6EF_N10A9D7"></a><span style="width:791px;">
+                                    <img border="0" height="244" origHeight="244" origWidth="785" src="images/paper_runtime.png" width="785" /></span></p>
+                        </td>
+                    </tr>
+                    <tr class="table-row">
+                        <td align="center" class="content-level0 even center"><p><span class="emphasis">Editor</span></p>
+                        </td>
+                        <td align="center" class="content-level0 even center"><p><span class="emphasis">Web browser</span></p>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="dropdown-ct"><a name="N10A6EF_N10AA65"></a>
+            <h2 class="dropdown-title" onclick="toggleDropDownBlock(this)"><span class="dropdown-title-text">Properties</span>
+            </h2>
+            <div class="dropdown-body"><a name="N10A6EF_N10AA6B"></a>
+                <table class="parameter_tab font-std">
+                    <tbody>
+                        <tr class="table-row">
+                            <th align="center" class="content-level0 odd center" valign="top"><p>Name</p>
+                            </th>
+                            <th align="center" class="content-level0 odd center"><p>Type</p>
+                            </th>
+                            <th align="center" class="content-level0 odd center"><p>Description</p>
+                            </th>
+                            <th align="center" class="content-level0 odd center"><p>Bindable</p>
+                            </th>
+                            <th align="center" class="content-level0 odd center"><p>Necessary</p>
+                            </th>
+                            <th align="center" class="content-level0 odd center"><p>Default value</p>
+                            </th>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 odd" valign="bottom"><p>enable</p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeBoolean">Boolean</a></p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p>Defines the usability of the widget. A disabled widget (enable=<span class="codeinline">false</span>) does not respond to user interactions and does not trigger events. The "enable" behavior is inherited from container widgets to its child widgets as well.</p>
+                            </td>
+                            <td align="center" class="content-level0 odd center" valign="bottom"><p><a name="N10A6EF_N10AB01"></a><span style="width:22px;">
+                                        <img border="0" height="16" origHeight="16" origWidth="16" src="images/check.png" width="16" /></span></p>
+                            </td>
+                            <td align="center" class="content-level0 odd center"> </td>
+                            <td class="content-level0 odd" valign="bottom"><p><span class="codeinline">true</span></p>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 even" valign="bottom"><p>left</p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeInteger">Integer</a></p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p>Absolute position measured from the left border of the surrounding element (e.g. container widget or piece of content).</p>
+                            </td>
+                            <td align="center" class="content-level0 even center"> </td>
+                            <td align="center" class="content-level0 even center"> </td>
+                            <td class="content-level0 even"> </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 odd" valign="bottom"><p>top</p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeInteger">Integer</a></p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p>Absolute position measured from the top border of the surrounding element (e.g. container widget or piece of content).</p>
+                            </td>
+                            <td align="center" class="content-level0 odd center"> </td>
+                            <td align="center" class="content-level0 odd center"> </td>
+                            <td class="content-level0 odd"> </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 even" valign="bottom"><p>permissionOperate</p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeRoleCollection">RoleCollection</a></p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p>Defines which roles are permitted to use the widget. For an unauthorized role, the widget does not respond to user interactions and does not trigger events.</p>
+                            </td>
+                            <td align="center" class="content-level0 even center"> </td>
+                            <td align="center" class="content-level0 even center"> </td>
+                            <td class="content-level0 even"> </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 odd" valign="bottom"><p>permissionView</p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeRoleCollection">RoleCollection</a></p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p>Defines which roles are permitted to see the widget. The widget is not visible for an unauthorized role.</p>
+                            </td>
+                            <td align="center" class="content-level0 odd center"> </td>
+                            <td align="center" class="content-level0 odd center"> </td>
+                            <td class="content-level0 odd"> </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 even" valign="bottom"><p>style</p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeStyleReference">StyleReference</a></p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p>Reference to a widget style that can be created by the user.</p>
+                            </td>
+                            <td align="center" class="content-level0 even center" valign="bottom"><p><a name="N10A6EF_N10ACDE"></a><span style="width:22px;">
+                                        <img border="0" height="16" origHeight="16" origWidth="16" src="images/check.png" width="16" /></span></p>
+                            </td>
+                            <td align="center" class="content-level0 even center"> </td>
+                            <td class="content-level0 even" valign="bottom"><p>default</p>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 odd" valign="bottom"><p>visible</p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeBoolean">Boolean</a></p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p>Defines the visibility of the widget. The widget can be hidden with visible=<span class="codeinline">false</span>. (visible = <span class="codeinline">true</span>, invisible = <span class="codeinline">false</span>). The "visible" behavior is inherited from container widgets to its child widgets as well.</p>
+                            </td>
+                            <td align="center" class="content-level0 odd center" valign="bottom"><p><a name="N10A6EF_N10ADA4"></a><span style="width:22px;">
+                                        <img border="0" height="16" origHeight="16" origWidth="16" src="images/check.png" width="16" /></span></p>
+                            </td>
+                            <td align="center" class="content-level0 odd center"> </td>
+                            <td class="content-level0 odd" valign="bottom"><p><span class="codeinline">true</span></p>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 even" valign="bottom"><p>width</p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeSize">Size</a></p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p>Defines the total width of the widget in pixels.<br />A specification in % refers to the width of the surrounding element.</p>
+                            </td>
+                            <td align="center" class="content-level0 even center"> </td>
+                            <td align="center" class="content-level0 even center"> </td>
+                            <td class="content-level0 even"><p>300</p>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 odd" valign="bottom"><p>height</p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeSize">Size</a></p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p>Defines the total height of the widget in pixels.<br />A specification in % refers to the height of the surrounding element.</p>
+                            </td>
+                            <td align="center" class="content-level0 odd center"> </td>
+                            <td align="center" class="content-level0 odd center"> </td>
+                            <td class="content-level0 odd"><p>300</p>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 even" valign="bottom"><p>minWidth</p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeSize">Size</a></p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p>Defines the minimum total width of the widget for use in a container widget (e.g. FlexLayoutPanel). Value 0 has no effect.</p>
+                            </td>
+                            <td align="center" class="content-level0 even center"> </td>
+                            <td align="center" class="content-level0 even center"> </td>
+                            <td class="content-level0 even"><p>0</p>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 odd" valign="bottom"><p>maxWidth</p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeSize">Size</a></p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p>Defines the maximum total width of the widget for use in a container widget (e.g. FlexLayoutPanel). Value 0 has no effect.</p>
+                            </td>
+                            <td align="center" class="content-level0 odd center"> </td>
+                            <td align="center" class="content-level0 odd center"> </td>
+                            <td class="content-level0 odd"><p>0</p>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 even" valign="bottom"><p>minHeight</p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeSize">Size</a></p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p>Defines the minimum total height of the widget for use in a container widget (e.g. FlexLayoutPanel). Value 0 has no effect.</p>
+                            </td>
+                            <td align="center" class="content-level0 even center"> </td>
+                            <td align="center" class="content-level0 even center"> </td>
+                            <td class="content-level0 even"><p>0</p>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 odd" valign="bottom"><p>maxHeight</p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeSize">Size</a></p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p>Defines the maximum total height of the widget for use in a container widget (e.g. FlexLayoutPanel).  Value 0 has no effect.</p>
+                            </td>
+                            <td align="center" class="content-level0 odd center"> </td>
+                            <td align="center" class="content-level0 odd center"> </td>
+                            <td class="content-level0 odd"><p>0</p>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 even" valign="bottom"><p>zIndex</p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeUInteger">UInteger</a></p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p>zIndex determines the z-order of the widgets. For overlapping widgets, zIndex determines which widget is above and which is below. The widget with the larger zIndex is above; the one with the smaller zIndex is below. zIndex must be unique in a piece of content or container widget. zIndex is assigned automatically by the visual editor and can be modified in this view via the toolbar.</p>
+                            </td>
+                            <td align="center" class="content-level0 even center"> </td>
+                            <td align="center" class="content-level0 even center" valign="bottom"><p><a name="N10A6EF_N10B021"></a><span style="width:22px;">
+                                        <img border="0" height="16" origHeight="16" origWidth="16" src="images/check.png" width="16" /></span></p>
+                            </td>
+                            <td class="content-level0 even"> </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 odd" valign="bottom"><p>maxZoomLevel</p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeUNumber">UNumber</a></p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p>Limits the factor for zooming in. The value 100 means there is no zoom. The zoom factor is specified as a percentage here.</p>
+                            </td>
+                            <td align="center" class="content-level0 odd center" valign="bottom"> </td>
+                            <td align="center" class="content-level0 odd center" valign="bottom"> </td>
+                            <td class="content-level0 odd" valign="bottom"><p>500</p>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 even" valign="bottom"><p>minZoomLevel</p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeUNumber">UNumber</a></p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p>Limits the factor for zooming out. The value 100 means there is no zoom. The zoom factor is specified as a percentage here.</p>
+                            </td>
+                            <td align="center" class="content-level0 even center" valign="bottom"> </td>
+                            <td align="center" class="content-level0 even center" valign="bottom"> </td>
+                            <td class="content-level0 even" valign="bottom"><p>20</p>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 odd" valign="bottom"><p>colorList</p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeColorList">ColorList</a></p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p>List of colors used by commands to change colors. Only hex values are currently supported.</p>
+                            </td>
+                            <td align="center" class="content-level0 odd center"> </td>
+                            <td align="center" class="content-level0 odd center" valign="bottom"> </td>
+                            <td class="content-level0 odd" valign="bottom"><p>#FFCC66, #FF8800, #FFCC99, #993333</p>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 even" valign="bottom"><p>transitionTime</p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeUInteger">UInteger</a></p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p>Defines the time (ms) used by the child elements to visually transition from an old value to a new value.</p>
+                            </td>
+                            <td align="center" class="content-level0 even center" valign="bottom"><p><a name="N10A6EF_N10B1AE"></a><span style="width:22px;">
+                                        <img border="0" height="16" origHeight="16" origWidth="16" src="images/check.png" width="16" /></span></p>
+                            </td>
+                            <td align="center" class="content-level0 even center" valign="bottom"> </td>
+                            <td class="content-level0 even" valign="bottom"><p>500</p>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 odd" valign="bottom"><p>svgFilePath</p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeImagePath">ImagePath</a></p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p>Path to a file containing SVG content for widget Paper.</p>
+                            </td>
+                            <td align="center" class="content-level0 odd center" valign="bottom"><p><a name="N10A6EF_N10B260"></a><span style="width:22px;">
+                                        <img border="0" height="16" origHeight="16" origWidth="16" src="images/check.png" width="16" /></span></p>
+                            </td>
+                            <td align="center" class="content-level0 odd center" valign="bottom"> </td>
+                            <td class="content-level0 odd"> </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 even" valign="bottom"><p>svgContent</p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeString">String</a></p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p>Defines additional SVG content that is displayed by widget Paper. This SVG content is specified in the form of a string. For additional information, see <a class="link link-xref" href="konzept.html">Concept</a>.</p>
+                            </td>
+                            <td align="center" class="content-level0 even center" valign="bottom"><p><a name="N10A6EF_N10B31C"></a><span style="width:22px;">
+                                        <img border="0" height="16" origHeight="16" origWidth="16" src="images/check.png" width="16" /></span></p>
+                            </td>
+                            <td align="center" class="content-level0 even center" valign="bottom"> </td>
+                            <td class="content-level0 even"> </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 odd" valign="bottom"><p>transform</p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeString">String</a></p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p>Applies a transformation to the defined SVG element. For additional information about transformations and the appearance of the transformation string, see <a class="link link-xref" href="konzept.html">Concept</a>.</p>
+                            </td>
+                            <td align="center" class="content-level0 odd center" valign="bottom"><p><a name="N10A6EF_N10B3D8"></a><span style="width:22px;">
+                                        <img border="0" height="16" origHeight="16" origWidth="16" src="images/check.png" width="16" /></span></p>
+                            </td>
+                            <td align="center" class="content-level0 odd center" valign="bottom"> </td>
+                            <td class="content-level0 odd"> </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 even" valign="bottom"><p>tooltip</p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeString">String</a></p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p>Defines the text that should appear as information when pressing the tooltip indicator.</p><p>A static text or text from the text system can be used.  For additional information, see <a class="link link-xref" href="../../../../../visualization/mappview/engineering/lv_textsystem/lv_textsystem.html">here</a>.</p><p>To do this, tooltip mode must be enabled. There are two different ways to do this:</p>
+                                <ul class="container-enum enum-standard standard"><li class="enum-element" id="1540925751607_N10B49A"><p>Using action "ShowTooltip"</p></li><li class="enum-element" id="1540925751607_N10B49D"><p>Using client system action <a class="link link-xref" href="../../../../../visualization/mappview/engineering/cv_eventaction/cv_actions/cv_actions_clientsystem/cv_actions_clientsystem_showtooltip.html">ShowTooltips</a>.</p></li>
+                                </ul>
+                            </td>
+                            <td align="center" class="content-level0 even center" valign="bottom"> </td>
+                            <td align="center" class="content-level0 even center" valign="bottom"> </td>
+                            <td class="content-level0 even"> </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 odd" valign="bottom"><p>tabIndex</p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeInteger">Integer</a></p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p>Property tabIndex is used to manage the tab order during keyboard operation. <br />For additional information, see <a class="link link-xref" href="../../../../../visualization/mappview/guides/faq/faq_keyboardoperation/keyboardoperation_faq.html">Keyboard operation</a>.<br />ENTER triggers event Click if tabIndex ≥0. <br />It is not possible to operate widget Paper with the keyboard.  </p>
+                            </td>
+                            <td align="center" class="content-level0 odd center" valign="bottom"> </td>
+                            <td align="center" class="content-level0 odd center" valign="bottom"> </td>
+                            <td class="content-level0 odd"><p>-1</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="dropdown-ct"><a name="N10A6EF_N10B540"></a>
+            <h2 class="dropdown-title" onclick="toggleDropDownBlock(this)"><span class="dropdown-title-text">Styleable properties</span>
+            </h2>
+            <div class="dropdown-body"><a name="N10A6EF_N10B546"></a>
+                <table class="parameter_tab font-std">
+                    <tbody>
+                        <tr class="table-row">
+                            <th align="center" class="content-level0 odd center"><p>Name</p>
+                            </th>
+                            <th align="center" class="content-level0 odd center"><p>Type</p>
+                            </th>
+                            <th align="center" class="content-level0 odd center"><p>Description</p>
+                            </th>
+                            <th align="center" class="content-level0 odd center"><p>Default value</p>
+                            </th>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 odd" valign="bottom"><p>backColor</p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeColor">Color</a></p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p>Defines the background color of the widget.</p>
+                            </td>
+                            <td class="content-level0 odd"><p>Transparent</p>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 even" valign="bottom"><p>borderStyle</p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeBorderStyle">BorderStyle</a></p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p>Defines the style of the border around the widget. For example, solid, dashed or dotted borders can be used.</p>
+                            </td>
+                            <td class="content-level0 even" valign="top"><p>solid</p>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 odd" valign="bottom"><p>borderWidth</p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypePixelValCollection">PixelValCollection</a></p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p>Defines the width of the border around the widget.</p>
+                            </td>
+                            <td class="content-level0 odd"><p>1px</p>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 even" valign="bottom"><p>borderColor</p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeColorCollection">ColorCollection</a></p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p>Defines the color of the border around the widget.</p>
+                            </td>
+                            <td class="content-level0 even"><p>#000000</p>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 odd" valign="bottom"><p>cornerRadius</p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypePixelValCollection">PixelValCollection</a></p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p>Defines the rounding of the corners of the widget.</p>
+                            </td>
+                            <td class="content-level0 odd"><p>0px</p>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 even" valign="bottom"><p>opacity</p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeOpacity">Opacity</a></p>
+                            </td>
+                            <td class="content-level0 even" valign="bottom"><p>Defines the transparency of the widget. The smaller the value, the more transparent the widget is displayed.</p>
+                            </td>
+                            <td class="content-level0 even"><p>1</p>
+                            </td>
+                        </tr>
+                        <tr class="table-row">
+                            <td class="content-level0 odd" valign="bottom"><p>margin</p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p><a class="link link-anchor" href="../../../../../visualization/mappview/widgets/definitions/datatypes.html#DatatypeMargin">Margin</a></p>
+                            </td>
+                            <td class="content-level0 odd" valign="bottom"><p>Defines the offset of the outer border of the widget from the actual set position of the widget. For additional information, see <a class="link link-xref" href="../../../../../visualization/mappview/widgets/zusatzliche_information/definition_von_margin_und_padding.html">here</a>.</p>
+                            </td>
+                            <td class="content-level0 odd"><p>0px</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <script type="text/javascript">			
+var ascArrow = "&#9650";
+var descArrow = "&#9660";
+			
+$(document).ready(function(){
+	var allTables = $("table");
+	
+	var headerLink = $(allTables[0]).find("th").first().find('a');
+		var start=0;
+		if(headerLink.length == 1){
+		    start=1;
+		}
+	
+	for (var i = start; i < allTables.length; i+=1) {
+		var firstTableColumnHeader = $(allTables[i]).find("th").first();
+		
+		if(firstTableColumnHeader[0]){
+			var headerPargraph = firstTableColumnHeader[0].getElementsByTagName("p")[0];
+			headerPargraph.innerHTML = headerPargraph.innerHTML +" "+ascArrow+" "+descArrow;
+			firstTableColumnHeader.attr("clickCount", 0);
+			firstTableColumnHeader.attr("onclick", "sortTable()");
+		}
+
+		var allRows = $(allTables[i]).find("tr");
+		
+		for (var j = 0; j < allRows.length; j+=1) {
+			$(allRows[j]).attr("originalIndex", j);
+		}	
+	}		
+});
+
+function sortTable() {
+	var clickCount = parseInt(arguments.callee.caller.arguments[0].currentTarget.getAttribute("clickCount"))
+	clickCount += 1;
+	arguments.callee.caller.arguments[0].currentTarget.setAttribute("clickCount", clickCount);
+
+	if(clickCount % 3 === 0){
+		restoreOriginalSort(arguments.callee.caller.arguments[0].currentTarget);
+		arguments.callee.caller.arguments[0].currentTarget.setAttribute("clickCount", 0);
+	} else{
+		sortAscOrDesc(arguments.callee.caller.arguments[0].currentTarget);
+	}
+	
+}
+
+function restoreOriginalSort(target) {
+	var rows, keepSwitching, i, currentRow, nextRow, switchNeeded, 
+		switchCounter = 0,
+		currentTarget = target,
+		table = $(currentTarget).closest("table")[0],
+		headerRow = table.getElementsByTagName("TR")[0].getElementsByTagName("TH")[0],
+		rowParagraph = headerRow.getElementsByTagName("p")[0],
+		paragraphInnerHTML = rowParagraph.innerHTML.split(" ")[0];
+		
+		rowParagraph.innerHTML = paragraphInnerHTML +" "+ascArrow+" "+descArrow;
+
+		keepSwitching = true; 
+		
+	while (keepSwitching) {
+		keepSwitching = false;
+		rows = table.getElementsByTagName("TR");
+		// Loop over table rows(except header)
+		for (i = 0; i < (rows.length-1); i++) {
+		  switchNeeded = false;
+		  currentRow = rows[i];
+		  nextRow = rows[i + 1];
+			if (parseInt(currentRow.getAttribute("originalIndex")) > parseInt(nextRow.getAttribute("originalIndex"))) {
+			  // switch is needed based on desired direction
+			  switchNeeded = true;
+			  break;
+			}
+		}
+		
+		if (switchNeeded) {
+			rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+			keepSwitching = true;
+			switchCounter ++; 
+		} else {
+			keepSwitching = false;
+		}
+	}
+	
+	rowParagraph.innerHTML = paragraphInnerHTML +" "+ascArrow+" "+descArrow;
+}
+
+function sortAscOrDesc(target){
+	var rows, keepSwitching, i, currentRow, nextRow, switchNeeded, direction, 
+		switchCounter = 0,
+		currentTarget = target,
+		table = $(currentTarget).closest("table")[0],
+		headerRow = table.getElementsByTagName("TR")[0].getElementsByTagName("TH")[0],
+		rowParagraph = headerRow.getElementsByTagName("p")[0],
+		paragraphInnerHTML = rowParagraph.innerHTML.split(" ")[0];
+		
+		rowParagraph.innerHTML = paragraphInnerHTML +" "+ascArrow+" "+descArrow;
+
+	keepSwitching = true;
+	direction = "ascending"; 
+	//Loop until switching is done
+	while (keepSwitching) {
+		keepSwitching = false;
+		rows = table.getElementsByTagName("TR");
+		// Loop over table rows(except header)
+		for (i = 1; i < (rows.length - 1); i++) {
+		  switchNeeded = false;
+		  currentRow = rows[i].getElementsByTagName("TD")[0];
+		  nextRow = rows[i + 1].getElementsByTagName("TD")[0];
+		  if (direction == "ascending") {
+			if (currentRow.innerText.toLowerCase() > nextRow.innerText.toLowerCase()) {
+			  // switch is needed based on desired direction
+			  switchNeeded= true;
+			  break;
+			}
+		  } else if (direction == "descending") {
+			if (currentRow.innerText.toLowerCase() < nextRow.innerText.toLowerCase()) {
+			  // switch is needed based on desired direction
+			  switchNeeded= true;
+			  break;
+			}
+		  }
+		}
+		
+		
+		if (switchNeeded) {
+		  rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+		  keepSwitching = true;
+		  switchCounter ++; 
+		} else {
+		  if (switchCounter == 0 && direction == "ascending") {
+			direction = "descending";
+			keepSwitching = true;
+		  }
+		}
+	}
+	
+	if(direction === "ascending"){
+		rowParagraph.innerHTML = paragraphInnerHTML +" "+ascArrow;
+	} else if(direction === "descending"){
+		rowParagraph.innerHTML = paragraphInnerHTML +" "+descArrow;
+	} 
+}
+</script>
+            </div>
+        </div>
+        <div class="blockRule block-description"><a name="N10A6F7"></a>
+            <!--ListContent-->
+            <div class="DoNotPrintNavItems"><p class="Navigation">T<!---->o<!---->p<!---->i<!---->c<!---->s<!----> <!---->i<!---->n<!----> <!---->t<!---->h<!---->i<!---->s<!----> <!---->s<!---->e<!---->c<!---->t<!---->i<!---->o<!---->n<!---->:<!----></p>
+                <ul class="Navigation"><li class="Navigation"><a class="link link-xref" href="aktionen_und_ereignisse.html">A<!---->c<!---->t<!---->i<!---->o<!---->n<!---->s<!----> <!---->a<!---->n<!---->d<!----> <!---->e<!---->v<!---->e<!---->n<!---->t<!---->s<!----></a></li><li class="Navigation"><a class="link link-xref" href="konzept.html">C<!---->o<!---->n<!---->c<!---->e<!---->p<!---->t<!----></a></li>
+                </ul>
+            </div>
+            <!--/ListContent-->
+        </div>
+    </body>
+</html>

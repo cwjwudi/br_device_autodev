@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="zh-CN" style="height: 100%">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>色组1 仿真</title>
+  <style>
+    html, body { height: 100%; margin: 0; overflow: hidden; }
+    .page { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transition: opacity .25s, visibility .25s; }
+    .page.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+
+    /* ── 图表状态栏 ── */
+    #chartStatusBar {
+      display: flex; align-items: center; gap: 14px; padding: 3px 12px;
+      background: #fafafa; border-bottom: 1px solid #e0e0e0;
+      font-family: 'Segoe UI', sans-serif; font-size: 10px; color: #888;
+      min-height: 24px;
+    }
+    #chartStatusBar .st-val { font-weight: 700; color: #333; font-size: 11px; }
+
+    #pageSwitchHint {
+      position: fixed; bottom: 6px; right: 10px; z-index: 9999;
+      background: rgba(0,0,0,.6); color: #fff; padding: 3px 12px;
+      border-radius: 12px; font-size: 10px; font-family: 'Segoe UI', sans-serif;
+      cursor: pointer; opacity: .6; transition: opacity .3s; user-select: none;
+    }
+    #pageSwitchHint:hover { opacity: 1; }
+    #pageSwitchHint.flash { opacity: 1; }
+
+    /* ── 诊断面板：紧凑布局 ── */
+    #diagPage { background: #f0f2f5; overflow-y: auto; font-family: 'Segoe UI', sans-serif; font-size: 12px; color: #333; }
+    #diagPage * { box-sizing: border-box; }
+    #diagPage .dg-wrap { padding: 8px 10px; }
+    #diagPage .dg-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    #diagPage .dg-header h1 { font-size: 14px; margin: 0; color: #1565c0; }
+    #diagPage .dg-header .dg-hint { font-size: 10px; color: #888; }
+
+    #diagPage .status-bar {
+      display: flex; align-items: center; gap: 10px; padding: 5px 10px;
+      background: #e3f2fd; border-radius: 4px; margin-bottom: 6px; flex-wrap: wrap; font-size: 11px;
+    }
+    #diagPage .status-bar b { font-size: 12px; }
+    #diagPage .blink { animation: dg-blink .5s ease-in-out; }
+    @keyframes dg-blink { 0%{background:#e3f2fd} 50%{background:#bbdefb} 100%{background:#e3f2fd} }
+
+    #diagPage .dg-config {
+      display: flex; align-items: center; gap: 6px; padding: 6px 8px;
+      background: #fff; border: 1px solid #e0e0e0; border-radius: 4px; margin-bottom: 6px; flex-wrap: wrap;
+    }
+    #diagPage .dg-config label { font-weight: 600; font-size: 11px; white-space: nowrap; }
+    #diagPage .dg-config input[type="text"] { padding: 3px 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 11px; }
+    #diagPage .dg-btn { padding: 3px 10px; cursor: pointer; border: 1px solid #1976d2; background: #1976d2; color: #fff; border-radius: 3px; font-size: 11px; white-space: nowrap; }
+    #diagPage .dg-btn:hover { background: #1565c0; }
+    #diagPage .dg-btn:disabled { opacity: .45; cursor: not-allowed; }
+    #diagPage .dg-btn.sec { background: #fff; color: #1976d2; }
+    #diagPage .dg-btn.sec:hover { background: #e3f2fd; }
+    #diagPage .dg-btn.danger { background: #c62828; border-color: #c62828; }
+
+    #diagPage .dg-tbl-wrap { border: 1px solid #e0e0e0; border-radius: 4px; overflow: auto; max-height: calc(100vh - 200px); }
+    #diagPage table { border-collapse: collapse; font-size: 11px; min-width: 100%; }
+    #diagPage th, #diagPage td { border: 1px solid #e8e8e8; padding: 3px 6px; white-space: nowrap; }
+    #diagPage th { background: #f5f5f5; font-weight: 600; position: sticky; top: 0; z-index: 1; font-size: 10px; text-align: center; position: relative; user-select: none; }
+    #diagPage th .col-resize { position: absolute; right: -3px; top: 0; width: 6px; height: 100%; cursor: col-resize; z-index: 2; }
+    #diagPage .val-cell { font-family: Consolas, monospace; font-size: 10px; cursor: pointer; position: relative; }
+    #diagPage .val-cell:hover { background: #f5f5f5; }
+    #diagPage .val-cell.expanded { white-space: pre-wrap !important; word-break: break-all; max-height: 200px; overflow-y: auto; background: #fffde7; }
+    #diagPage .q-good { background: #e8f5e9; color: #2e7d32; font-weight: bold; text-align: center; font-size: 10px; }
+    #diagPage .q-bad { background: #ffebee; color: #c62828; font-weight: bold; text-align: center; font-size: 10px; }
+    #diagPage .q-pending { background: #fff8e1; color: #f57f17; text-align: center; font-size: 10px; }
+    #diagPage .badge { display: inline-block; padding: 1px 5px; border-radius: 8px; font-size: 9px; font-weight: bold; }
+    #diagPage .badge-warn { background: #fff8e1; color: #f57f17; }
+    #diagPage .writable-row { background: #e8f0fe !important; }
+
+    #diagPage .dg-log {
+      margin-top: 6px; max-height: 100px; overflow-y: auto;
+      font-family: Consolas, monospace; font-size: 10px; background: #fafafa;
+      padding: 4px 6px; border-radius: 3px; border: 1px solid #e0e0e0;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="chartPage" class="page" style="display:flex; flex-direction:column;">
+    <div id="chartStatusBar">
+      <span>版周长: <span class="st-val" id="stCircumference">690</span> mm</span>
+      <span>|</span>
+      <span>触摸: <span class="st-val" id="stTouchPos">-</span> mm</span>
+      <span>|</span>
+      <span>锁标: <span class="st-val" id="stLockedPos">-</span> mm</span>
+      <span>|</span>
+      <span>窗口: <span class="st-val" id="stWindowWidth">-</span> mm</span>
+      <span>|</span>
+      <span>模式: <span class="st-val" id="stDrawMode">0</span></span>
+    </div>
+    <div id="container" style="flex:1; min-height:0;"></div>
+  </div>
+
+  <div id="diagPage" class="page hidden">
+    <div class="dg-wrap">
+      <div class="dg-header">
+        <h1>ASP 通讯诊断</h1>
+        <span class="dg-hint">Shift+1 图表 | Shift+2 诊断 | 点击右下角切换</span>
+      </div>
+
+      <div class="status-bar" id="dg-statusBar">
+        <span>状态：<b id="dg-connStatus">-</b></span>
+        <span>变量：<b id="dg-varCount">0</b></span>
+        <span>刷新：<b id="dg-pollCount">0</b></span>
+        <span>响应：<b id="dg-lastTime">-</b></span>
+        <span>耗时：<b id="dg-lastDuration">-</b></span>
+        <span>失败：<b id="dg-failCount">0</b></span>
+      </div>
+
+      <div class="dg-config">
+        <label>ASP:</label>
+        <input type="text" id="dg-aspUrl" value="asp/color01.json.asp" style="width:200px;" />
+        <label>间隔:</label>
+        <input type="text" id="dg-pollInterval" value="2000" style="width:50px;" />ms
+        <button class="dg-btn" id="dg-btnStart">开始诊断</button>
+        <button class="dg-btn danger" id="dg-btnStop" disabled>停止</button>
+        <button class="dg-btn sec" id="dg-btnOnce">单次</button>
+      </div>
+
+      <div class="dg-tbl-wrap">
+        <table id="dg-table">
+          <colgroup>
+            <col style="width:30px;">
+            <col style="width:100px;">
+            <col style="width:220px;">
+            <col style="width:auto;">
+            <col style="width:60px;">
+            <col style="width:40px;">
+            <col style="width:130px;">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>#<span class="col-resize" data-col="0"></span></th>
+              <th>JSON 键<span class="col-resize" data-col="1"></span></th>
+              <th>PLC 变量<span class="col-resize" data-col="2"></span></th>
+              <th>当前值<span class="col-resize" data-col="3"></span></th>
+              <th>类型<span class="col-resize" data-col="4"></span></th>
+              <th>质量</th>
+              <th style="width:130px;">写入测试</th>
+            </tr>
+          </thead>
+          <tbody id="dg-varTableBody">
+            <tr><td colspan="7" style="text-align:center; color:#999; padding:12px;">点击「开始诊断」或「单次」加载</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="dg-log" id="dg-logBody"></div>
+    </div>
+  </div>
+
+  <div id="pageSwitchHint" style="display:none;">Shift+2 诊断 | 点击切换</div>
+
+  <script src="js/echarts.min.js"></script>
+  <script src="js/jquery.min.js"></script>
+  <script src="js/PV_Access.js"></script>
+  <script src="js/dataService.js"></script>
+  <script src="js/chartCore.js"></script>
+  <script>
+  var currentPage = 'chart';
+
+  function switchTo(page) {
+    if (page === currentPage) return;
+    currentPage = page;
+    var cp = document.getElementById('chartPage');
+    var dp = document.getElementById('diagPage');
+    var h  = document.getElementById('pageSwitchHint');
+    if (page === 'diag') {
+      cp.className = 'page hidden';
+      dp.className = 'page';
+      h.innerHTML = 'Shift+1 图表 | 点击切换';
+      h.style.display = '';
+      if (typeof initDiag === 'function' && !window._diagInited) initDiag();
+    } else {
+      dp.className = 'page hidden';
+      cp.className = 'page';
+      h.style.display = 'none';
+      try { window.dispatchEvent(new Event('resize')); } catch(ex) {}
+    }
+    h.className = 'flash';
+    setTimeout(function() { h.className = ''; }, 500);
+  }
+
+  document.addEventListener('keydown', function(e) {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+    if (e.shiftKey && (e.code === 'Digit1' || e.key === '!' || e.key === '1')) { e.preventDefault(); switchTo('chart'); }
+    if (e.shiftKey && (e.code === 'Digit2' || e.key === '@' || e.key === '2')) { e.preventDefault(); switchTo('diag'); }
+  });
+
+  document.getElementById('pageSwitchHint').addEventListener('click', function() {
+    switchTo(currentPage === 'chart' ? 'diag' : 'chart');
+  });
+
+  $(document).ready(function() {
+
+    // ── X67 锁标图表初始化 ──
+    // 版周长默认 690mm，后续从 ASP (mappView→OPC UA→PLC→ASP) 读取
+    try {
+      LockChart.init('container', { circumference: 690 });
+      LockChart.onDrag(function (posMm) {
+        $('#stTouchPos').text(posMm != null ? posMm.toFixed(1) : '-');
+      });
+      DataService.startPolling(
+        'asp/color01.json.asp',
+        function (data) {
+          LockChart.updateData(data.group1Data, data.group2Data, data.controlData, {
+            group3: data.group3Data,
+            group4: data.group4Data,
+            group5: data.group5Data,
+            group6: data.group6Data
+          });
+          var st = LockChart.getState();
+          $('#stCircumference').text(LockChart.getConfig().circumference);
+          $('#stTouchPos').text(st.touchPosMm != null ? st.touchPosMm.toFixed(1) : '-');
+          $('#stLockedPos').text(st.lockedPosMm != null ? st.lockedPosMm.toFixed(1) : '-');
+          $('#stWindowWidth').text(st.windowWidthMm != null ? st.windowWidthMm.toFixed(1) : '-');
+          var modeNames = { 0: '0:双光眼', 1: '1:纵跟前横跟首', 2: '2:仅上光眼', 3: '3:仅下光眼', 10: '10:BST单光眼', 11: '11:BST双光眼' };
+          $('#stDrawMode').text((st.drawMode in modeNames) ? modeNames[st.drawMode] : String(st.drawMode));
+        },
+        function (error) { console.error('数据服务错误:', error); }
+      );
+    } catch (ex) { console.error('LockChart init:', ex); }
+
+    /* ── 诊断工具 ── */
+    window._diagInited = false;
+    var PLC_VAR_MAP = {
+      'strHex00':'gstAspInface.stToAsp.strDataST1[0]','strHex01':'gstAspInface.stToAsp.strDataST1[1]',
+      'strHex02':'gstAspInface.stToAsp.strDataST1[2]','strHex03':'gstAspInface.stToAsp.strDataST1[3]',
+      'strHex04':'gstAspInface.stToAsp.strDataST1[4]','strHex05':'gstAspInface.stToAsp.strDataST1[5]',
+      'strHex06':'gstAspInface.stToAsp.strDataST1[6]','strHex07':'gstAspInface.stToAsp.strDataST1[7]',
+      'strHex08':'gstAspInface.stToAsp.strDataST1[8]',
+      'strHex10':'gstAspInface.stToAsp.strDataST2[0]','strHex11':'gstAspInface.stToAsp.strDataST2[1]',
+      'strHex12':'gstAspInface.stToAsp.strDataST2[2]','strHex13':'gstAspInface.stToAsp.strDataST2[3]',
+      'strHex14':'gstAspInface.stToAsp.strDataST2[4]','strHex15':'gstAspInface.stToAsp.strDataST2[5]',
+      'strHex16':'gstAspInface.stToAsp.strDataST2[6]','strHex17':'gstAspInface.stToAsp.strDataST2[7]',
+      'strHex18':'gstAspInface.stToAsp.strDataST2[8]',
+      'diWindowWidth':'gstAspInface.stToAsp.diWindowWidth',
+      'usiCmdLatchPos':'gstAspInface.stToAsp.usiCmdLatchPos',
+      'udiCurLatchPosition':'gstAspInface.stToAsp.udiCurLatchPosition',
+      'diPuWindowIntervalmm':'gstAspInface.stToAsp.diPuWindowIntervalmm',
+      'usiActiveDrawMode':'gstAspInface.stToAsp.usiActiveDrawMode'
+    };
+    var WRITABLE_KEYS = ['udiCurLatchPosition'];
+    var WRITE_PV_MAP = {
+      'udiCurLatchPosition': 'gstAspInface.stFromAsp.udiCurLatchPosition'
+    };
+    var dgPolling = false, dgPollTimer = null, dgPollCount = 0, dgFailCount = 0, dgLastJson = null;
+    var dgLogs = [], dgMaxLogs = 30;
+    var dgExpandedKeys = {};
+
+    function dgGetUrl()      { return $('#dg-aspUrl').val().trim(); }
+    function dgGetInterval() { return parseInt($('#dg-pollInterval').val()) || 2000; }
+
+    function dgLog(msg, isErr) {
+      var ts = new Date().toLocaleTimeString();
+      var c = isErr ? 'color:#c62828;' : '';
+      dgLogs.unshift('<div style="' + c + '">[' + ts + '] ' + msg + '</div>');
+      if (dgLogs.length > dgMaxLogs) dgLogs.pop();
+      $('#dg-logBody').html(dgLogs.join(''));
+    }
+
+    function dgValShort(v) {
+      if (v == null) return '<span style="color:#999;">null</span>';
+      var s = String(v);
+      if (s.length > 40) return s.substring(0, 40) + '<span style="color:#999;"> ...(' + s.length + ')</span>';
+      return s;
+    }
+    function dgValFull(v) {
+      if (v == null) return '<span style="color:#999;">null</span>';
+      return String(v);
+    }
+    function dgTypeLen(v) {
+      if (v == null) return '-';
+      if (typeof v === 'string') return 'str[' + v.length + ']';
+      if (typeof v === 'number') return 'num';
+      return typeof v;
+    }
+    function dgAssess(key, val) {
+      if (val === undefined || val === null || (typeof val === 'string' && val === '')) return 'bad';
+      return 'good';
+    }
+
+    function dgRenderTable(json) {
+      if (!json || typeof json !== 'object') return;
+      var keys = Object.keys(json);
+      $('#dg-varCount').text(keys.length);
+      var html = keys.map(function(key, i) {
+        var val = json[key], q = dgAssess(key, val);
+        var wr = WRITABLE_KEYS.indexOf(key) >= 0;
+        var pv = PLC_VAR_MAP[key] || '-';
+        var isExp = !!dgExpandedKeys[key];
+        var valCls = 'val-cell' + (isExp ? ' expanded' : '');
+        var writeCol = '';
+        if (wr) {
+          var writePv = WRITE_PV_MAP[key] || '';
+          writeCol = '<td style="white-space:nowrap;">' +
+            '<input type="text" class="dg-write-input" data-key="' + key + '" data-pv="' + writePv + '" ' +
+            'placeholder="值" style="width:60px; padding:2px 4px; font-size:10px; border:1px solid #ccc; border-radius:2px;">' +
+            ' <button class="dg-btn dg-write-btn" data-key="' + key + '" style="padding:2px 6px; font-size:10px; background:#ff8f00; border-color:#ff8f00;">写入</button>' +
+            '</td>';
+        } else {
+          writeCol = '<td style="text-align:center; color:#ccc; font-size:9px;">-</td>';
+        }
+        return '<tr' + (wr ? ' class="writable-row"' : '') + '>' +
+          '<td style="text-align:center;">' + (i+1) + '</td>' +
+          '<td><b>' + key + '</b>' + (wr ? ' <span class="badge badge-warn">W</span>' : '') + '</td>' +
+          '<td style="font-size:10px; color:#555;">' + pv + '</td>' +
+          '<td class="' + valCls + '" data-key="' + key + '" title="点击展开/折叠">' + (isExp ? dgValFull(val) : dgValShort(val)) + '</td>' +
+          '<td style="text-align:center;">' + dgTypeLen(val) + '</td>' +
+          '<td class="' + (q === 'good' ? 'q-good' : 'q-bad') + '">' + (q === 'good' ? '&#10003;' : '&#10007;') + '</td>' +
+          writeCol +
+          '</tr>';
+      }).join('');
+      $('#dg-varTableBody').html(html);
+    }
+
+    function dgUpdateStatus(ok) {
+      var el = $('#dg-connStatus');
+      if (ok) el.text('OK').css('color', '#2e7d32');
+      else    el.text('ERR').css('color', '#c62828');
+      $('#dg-pollCount').text(dgPollCount);
+      $('#dg-failCount').text(dgFailCount);
+    }
+
+    function dgDoRequest(cb) {
+      var url = dgGetUrl();
+      if (!url) { dgLog('ASP 地址为空', true); if (cb) cb(false); return; }
+      var t0 = Date.now();
+      dgPollCount++;
+      $.ajax({ url: url + '?' + Date.now(), dataType: 'json', cache: false, timeout: 5000
+      }).done(function(data) {
+        var dur = Date.now() - t0;
+        dgLastJson = data;
+        var keys = Object.keys(data), good = 0;
+        keys.forEach(function(k) { if (dgAssess(k, data[k]) === 'good') good++; });
+        dgRenderTable(data);
+        dgUpdateStatus(true);
+        $('#dg-lastTime').text(new Date().toLocaleTimeString());
+        $('#dg-lastDuration').text(dur + 'ms');
+        dgLog(dur + 'ms | ' + good + '/' + keys.length + ' OK');
+        if (cb) cb(true);
+      }).fail(function(xhr, status) {
+        dgFailCount++;
+        dgUpdateStatus(false);
+        dgLog('失败: ' + status + (xhr && xhr.status ? ' HTTP' + xhr.status : ''), true);
+        if (cb) cb(false);
+      });
+    }
+
+    function dgStartPoll() {
+      if (dgPolling) return;
+      dgPolling = true;
+      $('#dg-btnStart').prop('disabled', true);
+      $('#dg-btnStop').prop('disabled', false);
+      dgLog('自动诊断已启动，间隔 ' + dgGetInterval() + 'ms');
+      (function tick() {
+        dgDoRequest(function() {
+          if (dgPolling) dgPollTimer = setTimeout(tick, dgGetInterval());
+        });
+      })();
+    }
+
+    function dgStopPoll() {
+      dgPolling = false;
+      if (dgPollTimer) { clearTimeout(dgPollTimer); dgPollTimer = null; }
+      $('#dg-btnStart').prop('disabled', false);
+      $('#dg-btnStop').prop('disabled', true);
+      dgLog('诊断已停止');
+    }
+
+    function setupColResize() {
+      var table = document.getElementById('dg-table');
+      if (!table) return;
+      var cols = table.querySelectorAll('colgroup col');
+      var handles = table.querySelectorAll('.col-resize');
+      handles.forEach(function(handle) {
+        handle.addEventListener('mousedown', function(e) {
+          e.preventDefault();
+          var colIdx = parseInt(handle.getAttribute('data-col'));
+          var col = cols[colIdx];
+          var startX = e.pageX;
+          var startW = col.offsetWidth || parseInt(col.style.width) || 80;
+          function onMove(ev) {
+            var w = Math.max(20, startW + ev.pageX - startX);
+            col.style.width = w + 'px';
+          }
+          function onUp() {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+          }
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+        });
+      });
+    }
+
+    function dgWritePV(pvName, value, cb) {
+      var data = 'redirect=/response.asp&variable=' + encodeURIComponent(pvName) + '&value=' + encodeURIComponent(value) + '&write=1';
+      $.ajax({
+        url: '/goform/ReadWrite', type: 'POST', data: data, dataType: 'text', timeout: 5000
+      }).done(function(resp, status, xhr) {
+        dgLog('写入 ' + pvName + ' = ' + value + ' | HTTP ' + xhr.status + ' OK');
+        if (cb) cb(true);
+      }).fail(function(xhr, status) {
+        if (xhr && xhr.status === 500) {
+          dgLog('写入 ' + pvName + ' = ' + value + ' | HTTP 500 (写入成功，redirect=/response.asp 不存在导致)');
+          if (cb) cb(true);
+        } else {
+          dgLog('写入失败: ' + pvName + ' | ' + status + (xhr && xhr.status ? ' HTTP' + xhr.status : ''), true);
+          if (cb) cb(false);
+        }
+      });
+    }
+
+    function setupWriteBtn() {
+      document.getElementById('dg-varTableBody').addEventListener('click', function(e) {
+        var btn = e.target.closest('.dg-write-btn');
+        if (!btn) return;
+        var key = btn.getAttribute('data-key');
+        var input = document.querySelector('.dg-write-input[data-key="' + key + '"]');
+        if (!input) return;
+        var val = input.value.trim();
+        if (val === '') { dgLog('请输入要写入的值', true); return; }
+        var pv = input.getAttribute('data-pv');
+        if (!pv) { dgLog('未配置写入 PV 路径: ' + key, true); return; }
+        btn.disabled = true;
+        btn.textContent = '...';
+        dgWritePV(pv, val, function(ok) {
+          btn.disabled = false;
+          btn.textContent = '写入';
+          if (ok) input.style.borderColor = '#2e7d32';
+          else input.style.borderColor = '#c62828';
+          setTimeout(function() { input.style.borderColor = '#ccc'; }, 2000);
+        });
+      });
+    }
+
+    function setupValToggle() {
+      document.getElementById('dg-varTableBody').addEventListener('click', function(e) {
+        var td = e.target.closest('.val-cell');
+        if (!td) return;
+        var key = td.getAttribute('data-key');
+        if (!key || !dgLastJson) return;
+        var val = dgLastJson[key];
+        if (dgExpandedKeys[key]) {
+          delete dgExpandedKeys[key];
+          td.classList.remove('expanded');
+          td.innerHTML = dgValShort(val);
+        } else {
+          dgExpandedKeys[key] = true;
+          td.classList.add('expanded');
+          td.innerHTML = dgValFull(val);
+        }
+      });
+    }
+
+    window.initDiag = function() {
+      window._diagInited = true;
+      $('#dg-btnStart').on('click', dgStartPoll);
+      $('#dg-btnStop').on('click', dgStopPoll);
+      $('#dg-btnOnce').on('click', function() { dgDoRequest(); });
+      setupColResize();
+      setupValToggle();
+      setupWriteBtn();
+      dgLog('诊断面板就绪');
+      setTimeout(function() { dgDoRequest(); }, 200);
+    };
+
+  });
+  </script>
+</body>
+</html>

@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1"
+     id="qc_svg_root"
+     viewBox="0 0 349 733"
+     width="100%" height="100%"
+     preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <linearGradient id="grad_roller" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7f7f7f"/>
+      <stop offset="0.48" stop-color="#eeeeee"/>
+      <stop offset="1" stop-color="#7a7a7a"/>
+    </linearGradient>
+
+    <linearGradient id="grad_ball" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d3d3d3"/>
+      <stop offset="1" stop-color="#8f8f8f"/>
+    </linearGradient>
+
+    <linearGradient id="grad_small_ball" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#eeeeee"/>
+      <stop offset="1" stop-color="#aaaaaa"/>
+    </linearGradient>
+
+    <style>
+      .qcLine { fill: none; stroke: #757575; stroke-width: 4; stroke-linecap: square; stroke-linejoin: round; }
+      .qcThinLine { fill: none; stroke: #777777; stroke-width: 3; stroke-linecap: square; stroke-linejoin: round; }
+      .qcBodyFill { fill: #f1f1f1; stroke: none; }
+      .qcStatusFill { fill: #cfcfcf; stroke: none; }
+      .qcStatusText { fill: #ffffff; font-family: Arial, Helvetica, sans-serif; font-size: 44px; font-weight: 700; }
+      .qcFanFill { fill: #a8a8a8; stroke: none; }
+      .qcRollerFill { fill: url(#grad_roller); stroke: #777777; stroke-width: 1.4; }
+      .qcRollerHighlight { fill: none; stroke: #ffffff; stroke-width: 3; opacity: 0.58; }
+      .qcSensorFill { fill: #b7b7b7; stroke: none; }
+      .qcProductFill { fill: url(#grad_ball); stroke: none; }
+      .qcSmallProductFill { fill: url(#grad_small_ball); stroke: #555555; stroke-width: 2; }
+      .qcBeltFill { fill: #000000; stroke: none; }
+      .qcHiddenPath { fill: none; stroke: none; }
+    </style>
+  </defs>
+
+  <!-- Top reference pipe lines from the original image. -->
+  <g id="top_pipe" class="qcStaticLine">
+    <path id="top_pipe_left" class="qcLine" d="M0 52 H108 L118 62"/>
+    <path id="top_pipe_right" class="qcLine" d="M190 62 L201 52 H349"/>
+  </g>
+
+  <!-- Main inspection chamber outline. Keep these as static guide lines. -->
+  <g id="inspection_outline" class="qcStaticLine">
+    <path id="outline_left_wall" class="qcLine" d="M126 113 V428 L161 457"/>
+    <path id="outline_right_wall" class="qcLine" d="M180 96 L245 385 V421 L205 452"/>
+    <path id="outline_top_left" class="qcLine" d="M126 113 V83"/>
+    <path id="outline_top_right" class="qcLine" d="M180 96 L176 64"/>
+  </g>
+
+  <!-- Status badge. The badge body can be recolored. -->
+  <g id="status_badge" class="qcStatusBadge">
+    <path id="badge_body" class="qcStatusFill"
+          d="M116 57 H148 L161 82 L148 108 H116 L101 83 Z"/>
+    <text id="badge_text" class="qcStatusText" x="132" y="99" text-anchor="middle">E</text>
+  </g>
+
+  <!-- Fan. The whole group is controllable; keep center at 225,84 if spinning is later needed. -->
+  <g id="fan_group" class="qcFan">
+    <g id="fan_blades" class="qcFanBlades">
+      <path id="fan_blade_top" class="qcFanFill" d="M224 53 C238 63 238 76 225 82 C212 73 212 62 224 53 Z"/>
+      <path id="fan_blade_right" class="qcFanFill" d="M233 83 C246 74 258 78 264 91 C251 101 240 96 233 83 Z"/>
+      <path id="fan_blade_bottom" class="qcFanFill" d="M224 92 C237 101 236 114 223 122 C211 112 212 100 224 92 Z"/>
+      <path id="fan_blade_left" class="qcFanFill" d="M215 84 C202 94 190 90 184 78 C197 68 208 72 215 84 Z"/>
+    </g>
+    <circle id="fan_center" cx="224" cy="84" r="7" fill="#808080"/>
+  </g>
+
+  <!-- Static rollers. These are intended for color/style control, not rotation. -->
+  <g id="left_roller" class="qcRoller qcRollerLeft">
+    <path id="left_roller_body" class="qcRollerFill"
+          d="M149 138 L180 131 L234 365 L204 372 Z"/>
+    <path id="left_roller_highlight" class="qcRollerHighlight" d="M173 139 L224 363"/>
+  </g>
+
+  <g id="right_roller" class="qcRoller qcRollerRight">
+    <path id="right_roller_body" class="qcRollerFill"
+          d="M198 93 L228 86 L283 356 L252 363 Z"/>
+    <path id="right_roller_highlight" class="qcRollerHighlight" d="M222 95 L273 353"/>
+  </g>
+
+  <!-- Side block / sensor. -->
+  <g id="side_sensor" class="qcSensor">
+    <rect id="sensor_body" class="qcSensorFill" x="263" y="378" width="37" height="34" rx="3"/>
+    <rect id="sensor_shadow" x="258" y="385" width="7" height="20" fill="#9b9b9b"/>
+  </g>
+
+  <!-- Bottom wheel inside the chamber. -->
+  <g id="bottom_wheel" class="qcWheel">
+    <circle id="bottom_wheel_body" cx="190" cy="435" r="29" fill="#d9d9d9" stroke="#666666" stroke-width="2"/>
+  </g>
+
+  <!-- Small triangular marker above product. -->
+  <g id="guide_marker" class="qcGuideMarker">
+    <path id="guide_arrow" fill="#9c9c9c" d="M99 536 L149 534 L120 548 Z"/>
+  </g>
+
+  <!-- Conveyor section and controllable products. -->
+  <g id="conveyor_unit" class="qcConveyorUnit">
+    <path id="conveyor_left_line" class="qcLine" d="M107 585 L144 624"/>
+    <path id="conveyor_right_line" class="qcLine" d="M295 584 L258 624"/>
+    <path id="belt_black" class="qcBeltFill" d="M126 603 L148 625 H254 L276 603 Z"/>
+    <path id="belt_front_edge" class="qcThinLine" d="M148 625 H254"/>
+
+    <g id="main_product" class="qcMaterial qcProduct">
+      <circle id="main_product_body" class="qcProductFill" cx="194" cy="557" r="49"/>
+    </g>
+
+    <g id="small_product" class="qcMaterial qcSmallProduct">
+      <circle id="small_product_body" class="qcSmallProductFill" cx="262" cy="587" r="18"/>
+    </g>
+  </g>
+
+  <text id="station_number"
+        x="190" y="716"
+        text-anchor="middle"
+        font-family="Arial, Helvetica, sans-serif"
+        font-size="72"
+        fill="#000000">1</text>
+
+  <!-- Hidden guide paths for later Paper tPath tests. -->
+  <path id="path_product_drop" class="qcHiddenPath" d="M190 464 C190 500 193 530 194 557"/>
+  <path id="path_conveyor_move" class="qcHiddenPath" d="M95 587 H305"/>
+</svg>

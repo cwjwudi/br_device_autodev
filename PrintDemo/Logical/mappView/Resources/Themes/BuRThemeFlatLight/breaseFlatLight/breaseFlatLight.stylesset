@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<StylesSet id="breaseFlatLight" xmlns="http://www.br-automation.com/iat2015/stylesset/engineering/v1">
+	<Styles refId="BuRThemeFlatLightDefaultStyles" />
+	<Styles refId="BuRThemeFlatLightSystemStyles" />
+	<Styles refId="BuRThemeFlatLightButtonsStyles" />
+	<Styles refId="BuRThemeFlatLightCommonStyles" />
+	<Styles refId="BuRThemeFlatLightContainerStyles" />
+	<Styles refId="BuRThemeFlatLightNumericStyles" />
+	<Styles refId="BuRThemeFlatLightLabelTextsStyles" />
+	<Styles refId="BuRThemeFlatLightGraphicStyles" />
+	<Styles refId="BuRThemeFlatLightChartsStyles" />
+	<Styles refId="BuRThemeFlatLightSequencerStyles" />
+	<Styles refId="BuRThemeFlatLightListStyles" />
+</StylesSet>

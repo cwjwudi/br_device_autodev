@@ -1,0 +1,117 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Content id="Content_Motor" guid="e99e544e-5f5f-4a59-a29d-5d395c4fd6a2" height="900" width="1920" xmlns="http://www.br-automation.com/iat2015/contentDefinition/v2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Widgets>
+    <Widget xsi:type="widgets.brease.OnlineChart" id="OnlineChart1" top="40" left="50" width="390" height="319" zIndex="0" showGrid="false" chartBorderColor="rgba(0, 0, 0, 0)" borderStyle="none">
+      <Widgets>
+        <Widget xsi:type="widgets.brease.OnlineChartTimeAxis" id="OnlineChartTimeAxis1" zIndex="0" format="T" timeSpan="20">
+          <Widgets />
+        </Widget>
+        <Widget xsi:type="widgets.brease.OnlineChartYAxis" id="OnlineChartYAxis1" zIndex="1">
+          <Widgets>
+            <Widget xsi:type="widgets.brease.OnlineChartGraph" id="OnlineChartGraph1" zIndex="0" interpolationType="linear" maxValue="50" minValue="-50" xAxisRefId="OnlineChartTimeAxis1" lineWidth="1px" />
+            <Widget xsi:type="widgets.brease.OnlineChartGraph" id="OnlineChartGraph2" zIndex="1" maxValue="50" minValue="-50" xAxisRefId="OnlineChartTimeAxis1" lineColor="rgba(0, 0, 0, 1)" lineWidth="1px" />
+            <Widget xsi:type="widgets.brease.OnlineChartGraph" id="OnlineChartGraph3" zIndex="2" maxValue="50" minValue="-50" xAxisRefId="OnlineChartTimeAxis1" lineColor="rgba(0, 0, 0, 1)" lineWidth="1px" />
+          </Widgets>
+        </Widget>
+      </Widgets>
+    </Widget>
+    <Widget xsi:type="widgets.brease.OnlineChart" id="OnlineChart2" top="40" left="500" width="390" height="319" zIndex="1" showGrid="false" chartBorderColor="rgba(0, 0, 0, 0)" borderStyle="none">
+      <Widgets>
+        <Widget xsi:type="widgets.brease.OnlineChartTimeAxis" id="OnlineChartTimeAxis2" zIndex="0" format="T" timeSpan="20">
+          <Widgets />
+        </Widget>
+        <Widget xsi:type="widgets.brease.OnlineChartYAxis" id="OnlineChartYAxis2" zIndex="1">
+          <Widgets>
+            <Widget xsi:type="widgets.brease.OnlineChartGraph" id="OnlineChartGraph4" zIndex="0" interpolationType="linear" maxValue="50" minValue="-50" xAxisRefId="OnlineChartTimeAxis2" lineWidth="1px" />
+            <Widget xsi:type="widgets.brease.OnlineChartGraph" id="OnlineChartGraph5" zIndex="1" maxValue="50" minValue="-50" xAxisRefId="OnlineChartTimeAxis2" lineColor="rgba(0, 0, 0, 1)" lineWidth="1px" />
+            <Widget xsi:type="widgets.brease.OnlineChartGraph" id="OnlineChartGraph6" zIndex="2" maxValue="50" minValue="-50" xAxisRefId="OnlineChartTimeAxis2" lineColor="rgba(0, 0, 0, 1)" lineWidth="1px" />
+          </Widgets>
+        </Widget>
+      </Widgets>
+    </Widget>
+    <Widget xsi:type="widgets.brease.OnlineChart" id="OnlineChart3" top="30" left="950" width="390" height="319" zIndex="2" showGrid="false" chartBorderColor="rgba(0, 0, 0, 0)" borderStyle="none">
+      <Widgets>
+        <Widget xsi:type="widgets.brease.OnlineChartTimeAxis" id="OnlineChartTimeAxis3" zIndex="0" format="T" timeSpan="20">
+          <Widgets />
+        </Widget>
+        <Widget xsi:type="widgets.brease.OnlineChartYAxis" id="OnlineChartYAxis3" zIndex="1">
+          <Widgets>
+            <Widget xsi:type="widgets.brease.OnlineChartGraph" id="OnlineChartGraph7" zIndex="0" interpolationType="linear" maxValue="50" minValue="-50" xAxisRefId="OnlineChartTimeAxis3" lineWidth="1px" />
+            <Widget xsi:type="widgets.brease.OnlineChartGraph" id="OnlineChartGraph8" zIndex="1" maxValue="50" minValue="-50" xAxisRefId="OnlineChartTimeAxis3" lineColor="rgba(0, 0, 0, 1)" lineWidth="1px" />
+            <Widget xsi:type="widgets.brease.OnlineChartGraph" id="OnlineChartGraph9" zIndex="2" maxValue="50" minValue="-50" xAxisRefId="OnlineChartTimeAxis3" lineColor="rgba(0, 0, 0, 1)" lineWidth="1px" />
+          </Widgets>
+        </Widget>
+      </Widgets>
+    </Widget>
+    <Widget xsi:type="widgets.brease.OnlineChart" id="OnlineChart4" top="30" left="1400" width="390" height="319" zIndex="3" showGrid="false" chartBorderColor="rgba(0, 0, 0, 0)" borderStyle="none">
+      <Widgets>
+        <Widget xsi:type="widgets.brease.OnlineChartTimeAxis" id="OnlineChartTimeAxis4" zIndex="0" format="T" timeSpan="20">
+          <Widgets />
+        </Widget>
+        <Widget xsi:type="widgets.brease.OnlineChartYAxis" id="OnlineChartYAxis4" zIndex="1">
+          <Widgets>
+            <Widget xsi:type="widgets.brease.OnlineChartGraph" id="OnlineChartGraph10" zIndex="0" interpolationType="linear" maxValue="50" minValue="-50" xAxisRefId="OnlineChartTimeAxis4" lineWidth="1px" />
+            <Widget xsi:type="widgets.brease.OnlineChartGraph" id="OnlineChartGraph11" zIndex="1" maxValue="50" minValue="-50" xAxisRefId="OnlineChartTimeAxis4" lineColor="rgba(0, 0, 0, 1)" lineWidth="1px" />
+            <Widget xsi:type="widgets.brease.OnlineChartGraph" id="OnlineChartGraph12" zIndex="2" maxValue="50" minValue="-50" xAxisRefId="OnlineChartTimeAxis4" lineColor="rgba(0, 0, 0, 1)" lineWidth="1px" />
+          </Widgets>
+        </Widget>
+      </Widgets>
+    </Widget>
+    <Widget xsi:type="widgets.brease.OnlineChart" id="OnlineChart5" top="410" left="70" width="390" height="325" zIndex="4" showGrid="false" chartBorderColor="rgba(0, 0, 0, 0)" borderStyle="none">
+      <Widgets>
+        <Widget xsi:type="widgets.brease.OnlineChartTimeAxis" id="OnlineChartTimeAxis5" zIndex="0" format="T" timeSpan="20">
+          <Widgets />
+        </Widget>
+        <Widget xsi:type="widgets.brease.OnlineChartYAxis" id="OnlineChartYAxis5" zIndex="1">
+          <Widgets>
+            <Widget xsi:type="widgets.brease.OnlineChartGraph" id="OnlineChartGraph13" zIndex="0" interpolationType="linear" maxValue="50" minValue="-50" xAxisRefId="OnlineChartTimeAxis5" lineWidth="1px" />
+            <Widget xsi:type="widgets.brease.OnlineChartGraph" id="OnlineChartGraph14" zIndex="1" maxValue="50" minValue="-50" xAxisRefId="OnlineChartTimeAxis5" lineColor="rgba(0, 0, 0, 1)" lineWidth="1px" />
+            <Widget xsi:type="widgets.brease.OnlineChartGraph" id="OnlineChartGraph15" zIndex="2" maxValue="50" minValue="-50" xAxisRefId="OnlineChartTimeAxis5" lineColor="rgba(0, 0, 0, 1)" lineWidth="1px" />
+          </Widgets>
+        </Widget>
+      </Widgets>
+    </Widget>
+    <Widget xsi:type="widgets.brease.OnlineChart" id="OnlineChart6" top="410" left="520" width="390" height="325" zIndex="5" showGrid="false" chartBorderColor="rgba(0, 0, 0, 0)" borderStyle="none">
+      <Widgets>
+        <Widget xsi:type="widgets.brease.OnlineChartTimeAxis" id="OnlineChartTimeAxis6" zIndex="0" format="T" timeSpan="20">
+          <Widgets />
+        </Widget>
+        <Widget xsi:type="widgets.brease.OnlineChartYAxis" id="OnlineChartYAxis6" zIndex="1">
+          <Widgets>
+            <Widget xsi:type="widgets.brease.OnlineChartGraph" id="OnlineChartGraph16" zIndex="0" interpolationType="linear" maxValue="50" minValue="-50" xAxisRefId="OnlineChartTimeAxis6" lineWidth="1px" />
+            <Widget xsi:type="widgets.brease.OnlineChartGraph" id="OnlineChartGraph17" zIndex="1" maxValue="50" minValue="-50" xAxisRefId="OnlineChartTimeAxis6" lineColor="rgba(0, 0, 0, 1)" lineWidth="1px" />
+            <Widget xsi:type="widgets.brease.OnlineChartGraph" id="OnlineChartGraph18" zIndex="2" maxValue="50" minValue="-50" xAxisRefId="OnlineChartTimeAxis6" lineColor="rgba(0, 0, 0, 1)" lineWidth="1px" />
+          </Widgets>
+        </Widget>
+      </Widgets>
+    </Widget>
+    <Widget xsi:type="widgets.brease.OnlineChart" id="OnlineChart7" top="400" left="970" width="390" height="325" zIndex="6" showGrid="false" chartBorderColor="rgba(0, 0, 0, 0)" borderStyle="none">
+      <Widgets>
+        <Widget xsi:type="widgets.brease.OnlineChartTimeAxis" id="OnlineChartTimeAxis7" zIndex="0" format="T" timeSpan="20">
+          <Widgets />
+        </Widget>
+        <Widget xsi:type="widgets.brease.OnlineChartYAxis" id="OnlineChartYAxis7" zIndex="1">
+          <Widgets>
+            <Widget xsi:type="widgets.brease.OnlineChartGraph" id="OnlineChartGraph19" zIndex="0" interpolationType="linear" maxValue="50" minValue="-50" xAxisRefId="OnlineChartTimeAxis7" lineWidth="1px" />
+            <Widget xsi:type="widgets.brease.OnlineChartGraph" id="OnlineChartGraph20" zIndex="1" maxValue="50" minValue="-50" xAxisRefId="OnlineChartTimeAxis7" lineColor="rgba(0, 0, 0, 1)" lineWidth="1px" />
+            <Widget xsi:type="widgets.brease.OnlineChartGraph" id="OnlineChartGraph21" zIndex="2" maxValue="50" minValue="-50" xAxisRefId="OnlineChartTimeAxis7" lineColor="rgba(0, 0, 0, 1)" lineWidth="1px" />
+          </Widgets>
+        </Widget>
+      </Widgets>
+    </Widget>
+    <Widget xsi:type="widgets.brease.OnlineChart" id="OnlineChart8" top="400" left="1420" width="390" height="325" zIndex="7" showGrid="false" chartBorderColor="rgba(0, 0, 0, 0)" borderStyle="none">
+      <Widgets>
+        <Widget xsi:type="widgets.brease.OnlineChartTimeAxis" id="OnlineChartTimeAxis8" zIndex="0" format="T" timeSpan="20">
+          <Widgets />
+        </Widget>
+        <Widget xsi:type="widgets.brease.OnlineChartYAxis" id="OnlineChartYAxis8" zIndex="1">
+          <Widgets>
+            <Widget xsi:type="widgets.brease.OnlineChartGraph" id="OnlineChartGraph22" zIndex="0" interpolationType="linear" maxValue="50" minValue="-50" xAxisRefId="OnlineChartTimeAxis8" lineWidth="1px" />
+            <Widget xsi:type="widgets.brease.OnlineChartGraph" id="OnlineChartGraph23" zIndex="1" maxValue="50" minValue="-50" xAxisRefId="OnlineChartTimeAxis8" lineColor="rgba(0, 0, 0, 1)" lineWidth="1px" />
+            <Widget xsi:type="widgets.brease.OnlineChartGraph" id="OnlineChartGraph24" zIndex="2" maxValue="50" minValue="-50" xAxisRefId="OnlineChartTimeAxis8" lineColor="rgba(0, 0, 0, 1)" lineWidth="1px" />
+          </Widgets>
+        </Widget>
+      </Widgets>
+    </Widget>
+  </Widgets>
+</Content>

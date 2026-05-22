@@ -1,0 +1,230 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+    <head>
+        <!-- Generator:SMC BookVersion="1.28" DocVersion="1.6" -->
+        <title>Concept </title>
+        <meta content="IE=EDGE" http-equiv="x-ua-compatible" />
+        <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />
+        <script language="javascript" src="../../../../../../../help/js/jquery.js" type="text/javascript"></script>
+        <script language="javascript" src="../../../../../../../help/js/codebox.js" type="text/javascript"></script>
+        <link href="../../../../../../../help/help.css" rel="stylesheet" type="text/css" />
+        <link href="../../../../../../../help/as_config/editor.css" rel="stylesheet" type="text/css" />
+        <script type="text/javascript">
+				function toggleDropDownBlock(elem) {
+					var cls = elem.parentNode.className;
+					var closedCls = "closed";
+					var closedIdx = cls.indexOf(closedCls);
+					if (closedIdx > 0) {
+						elem.parentNode.className = cls.substring(0, closedIdx) + cls.substring(closedIdx + closedCls.length);
+					} else {
+						elem.parentNode.className += " " + closedCls;
+					}
+				}
+	</script>
+    </head>
+    <body>
+        <div class="ManualTitle">mapp View V5.24</div>
+        <h1 class="headline-content">Concept</h1>
+        <div class="blockRule block-description"><a name="N10BD43_N10BD52"></a><p class="par0">This section includes detailed information for the concept of widget "Paper".</p><p class="par0">Widget "Paper" is used to display SVG contents and manipulate certain elements. This makes it possible to display animations based on process logic. This page describes the different possibilities for manipulation, or "transformation".</p><p class="par0">For more information about the structure of SVG elements, see <a class="link link-url" href="https://www.w3schools.com/graphics/svg_intro.asp" target="NEW_WIN">SVG tutorial</a>.</p><p class="par0">For more information about coordinate systems in an SVG element, see <a class="link link-url" href="http://www.sarasoueidan.com/blog/svg-coordinate-systems/" target="NEW_WIN">SVG coordinate systems</a>.</p><p class="par0">Widget properties "svgFilePath" and "svgContent" define which SVG content should be displayed. Since size specification and coordinate systems can be defined in SVG files, it is important that the size of the widget corresponds to the size of the content if the content should be fully displayed on the widget in its initial state (without zooming). It is recommended to set attributes "width" and "height" to value "100%" in the root node of the SVG files to be used.</p><p class="par0"><span class="emphasis">Behavior during page change</span></p><p class="par0">If a transformation is currently executing on widget "Paper" and the user switches to another page in the mapp View HMI application, the transformation will continue to execute. </p><p class="par0">If the transformation string happens to change during the page change, however, the transformation is only continued after the user is back on the page containing widget "Paper". </p><p class="par0">If the transformation string changes several times during a page change, the last specified transformation is executed as soon as the user navigates to the page containing widget Paper. </p>
+        </div>
+        <div class="blockRule block-description"><a name="N10BD43_N10BDFE"></a>
+            <h2>Temporarily adding SVG objects</h2><p class="par0">Any SVG objects (e.g. a status text) can be displayed on widget "Paper" using property "svgContent". These objects are entered directly using SVG syntax. Binding this property to a process variable makes it possible to add or remove objects dynamically. The element is removed from widget "Paper" as soon as it is deleted from the string.</p>
+            <ul class="container-enum enum-standard standard" start="0"><li class="enum-title">Example</li><li class="enum-element" id="N10BD43_N10BE0C"><p>The following string is appended to property "svgContent":</p><pre xmlns:config="config://smc.broker.BrokerConfig" class="code code-example XML"><span class="xml-element-start-lt def-OpenTag def-Tag">&lt;</span><span class="xml-element-start-name def-Tag">text</span> <span class="xml-Attribute-name def-ParameterUnknown def-ParameterStrong def-Parameter">class</span><span class="xml-Attribute-eq def-Symbol">=</span><span class="xml-AttValue-start def-StringEdge def-String">"</span><span class="xml-AttValue def-String">cText</span><span class="xml-AttValue-end def-StringEdge def-String">"</span> <span class="xml-Attribute-name def-ParameterUnknown def-ParameterStrong def-Parameter">font-family</span><span class="xml-Attribute-eq def-Symbol">=</span><span class="xml-AttValue-start def-StringEdge def-String">"</span><span class="xml-AttValue def-String">Helvetica, Arial, sans-serif</span><span class="xml-AttValue-end def-StringEdge def-String">"</span> <span class="xml-Attribute-name def-ParameterUnknown def-ParameterStrong def-Parameter">font-size</span><span class="xml-Attribute-eq def-Symbol">=</span><span class="xml-AttValue-start def-StringEdge def-String">"</span><span class="xml-AttValue def-String">25</span><span class="xml-AttValue-end def-StringEdge def-String">"</span> <span class="xml-Attribute-name def-ParameterUnknown def-ParameterStrong def-Parameter">y</span><span class="xml-Attribute-eq def-Symbol">=</span><span class="xml-AttValue-start def-StringEdge def-String">"</span><span class="xml-AttValue def-String">380</span><span class="xml-AttValue-end def-StringEdge def-String">"</span> <span class="xml-Attribute-name def-ParameterUnknown def-ParameterStrong def-Parameter">x</span><span class="xml-Attribute-eq def-Symbol">=</span><span class="xml-AttValue-start def-StringEdge def-String">"</span><span class="xml-AttValue def-String">200</span><span class="xml-AttValue-end def-StringEdge def-String">"</span><span class="xml-element-start-gt def-OpenTag def-Tag">&gt;</span>mappView<span class="xml-element-end-lt def-CloseTag def-Tag">&lt;/</span><span class="xml-element-end-name def-Tag">text</span><span class="xml-element-end-gt def-CloseTag def-Tag">&gt;</span></pre><p class="par0">This places the text "mappView" at the coordinates x=200 and y=380. In addition, transformations can be defined for this text. For additional information about possible objects and transformations, see <a class="link link-url" href="https://www.w3schools.com/graphics/svg_intro.asp" target="NEW_WIN">SVG tutorial</a>.</p></li>
+            </ul>
+        </div>
+        <div class="blockRule block-description"><a name="N10BD43_N10BE61"></a>
+            <h2>Performing transformations</h2><p class="par0">In order to perform a transformation, a process variable must be connected to property "transform".</p><p class="par0"><span class="emphasis">Structure of the transformation string:</span></p><p class="par0">[{"<span class="emphasis">select</span>":<span class="italics">argument</span>,"parameter":<span class="italics">argument</span>,"parameter":[<span class="italics">argument</span>,<span class="italics">argument</span>]}]</p><p class="par0">If transformations should be triggered at the same time for multiple selected elements, the transformation string can be specified as a comma-separated list:</p><p class="par0">[{"<span class="emphasis">select</span>":<span class="italics">argument</span>,"parameter":<span class="italics">argument</span>},{"<span class="emphasis">select</span>":<span class="italics">argument</span>,"parameter":<span class="italics">argument</span>,"parameter":[<span class="italics">argument</span>,<span class="italics">argument</span>]}]</p>
+            <ul class="container-enum enum-standard standard" start="0"><li class="enum-title">Examples:</li><li class="enum-element" id="N10BD43_N10BEA3"><p>[{"select":"#box","duration":10000,"display":true,"tPath":["#conveyor",false]}]</p><p class="par0">This selects object "box", makes it visible and moves it along the path with ID "conveyor". All transformations take 10 seconds.</p></li><li class="enum-element" id="N10BD43_N10BEA9"><p>[{"select":"#box","duration":1000,"display":true,"fill":1,"translate":[100,-70]},{"select":"#lift","translate":[200,-20]}]</p><p class="par0">This selects object "box", makes it visible and moves it to coordinates X=100 and Y=-70. In addition, object "lift" is selected and moved to coordinates X=200 and Y=-20. All transformations applied to object "box" take 1 second. All transformations applied to object "lift" take the amount of time specified with property "transitionTime".</p></li>
+            </ul><p class="par0">Parameter "select" is required for each transformation. This parameter is used to select an element in an SVG file.</p><p class="par0">The following explains all possible parameters and their arguments.</p>
+        </div>
+        <div class="dropdown-ct closed"><a name="N10BD43_N10BEB5"></a>
+            <h2 class="dropdown-title" onclick="toggleDropDownBlock(this)"><span class="dropdown-title-text">duration</span>
+            </h2>
+            <div class="dropdown-body"><p class="par0">This parameter overwrites the duration defined in the properties for this one operation. This duration is specified in milliseconds.</p><p class="par0">If a duration is not specified, then the duration specified with widget property "transitionTime" is used.</p>
+                <ul class="container-enum enum-standard standard" start="0"><li class="enum-title">Examples:</li><li class="enum-element" id="N10BD43_N10BEC7"><p>"duration":6000</p><p class="par0">The transformation will take 6 seconds.</p></li>
+                </ul>
+            </div>
+        </div>
+        <div class="dropdown-ct closed"><a name="N10BD43_N10BECD"></a>
+            <h2 class="dropdown-title" onclick="toggleDropDownBlock(this)"><span class="dropdown-title-text">spin</span>
+            </h2>
+            <div class="dropdown-body"><p class="par0">This parameter spins the selected SVG object. This parameters requires three arguments to be specified:</p>
+                <ul class="container-enum enum-standard standard"><li class="enum-element" id="N10BD43_N10BED9"><p>angle: Angle</p></li><li class="enum-element" id="N10BD43_N10BEDC"><p>cx: Midpoint of the rotation on the x-coordinate</p></li><li class="enum-element" id="N10BD43_N10BEDF"><p>cy: Midpoint of the rotation on the y-coordinate</p></li>
+                </ul><p class="par0">With its arguments, the parameter looks like this: "spin":[angle,cx,cy].</p>
+                <ul class="container-enum enum-standard standard" start="0"><li class="enum-title">Examples:</li><li class="enum-element" id="N10BD43_N10BEEB"><p>"spin":[45,0,0]</p><p class="par0">The object is rotated 45° around the coordinates X=0 and Y=0.</p><a name="N10BD43_N10BEF1"></a>
+                        <table class="parameter_tab font-std">
+                            <col width="50%" />
+                            <col width="50%" />
+                            <tbody>
+                                <tr class="table-row">
+                                    <th align="center" class="content-level0 odd center"><p>Appearance before transformation</p>
+                                    </th>
+                                    <th align="center" class="content-level0 odd center"><p>Appearance after transformation</p>
+                                    </th>
+                                </tr>
+                                <tr class="table-row">
+                                    <td align="center" class="content-level0 odd center"><p><a name="N10BD43_N10BF15"></a><span style="width:344px;">
+                                                <img border="0" height="330" origHeight="330" origWidth="338" src="images/display_true.png" width="338" /></span></p>
+                                    </td>
+                                    <td align="center" class="content-level0 odd center"><p><a name="N10BD43_N10BF87"></a><span style="width:351px;">
+                                                <img border="0" height="323" origHeight="323" origWidth="345" src="images/spin_45degree.png" width="345" /></span></p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table></li><li class="enum-element" id="N10BD43_N10C000"><p>"spin":[720,100,0]</p><p class="par0">The object completes 2 full rotations around the X=100 and Y=0.</p></li>
+                </ul>
+            </div>
+        </div>
+        <div class="dropdown-ct closed"><a name="N10BD43_N10C006"></a>
+            <h2 class="dropdown-title" onclick="toggleDropDownBlock(this)"><span class="dropdown-title-text">translate</span>
+            </h2>
+            <div class="dropdown-body"><p class="par0">This parameter shifts the selected SVG object. This parameters requires the following arguments:</p>
+                <ul class="container-enum enum-standard standard"><li class="enum-element" id="N10BD43_N10C012"><p>tx: Target position on the x-axis</p></li><li class="enum-element" id="N10BD43_N10C015"><p>ty: Target position on the y-axis</p></li>
+                </ul><p class="par0">With its arguments, the parameter looks like this: "translate":[tx,ty].</p><p class="par0">The zero point of the object is shifted to the specified coordinates.</p>
+                <ul class="container-enum enum-standard standard" start="0"><li class="enum-title">Examples:</li><li class="enum-element" id="N10BD43_N10C024"><p>"translate":[-100,0]</p><p class="par0">The zero point of the object is shifted to the coordinates X=-100 and Y=0.</p><a name="N10BD43_N10C02A"></a>
+                        <table class="parameter_tab font-std">
+                            <col width="50%" />
+                            <col width="50%" />
+                            <tbody>
+                                <tr class="table-row">
+                                    <th align="center" class="content-level0 odd center"><p>Appearance before transformation</p>
+                                    </th>
+                                    <th align="center" class="content-level0 odd center"><p>Appearance after transformation</p>
+                                    </th>
+                                </tr>
+                                <tr class="table-row">
+                                    <td align="center" class="content-level0 odd center"><p><a name="N10BD43_N10C04E"></a><span style="width:344px;">
+                                                <img border="0" height="330" origHeight="330" origWidth="338" src="images/display_true.png" width="338" /></span></p>
+                                    </td>
+                                    <td align="center" class="content-level0 odd center"><p><a name="N10BD43_N10C0C0"></a><span style="width:582px;">
+                                                <img border="0" height="341" origHeight="341" origWidth="576" src="images/translate_x-100.png" width="576" /></span></p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table></li><li class="enum-element" id="N10BD43_N10C139"><p>"translate":[-70,70]</p><p class="par0">The zero point of the object is shifted to the coordinates X=-70 and Y=70.</p></li>
+                </ul>
+            </div>
+        </div>
+        <div class="dropdown-ct closed"><a name="N10BD43_N10C13F"></a>
+            <h2 class="dropdown-title" onclick="toggleDropDownBlock(this)"><span class="dropdown-title-text">scale</span>
+            </h2>
+            <div class="dropdown-body"><p class="par0">This parameter modifies the size of the selected SVG object. This parameters requires the following arguments:</p>
+                <ul class="container-enum enum-standard standard"><li class="enum-element" id="N10BD43_N10C14B"><p>sx: Scaling of the object in the x-direction.</p></li><li class="enum-element" id="N10BD43_N10C14E"><p>sy: Scaling of the object in the y-direction.</p></li>
+                </ul><p class="par0">With its arguments, the parameter looks like this: "scale":[sx,sy].</p>
+                <ul class="container-enum enum-standard standard" start="0"><li class="enum-title">Examples:</li><li class="enum-element" id="N10BD43_N10C15A"><p>"scale":[0.5,1]</p><p class="par0">The size of the object in the x-direction is halved.</p><a name="N10BD43_N10C160"></a>
+                        <table class="parameter_tab font-std">
+                            <col width="50%" />
+                            <col width="50%" />
+                            <tbody>
+                                <tr class="table-row">
+                                    <th align="center" class="content-level0 odd center"><p>Appearance before transformation</p>
+                                    </th>
+                                    <th align="center" class="content-level0 odd center"><p>Appearance after transformation</p>
+                                    </th>
+                                </tr>
+                                <tr class="table-row">
+                                    <td align="center" class="content-level0 odd center"><p><a name="N10BD43_N10C184"></a><span style="width:344px;">
+                                                <img border="0" height="330" origHeight="330" origWidth="338" src="images/display_true.png" width="338" /></span></p>
+                                    </td>
+                                    <td align="center" class="content-level0 odd center"><p><a name="N10BD43_N10C1F6"></a><span style="width:345px;">
+                                                <img border="0" height="340" origHeight="340" origWidth="339" src="images/scale_x-0_5.png" width="339" /></span></p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table></li><li class="enum-element" id="N10BD43_N10C26F"><p>"scale":[1,2]</p><p class="par0">The size of the object in the y-direction is doubled.</p></li>
+                </ul>
+            </div>
+        </div>
+        <div class="dropdown-ct closed"><a name="N10BD43_N10C275"></a>
+            <h2 class="dropdown-title" onclick="toggleDropDownBlock(this)"><span class="dropdown-title-text">tPath</span>
+            </h2>
+            <div class="dropdown-body"><p class="par0">This parameter moves the selected SVG object along a predefined path. This parameters requires the following arguments:</p>
+                <ul class="container-enum enum-standard standard"><li class="enum-element" id="N10BD43_N10C281"><p>pathId: ID of the path in the SVG structure that the object should follow.</p></li><li class="enum-element" id="N10BD43_N10C284"><p>autoRotate: Defines whether the object should rotate automatically, for example in curves. Values "true" or "false" are possible.</p></li>
+                </ul><p class="par0">The following arguments can also be specified. These arguments are optional.</p>
+                <ul class="container-enum enum-standard standard"><li class="enum-element" id="N10BD43_N10C28D"><p>startPercentage: Defines the starting point on the path. Default value: 0%</p></li><li class="enum-element" id="N10BD43_N10C290"><p>endPercentage: Defines the endpoint on the path. Default value: 100%</p></li>
+                </ul><p class="par0">With its arguments, the parameter looks like this: "tPath":["#pathId",autoRotate,startPercentage,endPercentage].</p>
+                <ul class="container-enum enum-standard standard" start="0"><li class="enum-title">Examples:</li><li class="enum-element" id="N10BD43_N10C29C"><p>"tPath":["#conveyor",false]</p><p class="par0">The object follows the entire path with ID "conveyor" and is not rotated automatically.</p><p class="par0"><a name="N10BD43_N10C2A4"></a><span style="width:676px;">
+                                <img border="0" height="568" origHeight="568" origWidth="670" src="images/tpath_norotation.png" width="670" /></span></p></li><li class="enum-element" id="N10BD43_N10C311"><p>"tPath":["#robot",true,20,60]</p><p class="par0">The object follows the path "robot". If the path does not travel in a straight line, then the object will be rotated automatically. The object only follows 40% of the path; the movement begins at the 20% mark.</p><p class="par0"><a name="N10BD43_N10C319"></a><span style="width:703px;">
+                                <img border="0" height="550" origHeight="550" origWidth="697" src="images/tpath_withrotation.png" width="697" /></span></p></li>
+                </ul>
+            </div>
+        </div>
+        <div class="dropdown-ct closed"><a name="N10BD43_N10C386"></a>
+            <h2 class="dropdown-title" onclick="toggleDropDownBlock(this)"><span class="dropdown-title-text">fill</span>
+            </h2>
+            <div class="dropdown-body"><p class="par0">This parameter modifies the background color of the selected object. This parameters requires the following argument:</p>
+                <ul class="container-enum enum-standard standard"><li class="enum-element" id="N10BD43_N10C392"><p>colorIndex: Index of the background color to be used. The list of available colors is defined in property "colorList".</p></li>
+                </ul><p class="par0">With its arguments, the parameter looks like this: "fill":colorIndex.</p>
+                <ul class="container-enum enum-standard standard" start="0"><li class="enum-title">Examples:</li><li class="enum-element" id="N10BD43_N10C39E"><p>"fill":3</p><p class="par0">The selected object is filled with the background color at index "3".</p><a name="N10BD43_N10C3A4"></a>
+                        <table class="parameter_tab font-std">
+                            <col width="50%" />
+                            <col width="50%" />
+                            <tbody>
+                                <tr class="table-row">
+                                    <th align="center" class="content-level0 odd center"><p>Appearance before transformation</p>
+                                    </th>
+                                    <th align="center" class="content-level0 odd center"><p>Appearance after transformation</p>
+                                    </th>
+                                </tr>
+                                <tr class="table-row">
+                                    <td align="center" class="content-level0 odd center"><p><a name="N10BD43_N10C3C8"></a><span style="width:344px;">
+                                                <img border="0" height="330" origHeight="330" origWidth="338" src="images/display_true.png" width="338" /></span></p>
+                                    </td>
+                                    <td align="center" class="content-level0 odd center"><p><a name="N10BD43_N10C43A"></a><span style="width:338px;">
+                                                <img border="0" height="336" origHeight="336" origWidth="332" src="images/fill_changed.png" width="332" /></span></p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table></li>
+                </ul>
+            </div>
+        </div>
+        <div class="dropdown-ct closed"><a name="N10BD43_N10C4B3"></a>
+            <h2 class="dropdown-title" onclick="toggleDropDownBlock(this)"><span class="dropdown-title-text">style (defining complex styles of an object)</span>
+            </h2>
+            <div class="dropdown-body"><p class="par0">This parameter modifies the style of the selected object. Depending on the object, the style could be the background color, line color, line width or line opacity. This parameter needs a string from one or more key value pairs separated by a semicolon.</p><p class="par0">The parameter and its arguments looks like this: "style":"string".</p>
+                <ul class="container-enum enum-standard standard" start="0"><li class="enum-title">Examples:</li><li class="enum-element" id="N10BD43_N10C4C5"><p>"style":"fill:1;stroke:2;stroke-width:15px;stroke-opacity:0.5"</p><p class="par0">The selected object is filled with the background color at index "1"; the line color is set to the color at index "2". In addition, the line width is increased to 15 pixels and the line opacity set to 50%.</p><a name="N10BD43_N10C4CB"></a>
+                        <table class="parameter_tab font-std">
+                            <col width="50%" />
+                            <col width="50%" />
+                            <tbody>
+                                <tr class="table-row">
+                                    <th align="center" class="content-level0 odd center"><p>Appearance before transformation</p>
+                                    </th>
+                                    <th align="center" class="content-level0 odd center"><p>Appearance after transformation</p>
+                                    </th>
+                                </tr>
+                                <tr class="table-row">
+                                    <td align="center" class="content-level0 odd center"><p><a name="N10BD43_N10C4EF"></a><span style="width:344px;">
+                                                <img border="0" height="330" origHeight="330" origWidth="338" src="images/display_true.png" width="338" /></span></p>
+                                    </td>
+                                    <td align="center" class="content-level0 odd center"><p><a name="N10BD43_N10C561"></a><span style="width:316px;">
+                                                <img border="0" height="310" origHeight="310" origWidth="310" src="images/style_changed.png" width="310" /></span></p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table></li>
+                </ul>
+                <div class="notice info no-title"><p class="par0">Parameter "style" can include argument "fill". If this is the case (as in the example) and the previously described "fill" parameter is used in the same transformation, then parameter "fill" has no effect and argument "fill" of parameter "style" is applied.</p>
+                </div>
+            </div>
+        </div>
+        <div class="dropdown-ct closed"><a name="N10BD43_N10C5E1"></a>
+            <h2 class="dropdown-title" onclick="toggleDropDownBlock(this)"><span class="dropdown-title-text">display</span>
+            </h2>
+            <div class="dropdown-body"><p class="par0">This parameter modifies the visibility of an object. This parameters requires the following argument:</p>
+                <ul class="container-enum enum-standard standard"><li class="enum-element" id="N10BD43_N10C5ED"><p>visibility: Defines whether the object should be displayed on widget "Paper" or not. Values "true" or "false" are possible.</p></li>
+                </ul><p class="par0">With its arguments, the parameter looks like this: "display":visibility.</p>
+                <ul class="container-enum enum-standard standard" start="0"><li class="enum-title">Examples:</li><li class="enum-element" id="N10BD43_N10C5F9"><p>"display":true</p><p class="par0">The selected object is displayed.</p><p class="par0"><a name="N10BD43_N10C601"></a><span style="width:344px;">
+                                <img border="0" height="330" origHeight="330" origWidth="338" src="images/display_true.png" width="338" /></span></p></li><li class="enum-element" id="N10BD43_N10C66E"><p>"display":false</p><p class="par0">The selected object is not displayed.</p><p class="par0"><a name="N10BD43_N10C676"></a><span style="width:341px;">
+                                <img border="0" height="319" origHeight="319" origWidth="335" src="images/display_false.png" width="335" /></span></p></li>
+                </ul>
+            </div>
+        </div>
+        <div class="blockRule block-description"><a name="N10BD43_N10C6E3"></a>
+            <h2>Adding non-SVG elements</h2><p class="par0">Tag "foreignObject" tag must be used to add other image content to an SVG image, such as a PNG or JPG image.</p><p class="par0">The width and length must also be added.</p>
+            <ul class="container-enum enum-standard standard" start="0"><li class="enum-title">Example</li><li class="enum-element" id="N10BD43_N10C6F4"><p>The following string is appended to property "svgContent" with &lt;img&gt;:</p><pre xmlns:config="config://smc.broker.BrokerConfig" class="code code-example">'&lt;foreignObject x="0" y="0" width="32" height="32"&gt;&lt;img src="Media/Star.png" height="32" width="32"/&gt;&lt;/foreignObject&gt;'</pre><p class="par0">This places &lt;img src="Media/Star.png"/&gt; with the height and width of 32 at coordinates x=0 and y=0.</p></li>
+            </ul>
+        </div>
+    </body>
+</html>

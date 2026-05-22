@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<?AutomationStudio FileVersion="4.9"?>
+<Package SubType="StylesSetPackage" PackageType="StylesSetPackage" xmlns="http://br-automation.co.at/AS/Package">
+  <Objects>
+    <Object Type="File" Description="Styles Set" TransferedForTargetSourceCompare="true">breaseFlatLight.stylesset</Object>
+    <Object Type="File" TransferedForTargetSourceCompare="true">BuRThemeFlatLightDefaultStyles.styles</Object>
+    <Object Type="File" TransferedForTargetSourceCompare="true">BuRThemeFlatLightSystemStyles.styles</Object>
+    <Object Type="File" TransferedForTargetSourceCompare="true">BuRThemeFlatLightButtonsStyles.styles</Object>
+    <Object Type="File" TransferedForTargetSourceCompare="true">BuRThemeFlatLightCommonStyles.styles</Object>
+    <Object Type="File" TransferedForTargetSourceCompare="true">BuRThemeFlatLightContainerStyles.styles</Object>
+    <Object Type="File" TransferedForTargetSourceCompare="true">BuRThemeFlatLightNumericStyles.styles</Object>
+    <Object Type="File" TransferedForTargetSourceCompare="true">BuRThemeFlatLightLabelTextsStyles.styles</Object>
+    <Object Type="File" TransferedForTargetSourceCompare="true">BuRThemeFlatLightGraphicStyles.styles</Object>
+    <Object Type="File" TransferedForTargetSourceCompare="true">BuRThemeFlatLightChartsStyles.styles</Object>
+    <Object Type="File" TransferedForTargetSourceCompare="true">BuRThemeFlatLightSequencerStyles.styles</Object>
+    <Object Type="File" TransferedForTargetSourceCompare="true">BuRThemeFlatLightListStyles.styles</Object>
+  </Objects>
+</Package>

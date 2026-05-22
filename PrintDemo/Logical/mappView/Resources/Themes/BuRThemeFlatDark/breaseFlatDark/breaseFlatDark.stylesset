@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<StylesSet id="breaseFlatDark" xmlns="http://www.br-automation.com/iat2015/stylesset/engineering/v1">
+	<Styles refId="BuRThemeFlatDarkDefaultStyles" />
+	<Styles refId="BuRThemeFlatDarkSystemStyles" />
+	<Styles refId="BuRThemeFlatDarkButtonsStyles" />
+	<Styles refId="BuRThemeFlatDarkCommonStyles" />
+	<Styles refId="BuRThemeFlatDarkContainerStyles" />
+	<Styles refId="BuRThemeFlatDarkNumericStyles" />
+	<Styles refId="BuRThemeFlatDarkLabelTextsStyles" />
+	<Styles refId="BuRThemeFlatDarkGraphicStyles" />
+	<Styles refId="BuRThemeFlatDarkChartsStyles" />
+	<Styles refId="BuRThemeFlatDarkSequencerStyles" />
+	<Styles refId="BuRThemeFlatDarkListStyles" />
+</StylesSet>

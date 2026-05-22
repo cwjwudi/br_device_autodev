@@ -1,0 +1,50 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<vdef:Visualization id="vis_0" autoUpdate="true" xmlns:vdef="http://www.br-automation.com/iat2015/visualizationDefinition/v2">
+  <StartPage pageRefId="X67" />
+  <Pages>
+    <Page refId="X67" />
+    <Page refId="BST" />
+    <Page refId="Motor" />
+    <Page refId="SVG" />
+  </Pages>
+  <Navigations />
+  <BindingsSets>
+    <BindingsSet refId="Content_X67" />
+    <BindingsSet refId="Content_BST" />
+    <BindingsSet refId="Content_Motor" />
+    <BindingsSet refId="Content_SVG" />
+  </BindingsSets>
+  <EventBindingsSets />
+  <EventScriptsSets>
+    <EventScriptsSet refId="eventscript_0" />
+  </EventScriptsSets>
+  <Dialogs />
+  <Contents>
+    <Content refId="Content_X67" />
+    <Content refId="Content_AreaHeader" />
+    <Content refId="Content_AreaNavigation" />
+    <Content refId="Content_BST" />
+    <Content refId="Content_Motor" />
+    <Content refId="Content_SVG" />
+  </Contents>
+  <SnippetsSets />
+  <VariablesSets />
+  <ExpressionsSets />
+  <StartTheme themeRefId="BuRThemeFlatLight" />
+  <Themes>
+    <Theme refId="BuRThemeFlatDark" />
+    <Theme refId="BuRThemeFlatLight" />
+  </Themes>
+  <Configurations>
+    <Configuration key="activityCount" value="false" />
+    <Configuration key="zoom" value="true" />
+    <Gestures>
+      <!--<SystemGesture1 touchPoints="2" />
+		  <SystemGesture2 touchPoints="2" />
+		  <SystemGesture3 touchPoints="2" />-->
+    </Gestures>
+    <VirtualKeyboards>
+      <!--<InputProcessing onKeyDown="true" />-->
+    </VirtualKeyboards>
+  </Configurations>
+</vdef:Visualization>

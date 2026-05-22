@@ -1,0 +1,52 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<?AutomationStudio FileVersion="6.0"?>
+<OpcUaSource FileVersion="10">
+  <Aliases>
+    <ACLAliases />
+    <EURangeViolationAliases />
+    <EURangesAliases />
+    <EngineeringUnitAliases />
+  </Aliases>
+  <Module Name="&lt;Default&gt;">
+    <GlobalVariables Name="Global Variables">
+      <Variable Name="gstHmi" RecursiveEnable="2">
+        <Variable Name="stInputs">
+          <Variable Name="bCheckedPu" RecursiveEnable="2" />
+          <Variable Name="bMoveCurveLeft" />
+          <Variable Name="bMoveCurveRight" />
+          <Variable Name="bMoveLockBoxLeft" />
+          <Variable Name="bMoveLockBoxRight" />
+          <Variable Name="diLockBoxWidth" />
+          <Variable Name="bCmdLatchPos" />
+          <Variable Name="bVisMarkIntervalAdd" />
+          <Variable Name="bVisMarkIntervalMinus" />
+          <Variable Name="bActivePuTeachMode" />
+          <Variable Name="bRefreshSimData" />
+        </Variable>
+        <Variable Name="stOutputs">
+          <Variable Name="diSImage" />
+          <Variable Name="diPuWindowIntervalmm" />
+          <Variable Name="rPuBiasValue" RecursiveEnable="2" />
+          <Variable Name="rPuBiasLow" RecursiveEnable="2" />
+          <Variable Name="rPuBiasHigh" RecursiveEnable="2" />
+        </Variable>
+        <Variable Name="stConfig">
+          <Variable Name="strPuChartAdr" />
+        </Variable>
+      </Variable>
+      <Variable Name="gstMainInface">
+        <Variable Name="stFromMain">
+          <Variable Name="usiActiveDrawMode" />
+          <Variable Name="diSImage" />
+        </Variable>
+        <Variable Name="stToMain">
+          <Variable Name="usiActivePU" />
+        </Variable>
+      </Variable>
+    </GlobalVariables>
+    <Task Name="SVG">
+      <Variable Name="strTransform" />
+      <Variable Name="astSvgPu" RecursiveEnable="2" />
+    </Task>
+  </Module>
+</OpcUaSource>

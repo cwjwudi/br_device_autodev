@@ -1,0 +1,8 @@
+﻿<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<?smc BookVersion="1.28" ModularHelp="false"?>
+<Help>
+	<Section File="paper.html" Id="880427f6-2b8f-4844-bc88-e0b9d7da7d60" Text="Paper">
+		<Page File="aktionen_und_ereignisse.html" Id="26febf6d-853e-4eb1-9aba-df81d9a833a9" Text="Actions and events"/>
+		<Page File="konzept.html" Id="cffe70aa-3ccd-46cc-8fb4-82cb51a0f094" Text="Concept"/>
+	</Section>
+</Help>

@@ -1,0 +1,17 @@
+VAR
+	gstHmi : HMI_Interface_typ;
+	gstMiddle : Middle_Interface_typ;
+	gstAspInface : Asp_Interface_typ;
+	gstMainInface : Main_Interface_typ;
+END_VAR
+(*CONSTANT*)
+VAR CONSTANT
+	ST_DATA_LEN : UDINT := 1100;
+	ST_DATA_LEN_MINUS_ONE : UDINT := ST_DATA_LEN-1;
+	ST_DATA_LEN_DOUBLE : UDINT := ST_DATA_LEN*2;
+	ST_DATA_LEN_4T3 : UDINT := ST_DATA_LEN*4/3;
+	ST_SEP_DATA_LEN : UDINT := 252;
+	ST_SEP_LEN : UDINT := ST_DATA_LEN_4T3/ST_SEP_DATA_LEN + 1;
+	ST_SEP_LEN_MINUS_ONE : UDINT := ST_SEP_LEN-1;
+	ST_PU_SIZE : UDINT := 10;
+END_VAR

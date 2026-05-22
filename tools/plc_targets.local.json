@@ -1,0 +1,59 @@
+{
+  "automation_studio": {
+    "version": "AS6.5",
+    "bin_dir": "D:\\BRAutomation\\AS65\\AS6\\bin-en",
+    "build_exe": "D:\\BRAutomation\\AS65\\AS6\\bin-en\\BR.AS.Build.exe",
+    "pvi_transfer_exe": "D:\\BRAutomation\\AS65\\PVI6\\PVI\\Tools\\PVITransfer\\PVITransfer.exe"
+  },
+  "opcua": {
+    "auto_expose_all": false,
+    "exposure_mode": "whitelist",
+    "verify_after_download": true,
+    "endpoint_port": 4840,
+    "validation_node_ids": [
+      "ns=5;s=::AsGlobalPV:gstHmi.stOutputs.diSImage",
+      "ns=5;s=::AsGlobalPV:gstHmi.stOutputs.diPuWindowIntervalmm",
+      "ns=5;s=::AsGlobalPV:gstHmi.stConfig.strPuChartAdr",
+      "ns=5;s=::AsGlobalPV:gstMainInface.stFromMain.diSImage",
+      "ns=5;s=::AsGlobalPV:gstMainInface.stToMain.usiActivePU",
+      "ns=5;s=::SVG:strTransform"
+    ]
+  },
+  "pvi": {
+    "enabled": true,
+    "verify_after_download": false,
+    "pvi_dll_dir": null,
+    "validation_variables": [
+      {
+        "scope": "global",
+        "name": "gstHmi.stOutputs.diSImage"
+      },
+      {
+        "scope": "global",
+        "name": "gstHmi.stConfig.strPuChartAdr"
+      },
+      {
+        "scope": "global",
+        "name": "gstMainInface.stToMain.usiActivePU"
+      },
+      {
+        "scope": "task",
+        "task": "SVG",
+        "name": "strTransform"
+      }
+    ]
+  },
+  "targets": {
+    "arsim": {
+      "ip": "127.0.0.1",
+      "role": "arsim",
+      "allow_auto_download": true,
+      "arsim_loader_exe": "D:\\codex_ws\\motion_svg_test\\PrintDemo\\Temp\\Simulation\\Config1\\X20CP3687X\\ar000loader.exe"
+    },
+    "test_plc": {
+      "ip": "192.168.50.233",
+      "role": "dedicated_test_plc",
+      "allow_auto_download": true
+    }
+  }
+}

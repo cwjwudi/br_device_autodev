@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<?AutomationStudio FileVersion="4.9"?>
+<Package SubType="StylesSetPackage" PackageType="StylesSetPackage" xmlns="http://br-automation.co.at/AS/Package">
+  <Objects>
+    <Object Type="File" Description="Styles Set" TransferedForTargetSourceCompare="true">breaseFlatDark.stylesset</Object>
+    <Object Type="File" TransferedForTargetSourceCompare="true">BuRThemeFlatDarkDefaultStyles.styles</Object>
+    <Object Type="File" TransferedForTargetSourceCompare="true">BuRThemeFlatDarkSystemStyles.styles</Object>
+    <Object Type="File" TransferedForTargetSourceCompare="true">BuRThemeFlatDarkButtonsStyles.styles</Object>
+    <Object Type="File" TransferedForTargetSourceCompare="true">BuRThemeFlatDarkCommonStyles.styles</Object>
+    <Object Type="File" TransferedForTargetSourceCompare="true">BuRThemeFlatDarkContainerStyles.styles</Object>
+    <Object Type="File" TransferedForTargetSourceCompare="true">BuRThemeFlatDarkNumericStyles.styles</Object>
+    <Object Type="File" TransferedForTargetSourceCompare="true">BuRThemeFlatDarkLabelTextsStyles.styles</Object>
+    <Object Type="File" TransferedForTargetSourceCompare="true">BuRThemeFlatDarkGraphicStyles.styles</Object>
+    <Object Type="File" TransferedForTargetSourceCompare="true">BuRThemeFlatDarkChartsStyles.styles</Object>
+    <Object Type="File" TransferedForTargetSourceCompare="true">BuRThemeFlatDarkSequencerStyles.styles</Object>
+    <Object Type="File" TransferedForTargetSourceCompare="true">BuRThemeFlatDarkListStyles.styles</Object>
+  </Objects>
+</Package>
