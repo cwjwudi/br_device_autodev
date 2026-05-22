@@ -46,7 +46,63 @@ function Get-TargetConfig {
 
 function Write-ObjectJson {
     param([Parameter(Mandatory = $true)]$Object)
-    $Object | ConvertTo-Json -Depth 8
+    $Object | ConvertTo-Json -Depth 16
+}
+
+function Get-OutputLines {
+    param($Output)
+    return @($Output | ForEach-Object { $_.ToString() })
+}
+
+function Get-OutputTail {
+    param(
+        [string[]]$Lines,
+        [int]$Count = 20
+    )
+
+    if (-not $Lines -or $Lines.Count -eq 0) {
+        return @()
+    }
+
+    return @($Lines | Select-Object -Last $Count)
+}
+
+function Convert-JsonProcessOutput {
+    param(
+        [Parameter(Mandatory = $true)][string]$CommandName,
+        [Parameter(Mandatory = $true)][string[]]$Lines,
+        [Parameter(Mandatory = $true)][int]$ExitCode
+    )
+
+    $text = ($Lines -join [Environment]::NewLine).Trim()
+    if (-not $text) {
+        return [pscustomobject][ordered]@{
+            command = $CommandName
+            ok = $false
+            process_exit_code = $ExitCode
+            error = "The child process did not return JSON output."
+            output_tail = @()
+        }
+    }
+
+    try {
+        $parsed = $text | ConvertFrom-Json
+        if ($null -eq $parsed.ok) {
+            $parsed | Add-Member -NotePropertyName ok -NotePropertyValue ($ExitCode -eq 0) -Force
+        }
+        $parsed | Add-Member -NotePropertyName process_exit_code -NotePropertyValue $ExitCode -Force
+        return $parsed
+    }
+    catch {
+        return [pscustomobject][ordered]@{
+            command = $CommandName
+            ok = $false
+            process_exit_code = $ExitCode
+            error = "Failed to parse child process JSON output: $($_.Exception.Message)"
+            raw_output = $text
+            output_tail = Get-OutputTail $Lines
+        }
+    }
 }
 
 function Invoke-StartArsim {
@@ -115,11 +171,14 @@ function Invoke-Build {
         $args += "-buildRUCPackage"
     }
 
+    New-Item -ItemType Directory -Path $GeneratedDir -Force | Out-Null
+    $log = Join-Path $GeneratedDir "build_$Config.log"
     $output = & $buildExe @args 2>&1
     $exitCode = $LASTEXITCODE
-    $output | Write-Output
+    $lines = Get-OutputLines $output
+    $lines | Set-Content -LiteralPath $log -Encoding UTF8
 
-    $summaryLine = $output | Where-Object { $_ -match "Build:\s+\d+\s+error\(s\),\s+\d+\s+warning\(s\)" } | Select-Object -Last 1
+    $summaryLine = $lines | Where-Object { $_ -match "Build:\s+\d+\s+error\(s\),\s+\d+\s+warning\(s\)" } | Select-Object -Last 1
     $errors = $null
     $warnings = $null
     if ($summaryLine -match "Build:\s+(\d+)\s+error\(s\),\s+(\d+)\s+warning\(s\)") {
@@ -128,6 +187,8 @@ function Invoke-Build {
     }
 
     $ok = ($errors -eq 0)
+    $warningLines = @($lines | Where-Object { $_ -match "\bwarning\b" })
+    $errorLines = @($lines | Where-Object { $_ -match "\berror\b" -and $_ -notmatch "Build:\s+\d+\s+error\(s\)" })
     $report = [ordered]@{
         command = "Build"
         ok = $ok
@@ -138,6 +199,10 @@ function Invoke-Build {
         project = $project
         config = $Config
         build_ruc_package = [bool]$BuildRucPackage
+        log_path = $log
+        warning_lines = @($warningLines)
+        error_lines = @($errorLines)
+        output_tail = Get-OutputTail $lines
     }
 
     Write-ObjectJson $report
@@ -205,9 +270,6 @@ function Invoke-Probe {
         -LogPath $log `
         -PviTransferPath $pviTransfer 2>&1
     $exitCode = $LASTEXITCODE
-    if (-not $Quiet) {
-        $output | Write-Output
-    }
 
     $lines = @($output | ForEach-Object { $_.ToString() })
     $report = [ordered]@{
@@ -222,6 +284,7 @@ function Invoke-Probe {
         plc_status = Get-PviCommandValue $lines "PLCStatus"
         log_path = $log
         pil_path = $pil
+        output_tail = Get-OutputTail $lines
     }
 
     if ($Quiet) {
@@ -229,6 +292,9 @@ function Invoke-Probe {
     }
 
     Write-ObjectJson $report
+    if (-not $report.ok) {
+        exit 1
+    }
 }
 
 function Get-PackageInfo {
@@ -336,17 +402,37 @@ function Test-DownloadSafety {
     }
 
     Write-ObjectJson $report
+    if (-not $ok) {
+        exit 1
+    }
 }
 
 function Invoke-Download {
     $check = Test-DownloadSafety -Quiet
     if (-not $check.ok) {
-        Write-Error "Download safety check failed. Refusing to download."
+        $report = [ordered]@{
+            command = "Download"
+            ok = $false
+            target = $Target
+            executed = $false
+            safety_check = $check
+            reasons = @($check.reasons)
+            error = "Download safety check failed. Refusing to download."
+        }
+        Write-ObjectJson $report
         exit 2
     }
 
     if (-not $Execute) {
-        Write-Output "Download safety check passed, but -Execute was not specified. No download performed."
+        $report = [ordered]@{
+            command = "Download"
+            ok = $true
+            target = $Target
+            executed = $false
+            safety_check = $check
+            message = "Download safety check passed, but -Execute was not specified. No download performed."
+        }
+        Write-ObjectJson $report
         return
     }
 
@@ -358,28 +444,55 @@ function Invoke-Download {
     $log = Join-Path (Split-Path -Parent $pil) "pvi_download_$Target.log"
     $conn = "'/IF=tcpip', '/IP=$($targetConfig.ip) /COMT=2500 /AM=* /PT=11169', 'WT=60', 'IGNORE'"
 
-    & powershell -NoProfile -ExecutionPolicy Bypass `
+    $output = & powershell -NoProfile -ExecutionPolicy Bypass `
         -File $wrapper `
         -PilPath $pil `
         -LogPath $log `
         -PviTransferPath $pviTransfer `
-        -Conn $conn
+        -Conn $conn 2>&1
     $downloadExitCode = $LASTEXITCODE
-    if ($downloadExitCode -ne 0) {
-        exit $downloadExitCode
+    $lines = Get-OutputLines $output
+    $downloadOk = (($downloadExitCode -eq 0) -and (($lines -join "`n") -match "SUCCESSFUL"))
+    $verification = $null
+
+    if ($downloadOk -and $cfg.opcua.verify_after_download -eq $true) {
+        $verification = Invoke-VerifyOpcUa -Quiet
+    }
+    elseif ($downloadOk -and $cfg.pvi.verify_after_download -eq $true) {
+        $verification = Invoke-ReadPvi -Quiet
     }
 
-    if ($cfg.opcua.verify_after_download -eq $true) {
-        Write-Output "Running OPC UA verification after download..."
-        Invoke-VerifyOpcUa
+    $ok = $downloadOk
+    if ($verification -and $verification.ok -eq $false) {
+        $ok = $false
     }
-    elseif ($cfg.pvi.verify_after_download -eq $true) {
-        Write-Output "Running PVI verification after download..."
-        Invoke-ReadPvi
+
+    $report = [ordered]@{
+        command = "Download"
+        ok = $ok
+        target = $Target
+        target_ip = $targetConfig.ip
+        executed = $true
+        safety_check = $check
+        download_ok = $downloadOk
+        download_process_exit_code = $downloadExitCode
+        log_path = $log
+        output_tail = Get-OutputTail $lines
+        verification = $verification
+    }
+
+    Write-ObjectJson $report
+    if (-not $ok) {
+        if ($downloadExitCode -ne 0) {
+            exit $downloadExitCode
+        }
+        exit 1
     }
 }
 
 function Invoke-VerifyOpcUa {
+    param([switch]$Quiet)
+
     $cfg = Read-ToolchainConfig
     $targetConfig = Get-TargetConfig $cfg
     $port = 4840
@@ -387,8 +500,9 @@ function Invoke-VerifyOpcUa {
         $port = [int]$cfg.opcua.endpoint_port
     }
 
+    $warnings = @()
     if ($cfg.opcua.auto_expose_all -eq $true) {
-        Write-Warning "opcua.auto_expose_all is enabled. This is not recommended for customer equipment."
+        $warnings += "opcua.auto_expose_all is enabled. This is not recommended for customer equipment."
     }
 
     $nodes = @()
@@ -409,11 +523,27 @@ function Invoke-VerifyOpcUa {
     $nodesFile = Join-Path $GeneratedDir "opcua_nodes_$Target.json"
     ConvertTo-Json @($nodes) -Depth 4 | Set-Content -LiteralPath $nodesFile -Encoding UTF8
 
-    & python $script --endpoint $endpoint --nodes-file $nodesFile
-    exit $LASTEXITCODE
+    $output = & python $script --endpoint $endpoint --nodes-file $nodesFile 2>&1
+    $exitCode = $LASTEXITCODE
+    $lines = Get-OutputLines $output
+    $report = Convert-JsonProcessOutput -CommandName "VerifyOpcUa" -Lines $lines -ExitCode $exitCode
+    $report | Add-Member -NotePropertyName target -NotePropertyValue $Target -Force
+    $report | Add-Member -NotePropertyName nodes_file -NotePropertyValue $nodesFile -Force
+    $report | Add-Member -NotePropertyName warnings -NotePropertyValue @($warnings) -Force
+
+    if ($Quiet) {
+        return $report
+    }
+
+    Write-ObjectJson $report
+    if (-not $report.ok) {
+        exit 1
+    }
 }
 
 function Invoke-ReadPvi {
+    param([switch]$Quiet)
+
     $cfg = Read-ToolchainConfig
     $targetConfig = Get-TargetConfig $cfg
 
@@ -452,10 +582,24 @@ function Invoke-ReadPvi {
         $args += @("--pvi-dll-dir", (Resolve-RepoPath $cfg.pvi.pvi_dll_dir))
     }
 
-    & python @args
-    exit $LASTEXITCODE
+    $output = & python @args 2>&1
+    $exitCode = $LASTEXITCODE
+    $lines = Get-OutputLines $output
+    $report = Convert-JsonProcessOutput -CommandName "ReadPvi" -Lines $lines -ExitCode $exitCode
+    $report | Add-Member -NotePropertyName target -NotePropertyValue $Target -Force
+    $report | Add-Member -NotePropertyName variables_file -NotePropertyValue $variablesFile -Force
+
+    if ($Quiet) {
+        return $report
+    }
+
+    Write-ObjectJson $report
+    if (-not $report.ok) {
+        exit 1
+    }
 }
 
+try {
 switch ($Command) {
     "Help" {
         @"
@@ -479,4 +623,16 @@ Usage:
     "Download" { Invoke-Download }
     "VerifyOpcUa" { Invoke-VerifyOpcUa }
     "ReadPvi" { Invoke-ReadPvi }
+}
+}
+catch {
+    $report = [ordered]@{
+        command = $Command
+        ok = $false
+        error = $_.Exception.Message
+        category = $_.CategoryInfo.Category.ToString()
+        target = $Target
+    }
+    Write-ObjectJson $report
+    exit 1
 }
