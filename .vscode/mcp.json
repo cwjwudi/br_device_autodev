@@ -1,0 +1,10 @@
+{
+  "servers": {
+    "br-plc-toolchain": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["tools/mcp_server/server.py"],
+      "cwd": "${workspaceFolder}"
+    }
+  }
+}

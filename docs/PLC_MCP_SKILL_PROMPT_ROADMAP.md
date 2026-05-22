@@ -344,32 +344,40 @@ prompts/plc_toolchain/
 - `VerifyOpcUa` 和 `ReadPvi` 由 PowerShell 统一捕获 Python JSON，并补充 `process_exit_code`、临时变量文件路径等字段。
 - 顶层异常统一返回 `{ ok=false, command, error, target }` JSON。
 
-### M2：实现 MCP Server MVP（进行中，3 个最小工具已完成）
+### M2：实现 MCP Server MVP（已完成，全部 8 个工具已实现）
 
 目标：
 
 - 实现第一批 8 个 MCP 工具。
 - 能从 MCP 调用 ARsim 闭环。
 
-当前已完成的最小工具：
+已完成内容：
 
+- `plc_build_project`
+- `plc_start_arsim`
 - `plc_probe_target`
-- `plc_read_pvi`
+- `plc_describe_ruc_package`
 - `plc_check_download`
+- `plc_download_ruc`
+- `plc_verify_opcua`
+- `plc_read_pvi`
 
 实现位置：
 
-- `tools/mcp_server/server.py`
-- `tools/mcp_server/toolchain.py`
-- `tools/mcp_server/schemas.py`
+- `tools/mcp_server/server.py` — stdio JSON-RPC 入口
+- `tools/mcp_server/toolchain.py` — CLI 调用封装、结果整理、安全检查
+- `tools/mcp_server/schemas.py` — 工具参数 schema 定义
 
-验收：
+验收（全部已通过 2026-05-22 测试）：
 
+- `plc_build_project(target="arsim")` 构建成功，返回 0 error(s), 2 warning(s)。（已通过）
+- `plc_start_arsim(target="arsim")` 复用或启动 ARsim 实例。（已通过）
 - `plc_probe_target(target="arsim")` 返回 CPU/AR/状态。（已通过）
+- `plc_describe_ruc_package(target="arsim")` 返回包元信息 AR000 / 6.5.1。（已通过）
 - `plc_check_download(target="arsim")` 返回 `ok=true`。（已通过）
-- `plc_read_pvi(target="arsim")` 返回当前验证变量。（已通过）
-- `plc_check_download(target="test_plc")` 返回 `ok=false` 和拒绝原因，但 JSON-RPC 调用本身正常返回。（已通过）
-- `plc_download_ruc(target="arsim", execute=true)` 能下载并返回验证摘要。
+- `plc_download_ruc(target="arsim")` 不带 execute 时安全门拒绝。（已通过）
+- `plc_verify_opcua(target="arsim")` 读取 6/6 OPC UA 节点。（已通过）
+- `plc_read_pvi(target="arsim")` 读取 4/4 PVI 变量。（已通过）
 
 ### M3：创建 Skill
 
@@ -411,13 +419,13 @@ prompts/plc_toolchain/
 
 ## 推荐下一步执行顺序
 
-1. 先改造 `tools/plc_toolchain.ps1`，让所有命令 JSON 更稳定。
-2. 新建 `tools/mcp_server/`，实现 `plc_probe_target` 和 `plc_read_pvi` 两个最小工具。
-3. 接入 `plc_check_download`、`plc_download_ruc`。
-4. 做一次 ARsim 闭环 MCP 调用验证。
-5. 创建 `skills/br-plc-toolchain/`。
-6. 创建 `prompts/plc_toolchain/`。
-7. 补统一验证报告。
+1. ✅ 改造 `tools/plc_toolchain.ps1`，让所有命令 JSON 更稳定。（M1 已完成）
+2. ✅ 实现 MCP Server，全部 8 个第一批工具。（M2 已完成）
+3. ✅ 接入 `plc_build_project`、`plc_start_arsim`、`plc_describe_ruc_package`、`plc_download_ruc`、`plc_verify_opcua`。（M2 已完成）
+4. ✅ 完成 ARsim 闭环 MCP 调用验证。（全部 8 个工具已通过测试）
+5. 创建 `skills/br-plc-toolchain/`。（M3 待做）
+6. 创建 `prompts/plc_toolchain/`。（M4 待做）
+7. 补统一验证报告。（M5 待做）
 
 ## 待决策点
 

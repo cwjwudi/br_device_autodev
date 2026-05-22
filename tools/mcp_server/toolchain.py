@@ -31,6 +31,10 @@ def run_plc_toolchain(
     package_path: str | None = None,
     transfer_pil_path: str | None = None,
     pvi_variables: list[str] | None = None,
+    opcua_node_ids: list[str] | None = None,
+    build_ruc_package: bool = False,
+    execute: bool = False,
+    start_wait_seconds: int | None = None,
     timeout_seconds: int = 60,
 ) -> dict[str, Any]:
     args = [
@@ -57,6 +61,15 @@ def run_plc_toolchain(
         args.extend(["-TransferPilPath", transfer_pil_path])
     if pvi_variables:
         args.extend(["-PviVariable", ",".join(pvi_variables)])
+    if opcua_node_ids:
+        for nid in opcua_node_ids:
+            args.extend(["-OpcUaNodeId", nid])
+    if build_ruc_package:
+        args.append("-BuildRucPackage")
+    if execute:
+        args.append("-Execute")
+    if start_wait_seconds is not None:
+        args.extend(["-StartWaitSeconds", str(start_wait_seconds)])
 
     completed = subprocess.run(
         args,
@@ -111,6 +124,34 @@ def summarize(command: str, data: dict[str, Any]) -> str:
         variables = data.get("variables") or []
         ok_count = sum(1 for item in variables if item.get("ok"))
         return f"read {ok_count}/{len(variables)} PVI variables"
+    if command == "Build":
+        errors = data.get("parsed_errors")
+        warnings = data.get("parsed_warnings")
+        if errors is not None:
+            return f"{errors} error(s), {warnings} warning(s)"
+        return str(data.get("summary") or "build completed")
+    if command == "StartArsim":
+        if data.get("started_new_process"):
+            return f"started new ARsim (pid={data.get('process_id')})"
+        return f"reused existing ARsim (pid={data.get('process_id')})"
+    if command == "DescribePackage":
+        parts = []
+        for k in ("cpu_type", "ar_version", "runtime_type", "config_version"):
+            v = data.get(k)
+            if v:
+                parts.append(str(v))
+        return " / ".join(parts) if parts else "package described"
+    if command == "Download":
+        if data.get("executed"):
+            return f"download {'OK' if data.get('download_ok') else 'FAILED'}"
+        reasons = data.get("safety_check", {}).get("reasons") or data.get("reasons") or []
+        if reasons:
+            return f"blocked: {'; '.join(str(r) for r in reasons)}"
+        return "execute not set — dry run"
+    if command == "VerifyOpcUa":
+        results = data.get("results") or []
+        ok_count = sum(1 for item in results if item.get("ok"))
+        return f"read {ok_count}/{len(results)} OPC UA nodes"
     return str(data.get("summary") or command)
 
 
@@ -162,6 +203,23 @@ def next_actions(tool: str, data: dict[str, Any]) -> list[str]:
         return ["Do not download. Fix the reported package/target mismatch first."]
     if tool == "plc_read_pvi" and not data.get("ok"):
         return ["Check PVI Manager, target reachability, and variable whitelist names."]
+    if tool == "plc_build_project" and data.get("ok"):
+        return ["Run plc_describe_ruc_package to inspect the built RUC package, then plc_check_download."]
+    if tool == "plc_build_project" and not data.get("ok"):
+        return ["Review the build error lines and fix the project before rebuilding."]
+    if tool == "plc_start_arsim" and data.get("ok"):
+        return ["Run plc_probe_target to verify the ARsim is ready."]
+    if tool == "plc_describe_ruc_package" and data.get("ok"):
+        return ["Run plc_check_download to verify compatibility before downloading."]
+    if tool == "plc_download_ruc" and data.get("ok"):
+        return ["Run plc_verify_opcua or plc_read_pvi to confirm the download was successful."]
+    if tool == "plc_download_ruc" and not data.get("ok"):
+        safety = data.get("safety_check") or {}
+        if safety.get("ok") is False:
+            return ["Fix the reported safety check issues before retrying the download."]
+        return ["Check the download log and target connectivity, then retry."]
+    if tool == "plc_verify_opcua" and not data.get("ok"):
+        return ["Check OPC UA server status on the target, node IDs, and network connectivity. Try plc_read_pvi as a fallback."]
     return []
 
 
@@ -223,8 +281,90 @@ def plc_check_download(arguments: dict[str, Any]) -> dict[str, Any]:
     return wrap_result("plc_check_download", "CheckDownload", data, target)
 
 
+def plc_build_project(arguments: dict[str, Any]) -> dict[str, Any]:
+    target = str(arguments.get("target") or "arsim")
+    build_ruc = bool(arguments.get("build_ruc_package") or False)
+    data = run_plc_toolchain(
+        "Build",
+        target=target,
+        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
+        config=str(arguments.get("config") or DEFAULT_CONFIG),
+        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        build_ruc_package=build_ruc,
+        timeout_seconds=int(arguments.get("timeout_seconds") or 300),
+    )
+    return wrap_result("plc_build_project", "Build", data, target)
+
+
+def plc_start_arsim(arguments: dict[str, Any]) -> dict[str, Any]:
+    target = str(arguments.get("target") or "arsim")
+    data = run_plc_toolchain(
+        "StartArsim",
+        target=target,
+        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
+        config=str(arguments.get("config") or DEFAULT_CONFIG),
+        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        start_wait_seconds=int(arguments.get("start_wait_seconds") or 3),
+        timeout_seconds=int(arguments.get("timeout_seconds") or 30),
+    )
+    return wrap_result("plc_start_arsim", "StartArsim", data, target)
+
+
+def plc_describe_ruc_package(arguments: dict[str, Any]) -> dict[str, Any]:
+    target = str(arguments.get("target") or "arsim")
+    data = run_plc_toolchain(
+        "DescribePackage",
+        target=target,
+        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
+        config=str(arguments.get("config") or DEFAULT_CONFIG),
+        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        package_path=arguments.get("package_path"),
+        timeout_seconds=int(arguments.get("timeout_seconds") or 30),
+    )
+    return wrap_result("plc_describe_ruc_package", "DescribePackage", data, target)
+
+
+def plc_download_ruc(arguments: dict[str, Any]) -> dict[str, Any]:
+    target = str(arguments.get("target") or "arsim")
+    execute = arguments.get("execute") is True
+    data = run_plc_toolchain(
+        "Download",
+        target=target,
+        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
+        config=str(arguments.get("config") or DEFAULT_CONFIG),
+        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        package_path=arguments.get("package_path"),
+        transfer_pil_path=arguments.get("transfer_pil_path"),
+        execute=execute,
+        timeout_seconds=int(arguments.get("timeout_seconds") or 180),
+    )
+    return wrap_result("plc_download_ruc", "Download", data, target)
+
+
+def plc_verify_opcua(arguments: dict[str, Any]) -> dict[str, Any]:
+    target = str(arguments.get("target") or "arsim")
+    opcua_node_ids = arguments.get("opcua_node_ids")
+    if opcua_node_ids is not None and not isinstance(opcua_node_ids, list):
+        raise ValueError("opcua_node_ids must be an array of strings.")
+    data = run_plc_toolchain(
+        "VerifyOpcUa",
+        target=target,
+        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
+        config=str(arguments.get("config") or DEFAULT_CONFIG),
+        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        opcua_node_ids=[str(item) for item in opcua_node_ids] if opcua_node_ids else None,
+        timeout_seconds=int(arguments.get("timeout_seconds") or 60),
+    )
+    return wrap_result("plc_verify_opcua", "VerifyOpcUa", data, target)
+
+
 TOOLS = {
+    "plc_build_project": plc_build_project,
+    "plc_start_arsim": plc_start_arsim,
     "plc_probe_target": plc_probe_target,
-    "plc_read_pvi": plc_read_pvi,
+    "plc_describe_ruc_package": plc_describe_ruc_package,
     "plc_check_download": plc_check_download,
+    "plc_download_ruc": plc_download_ruc,
+    "plc_verify_opcua": plc_verify_opcua,
+    "plc_read_pvi": plc_read_pvi,
 }
