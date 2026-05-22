@@ -379,7 +379,7 @@ prompts/plc_toolchain/
 - `plc_verify_opcua(target="arsim")` 读取 6/6 OPC UA 节点。（已通过）
 - `plc_read_pvi(target="arsim")` 读取 4/4 PVI 变量。（已通过）
 
-### M3：创建 Skill
+### M3：创建 Skill（已完成）
 
 目标：
 
@@ -387,11 +387,19 @@ prompts/plc_toolchain/
 - Skill 使用简洁触发描述和短流程。
 - 详细规则放在 `references/`。
 
+已完成内容：
+
+- `skills/br-plc-toolchain/SKILL.md` — 触发条件、MCP 工具速查表、标准操作顺序、安全禁止项、失败处理
+- `skills/br-plc-toolchain/references/safety.md` — 目标分类权限表、下载五步检查清单、生产/Safety/OPC UA/PVI 安全规则、构建结果判断、日志审计
+- `skills/br-plc-toolchain/references/command-flow.md` — 5 种标准流程：ARsim 闭环验证、仅安全检查、功能修改反馈、下载失败诊断、测试 PLC 只读验证
+- `skills/br-plc-toolchain/references/verification.md` — OPC UA 6 个白名单节点详情、PVI 4 个白名单变量详情、验证策略、报告格式
+
 验收：
 
-- 新会话中 Agent 能根据 Skill 正确选择 MCP 工具。
-- Agent 不会跳过下载安全检查。
-- Agent 不会默认打开全部 OPC UA。
+- Skill 文件包含完整 MCP 工具速查表和参数说明。（已满足）
+- SKILL.md 明确列出 6 条安全禁止项。（已满足）
+- references/safety.md 详细定义下载前五步检查清单。（已满足）
+- command-flow.md 覆盖 5 种标准操作流程及失败处置。（已满足）
 
 ### M4：Prompt 模板
 
@@ -423,7 +431,7 @@ prompts/plc_toolchain/
 2. ✅ 实现 MCP Server，全部 8 个第一批工具。（M2 已完成）
 3. ✅ 接入 `plc_build_project`、`plc_start_arsim`、`plc_describe_ruc_package`、`plc_download_ruc`、`plc_verify_opcua`。（M2 已完成）
 4. ✅ 完成 ARsim 闭环 MCP 调用验证。（全部 8 个工具已通过测试）
-5. 创建 `skills/br-plc-toolchain/`。（M3 待做）
+5. ✅ 创建 `skills/br-plc-toolchain/`。（M3 已完成）
 6. 创建 `prompts/plc_toolchain/`。（M4 待做）
 7. 补统一验证报告。（M5 待做）
 

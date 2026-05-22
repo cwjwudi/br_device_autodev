@@ -91,6 +91,11 @@ PrintDemo/
   - `plc_download_ruc`
   - `plc_verify_opcua`
   - `plc_read_pvi`
+- 完成 M3：创建 `br-plc-toolchain` Skill，固化 Agent 操作规范和安全边界：
+  - `skills/br-plc-toolchain/SKILL.md`
+  - `skills/br-plc-toolchain/references/safety.md`
+  - `skills/br-plc-toolchain/references/command-flow.md`
+  - `skills/br-plc-toolchain/references/verification.md`
 
 已验证结果：
 
@@ -261,19 +266,27 @@ tools/plc_targets.local.json
 - `opcua.validation_node_ids`
 - `pvi.validation_variables`
 
+## Skill
+
+项目包含 `br-plc-toolchain` Skill（`skills/br-plc-toolchain/`），为 Codex 等 Agent 提供操作规范和安全边界：
+
+- `SKILL.md` — 触发条件、工具速查、操作顺序、安全禁止项、失败处理
+- `references/safety.md` — 目标分类权限、下载检查清单、生产/Safety/OPC UA/PVI 规则
+- `references/command-flow.md` — 5 种标准流程：闭环验证、安全检查、功能修改、失败诊断、只读验证
+- `references/verification.md` — OPC UA/PVI 白名单节点、读取策略、报告格式
+
 ## 下一步
 
 计划继续推进：
 
-1. 创建 `br-plc-toolchain` Skill，固化 Agent 操作规范和安全边界。
-2. 创建 Prompt 模板，用于构建验证、下载前检查、功能修改和失败诊断。
-3. 生成统一验证报告：
+1. 创建 Prompt 模板，用于构建验证、下载前检查、功能修改和失败诊断。
+2. 生成统一验证报告：
    - 构建摘要
    - RUC 包信息
    - 目标探针信息
    - 下载日志
    - OPC UA / PVI 读数
-4. 实现 M3 第二批 MCP 工具：
+3. 实现第二批 MCP 工具：
    - `plc_run_arsim_closed_loop` — 一键 ARsim 闭环
    - `plc_run_verification_suite` — 统合 OPC UA + PVI 验证
    - `plc_get_target_config` / `plc_list_targets` — 目标配置查询

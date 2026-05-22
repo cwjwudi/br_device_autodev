@@ -7,6 +7,8 @@
 - docs/PLC_AUTOMATION_TOOLCHAIN_CONTEXT.md
 - docs/PLC_MCP_SKILL_PROMPT_ROADMAP.md
 
+**首先加载 Skill：** `skills/br-plc-toolchain/SKILL.md` — 包含触发条件、安全规则和标准流程。
+
 ## 关键原则
 
 - 优先使用 Automation Studio 官方工具链。
