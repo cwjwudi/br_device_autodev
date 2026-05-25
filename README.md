@@ -309,11 +309,42 @@ tools/plc_targets.local.json
 
 ## 下一步
 
-计划继续推进：
+计划继续推进 M6：输入输出测试闭环。
 
-1. 对当前测试 PLC `192.168.50.222` 执行只读探针验证。
-2. 如需下载到真实测试 PLC，先生成匹配真实 PLC CPU/AR 的物理目标 RUC 包。
-3. 根据现场验证结果，补充报告中的业务判定字段。
+目标是把当前“构建、下载、变量可读”升级为“写入测试输入、读取输出、自动判定 pass/fail”。
+
+建议实施顺序：
+
+1. 新增 PVI 白名单写入能力：
+   - `tools/pvi_write.py`
+   - CLI：`WritePvi`
+   - MCP：`plc_write_pvi`
+   - 必须 `execute=true`
+2. 扩展 `tools/plc_targets.local.json`：
+   - `pvi.read_whitelist`
+   - `pvi.write_whitelist`
+   - `pvi.restore_writes`
+3. 新增输入输出测试 runner：
+   - `tools/plc_io_test_runner.py`
+   - CLI：`RunIoTestCase`、`RunTestSuite`、`ResetTestHarness`
+   - MCP：`plc_run_io_test_case`、`plc_run_test_suite`、`plc_reset_test_harness`
+4. 新增测试套件：
+   - `tests/plc/lqr_io_tests.json`
+5. 首批 LQR 测试场景：
+   - 零输入零输出
+   - 常规跟踪误差：`u = -K * (x - x_ref)`
+   - 输出限幅
+   - 未使能输出清零
+   - reset 清零
+6. 输出统一 IO 测试报告：
+   - `tools/.generated/reports/*_io_test_<suite>.json`
+
+M6 安全边界：
+
+- 只允许写 `pvi.write_whitelist` 中的测试 harness 变量。
+- 禁止写 Safety、物理 I/O、系统变量和生产 PLC。
+- 输出变量默认只读，不写。
+- 每次写入必须记录 write、readback、restore 和报告路径。
 
 详细计划见：
 

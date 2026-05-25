@@ -66,6 +66,31 @@
 2. MCP 工具 `plc_read_pvi` 仅支持读取，**不支持写入**
 3. 读取变量值的变化仅用于验证，不用于控制
 
+## M6 PVI 写入测试安全（待实现）
+
+M6 允许新增 PVI 写入能力，但只能用于输入输出测试 harness，不能变成通用写变量工具。
+
+强制规则：
+
+1. `plc_write_pvi` 必须显式传入 `execute=true`
+2. 只允许写 `tools/plc_targets.local.json` 中的 `pvi.write_whitelist`
+3. 禁止写 Safety、物理 I/O、系统变量、未列入测试 harness 的业务变量
+4. 禁止写 `role=production` 的目标
+5. 输出变量默认只读，不写，例如 LQR 的 `arLqrU`、`arLqrError`、`stLqrStatus`
+6. 每个测试用例结束后必须执行 restore/reset
+7. 写入前后都要读取关键变量，并写入报告
+
+建议 LQR 写入白名单：
+
+| 变量 | 类型 | 用途 |
+|---|---|---|
+| `LQR:bLqrEnable` | BOOL | 启用/停用控制器 |
+| `LQR:bLqrReset` | BOOL | 测试前后复位 |
+| `LQR:arLqrX` | REAL[4] | 状态输入 |
+| `LQR:arLqrXRef` | REAL[4] | 参考输入 |
+| `LQR:arLqrK` | REAL[8] | 控制增益 |
+| `LQR:rLqrMaxAbsU` | REAL | 输出限幅 |
+
 ## 构建结果判断
 
 1. **不以 exit code 判定成功/失败**

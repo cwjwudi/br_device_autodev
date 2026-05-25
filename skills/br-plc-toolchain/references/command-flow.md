@@ -132,3 +132,54 @@ plc_run_arsim_closed_loop(arguments: { "target": "arsim", "execute": true })
 - 当前 RUC 包是 ARsim 包 (`AR000`)，不能下载到物理 `test_plc`
 - test_plc 只能做只读探针和反馈验证
 - 如需要下载 test_plc，先构建匹配的物理目标包
+
+## 流程 6：输入输出测试闭环（M6 待实现）
+
+**用途：** 对 LQR 等控制逻辑执行真实输入输出测试。
+
+```
+1. plc_build_project(build_ruc_package=true)
+   → 构建并生成目标 RUC 包
+
+2. plc_probe_target(target="<target>")
+   → 确认目标 CPU/AR/状态
+
+3. plc_describe_ruc_package(target="<target>")
+   → 确认包信息
+
+4. plc_check_download(target="<target>")
+   → 下载安全检查
+
+5. plc_download_ruc(target="<target>", execute=true)
+   → 仅安全检查通过后下载
+
+6. plc_reset_test_harness(target="<target>", execute=true)
+   → 清空上一次测试状态
+
+7. plc_run_test_suite(
+     target="<target>",
+     suite="tests/plc/lqr_io_tests.json",
+     execute=true
+   )
+   → 白名单写入输入、等待、读取输出、比较期望值
+
+8. plc_reset_test_harness(target="<target>", execute=true)
+   → 测试后恢复安全状态
+```
+
+### 成功判定
+
+- 构建和下载安全检查通过
+- 每个测试用例的写入均来自 `pvi.write_whitelist`
+- 每个测试用例的断言均通过
+- restore/reset 成功
+- 报告写入 `tools/.generated/reports/*_io_test_<suite>.json`
+
+### 失败处置
+
+| 失败场景 | 处理方式 |
+|---|---|
+| 写入变量不在白名单 | 拒绝执行，报告变量名 |
+| 目标为 production | 拒绝执行 |
+| 断言失败 | 保留 actual/expected/tolerance，继续或按 suite 策略停止 |
+| restore 失败 | 标记高风险，报告最后一次 readback |

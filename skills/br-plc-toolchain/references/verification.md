@@ -138,3 +138,88 @@ plc_read_pvi(arguments: {
 - `tools/pvi_read.py` — PVI 读取 (依赖 B&R PVI DLL)
 
 MCP Server 调用这些脚本，Agent 不需要直接调用。
+
+## M6 输入输出测试验证（待实现）
+
+现有验证只证明变量可读和下载后程序在线。M6 需要验证控制逻辑本身：
+
+```text
+写入输入
+-> 等待 settle_ms
+-> 读取输出
+-> 比较 expected/tolerance
+-> 输出 pass/fail
+-> restore/reset
+```
+
+### LQR 推荐 read/write 分层
+
+写入白名单：
+
+| 变量 | 用途 |
+|---|---|
+| `LQR:bLqrEnable` | 控制器使能 |
+| `LQR:bLqrReset` | 测试复位 |
+| `LQR:arLqrX` | 状态向量 |
+| `LQR:arLqrXRef` | 参考状态 |
+| `LQR:arLqrK` | LQR 增益矩阵，2x4 展平 |
+| `LQR:rLqrMaxAbsU` | 输出限幅 |
+
+读取/断言变量：
+
+| 变量 | 断言内容 |
+|---|---|
+| `LQR:arLqrU` | `u = -K * (x - x_ref)`，带容差 |
+| `LQR:arLqrError` | `x - x_ref` |
+| `LQR:stLqrStatus.bValid` | 控制器是否产生有效输出 |
+| `LQR:stLqrStatus.bSaturated` | 是否触发限幅 |
+| `LQR:stLqrStatus.usiErrorCode` | 错误码是否符合预期 |
+
+### 推荐测试用例
+
+1. `zero_state_zero_output`
+   - 输入：`x=[0,0,0,0]`，`x_ref=[0,0,0,0]`
+   - 期望：`u=[0,0]`
+2. `nominal_tracking_error`
+   - 输入：非零 `x` 和固定 `K`
+   - 期望：`u=-K*(x-x_ref)`
+3. `saturation_limit`
+   - 输入：大误差，小 `rLqrMaxAbsU`
+   - 期望：输出被限幅，`bSaturated=true`
+4. `disabled_zero_output`
+   - 输入：`bLqrEnable=false`
+   - 期望：输出清零，`bValid=false`
+5. `reset_clears_output`
+   - 输入：`bLqrReset=true`
+   - 期望：输出和误差清零
+
+### IO 测试报告格式
+
+```json
+{
+  "ok": true,
+  "target": "test_plc",
+  "suite": "lqr_io_tests",
+  "cases_total": 5,
+  "cases_passed": 5,
+  "cases_failed": 0,
+  "cases": [
+    {
+      "name": "nominal_tracking_error",
+      "ok": true,
+      "writes": [],
+      "readback": {},
+      "checks": [
+        {
+          "variable": "LQR:arLqrU[0]",
+          "expected": -2.0,
+          "actual": -2.0,
+          "tolerance": 0.001,
+          "ok": true
+        }
+      ],
+      "restore_ok": true
+    }
+  ]
+}
+```

@@ -117,6 +117,15 @@ tools/mcp_server/
 | `plc_get_target_config` | 读取指定目标配置 |
 | `plc_list_targets` | 列出可用目标和安全角色 |
 
+第三批建议实现：输入输出测试能力（M6）：
+
+| MCP Tool | 用途 | 安全门 |
+| --- | --- | --- |
+| `plc_write_pvi` | 只对白名单测试变量执行 PVI 写入 | 必须 `execute=true`，禁止生产目标 |
+| `plc_run_io_test_case` | 执行单个输入 -> 等待 -> 输出读取 -> 断言测试 | 写入变量必须在白名单 |
+| `plc_run_test_suite` | 批量执行 JSON 测试套件并生成汇总报告 | 每条 case 独立记录 pass/fail |
+| `plc_reset_test_harness` | 将测试 harness 变量恢复到安全状态 | 只写 reset 白名单变量 |
+
 ### 参数约定
 
 所有工具统一接收：
@@ -137,6 +146,14 @@ tools/mcp_server/
 
 - `opcua_node_ids`：覆盖默认 OPC UA 白名单。
 - `pvi_variables`：覆盖默认 PVI 白名单。
+
+输入输出测试工具额外支持：
+
+- `writes`：测试输入写入列表，仅允许 `pvi.write_whitelist` 中的变量。
+- `readback`：写入后读取的输出变量列表，默认使用 `pvi.read_whitelist` 或测试用例指定变量。
+- `expected`：期望值、容差和比较方式。
+- `settle_ms`：写入后等待 PLC 周期执行的时间。
+- `restore`：测试完成后的恢复动作，默认启用。
 
 ### 返回格式
 
@@ -172,6 +189,15 @@ MCP 层必须再次检查这些规则，即使 CLI 已经检查：
 4. 不提供“打开全部 OPC UA 变量”的工具。
 5. 不提供写 PLC 变量的 MCP 工具，除非后续为测试 harness 单独设计白名单写入。
 6. 所有命令都必须固定在仓库根目录运行。
+
+M6 写入测试守卫：
+
+1. `plc_write_pvi` 必须要求 `execute=true`。
+2. 只允许写 `tools/plc_targets.local.json` 中 `pvi.write_whitelist` 的变量。
+3. 禁止写物理 I/O、Safety、系统变量、未列入测试 harness 的业务变量。
+4. `role=production` 直接拒绝写入测试。
+5. 每次写入前后必须记录 readback 和报告路径。
+6. 测试结束必须执行 restore/reset，失败时也要尝试恢复安全状态。
 
 ## Skill 规划
 
@@ -439,6 +465,64 @@ prompts/plc_toolchain/
 - MCP 已暴露 `plc_run_verification_suite` 和 `plc_run_arsim_closed_loop`。
 - 报告包含构建、包信息、目标探针、下载检查、下载结果和 OPC UA/PVI 验证结果。
 
+### M6：输入输出测试闭环（待做）
+
+目标：
+
+- 从“变量可读”升级到“输入输出行为可验证”。
+- 支持 LQR 等控制算法的输入、输出和容差断言。
+- 通过 PVI 对白名单测试变量写入输入，再读取输出并自动判定 pass/fail。
+- 输出 `tools/.generated/reports/*_io_test_<suite>.json`。
+
+建议新增本地文件：
+
+```text
+tools/
+  pvi_write.py
+  plc_io_test_runner.py
+
+tests/plc/
+  lqr_io_tests.json
+```
+
+建议 `tools/plc_targets.local.json` 扩展：
+
+```json
+{
+  "pvi": {
+    "read_whitelist": [],
+    "write_whitelist": [
+      { "scope": "task", "task": "LQR", "name": "bLqrEnable", "type": "BOOL" },
+      { "scope": "task", "task": "LQR", "name": "bLqrReset", "type": "BOOL" },
+      { "scope": "task", "task": "LQR", "name": "arLqrX", "type": "REAL[4]" },
+      { "scope": "task", "task": "LQR", "name": "arLqrXRef", "type": "REAL[4]" },
+      { "scope": "task", "task": "LQR", "name": "arLqrK", "type": "REAL[8]" },
+      { "scope": "task", "task": "LQR", "name": "rLqrMaxAbsU", "type": "REAL" }
+    ],
+    "restore_writes": [
+      { "variable": "LQR:bLqrEnable", "value": false },
+      { "variable": "LQR:bLqrReset", "value": true },
+      { "variable": "LQR:bLqrReset", "value": false }
+    ]
+  }
+}
+```
+
+首批 LQR 测试用例：
+
+1. `zero_state_zero_output`：零状态、零参考、启用后输出应为 `[0, 0]`。
+2. `nominal_tracking_error`：给定 `x`、`x_ref`、`K`，断言 `u = -K * (x - x_ref)`。
+3. `saturation_limit`：设置较小 `rLqrMaxAbsU`，断言输出限幅且 `bSaturated=true`。
+4. `disabled_zero_output`：`bLqrEnable=false` 时输出必须清零。
+5. `reset_clears_output`：`bLqrReset=true` 时输出和误差清零。
+
+验收：
+
+- 每个 test case 都有独立 `writes`、`readback`、`checks`、`ok`。
+- 测试套件失败时返回非零 exit code，并保留完整报告。
+- 写入动作全部可审计，报告包含写入前后的关键变量值。
+- 不修改 Safety，不写物理 I/O，不写生产 PLC。
+
 ## 推荐下一步执行顺序
 
 1. ✅ 改造 `tools/plc_toolchain.ps1`，让所有命令 JSON 更稳定。（M1 已完成）
@@ -449,12 +533,13 @@ prompts/plc_toolchain/
 6. ✅ 创建 `prompts/plc_toolchain/`。（M4 已完成）
 7. ✅ 补统一验证报告。（M5 已完成）
 8. ✅ 实现第二批 MCP 工具：闭环、验证套件、目标配置查询、目标列表。
+9. 设计并实现 M6 输入输出测试闭环：白名单写入、测试用例、套件报告。
 
 ## 待决策点
 
 1. MCP Server 是否只在本机 Codex 使用，还是需要给团队其他机器部署。
 2. Skill 是放仓库内随项目版本管理，还是安装到个人 Codex skills 目录。
-3. 是否允许 MCP 提供白名单变量写入能力，用于自动测试输入。
+3. 是否允许 MCP 提供白名单变量写入能力，用于自动测试输入。（M6 建议只允许测试 harness 白名单写入）
 4. 测试 PLC `192.168.50.222` 后续是否要加入真实下载闭环；当前只读探针为 `X20CP1685 / 6.5.1 / WarmStart`，如果要下载，需要生成匹配该 CPU/AR 的 RUC 包。
 5. OPC UA 自动修改配置是否只做“生成建议 diff”，不自动应用。
 
@@ -465,3 +550,4 @@ prompts/plc_toolchain/
 - ARsim 包与真实 PLC 包不能混用。
 - OPC UA 全量开放变量有客户设备安全风险，必须保持默认关闭。
 - PowerShell 数组参数容易被调用方传错，MCP 应负责把数组写入临时 JSON 文件再调用 CLI。
+- 写入测试一旦白名单设计过宽，会变成危险的任意变量写入能力；M6 必须默认拒绝未知变量和生产目标。
