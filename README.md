@@ -7,7 +7,8 @@
 - `PrintDemo/Huitong_FrontEval.apj`
 - 配置：`Config1`
 - 当前已验证 ARsim 目标：`127.0.0.1`
-- 当前已验证测试 PLC 只读目标：`192.168.50.233`
+- 当前配置测试 PLC 只读目标：`192.168.50.222`
+- 历史已验证测试 PLC 只读目标：`192.168.50.233`
 
 ## 项目目标
 
@@ -96,6 +97,17 @@ PrintDemo/
   - `skills/br-plc-toolchain/references/safety.md`
   - `skills/br-plc-toolchain/references/command-flow.md`
   - `skills/br-plc-toolchain/references/verification.md`
+- 完成 M4：创建标准 Prompt 模板：
+  - `prompts/plc_toolchain/build_and_verify_arsim.md`
+  - `prompts/plc_toolchain/safe_download_check.md`
+  - `prompts/plc_toolchain/add_plc_feature_with_feedback.md`
+  - `prompts/plc_toolchain/diagnose_download_failure.md`
+- 完成 M5：统一验证报告，输出到 `tools/.generated/reports/*.json`。
+- 完成第二批 MCP 工具：
+  - `plc_run_arsim_closed_loop`
+  - `plc_run_verification_suite`
+  - `plc_get_target_config`
+  - `plc_list_targets`
 
 已验证结果：
 
@@ -104,9 +116,14 @@ PrintDemo/
   - CPU：`X20CP3687X`
   - AR：`6.5.1`
   - 状态：`WarmStart`
-- 测试 PLC 只读探针：
+- 历史测试 PLC 只读探针：
   - CPU：`X20CP1586`
   - AR：`J4.93`
+  - 状态：`WarmStart`
+- 当前测试 PLC 只读探针（2026-05-25）：
+  - IP：`192.168.50.222`
+  - CPU：`X20CP1685`
+  - AR：`6.5.1`
   - 状态：`WarmStart`
 - ARsim 下载：
   - `Transfer "RUCPackage.zip" ... SUCCESSFUL`
@@ -185,6 +202,10 @@ python tools\mcp_server\server.py
 | `plc_download_ruc` | `Download` | 安全检查通过后执行下载 | **必须 `execute=true`** |
 | `plc_verify_opcua` | `VerifyOpcUa` | 读取 OPC UA 白名单节点值 | 只读，默认白名单 |
 | `plc_read_pvi` | `ReadPvi` | 读取 PVI 白名单变量值 | 只读，默认白名单 |
+| `plc_run_arsim_closed_loop` | `RunArsimClosedLoop` | 一键 ARsim 构建、检查、下载和验证 | 下载仍必须 `execute=true` |
+| `plc_run_verification_suite` | `RunVerificationSuite` | OPC UA 优先、PVI 备用的统一验证 | 只读 |
+| `plc_get_target_config` | `GetTargetConfig` | 读取指定目标配置和验证白名单 | 只读 |
+| `plc_list_targets` | `ListTargets` | 列出可用目标和安全角色 | 只读 |
 
 VSCode / Codex / Cursor 等 MCP 客户端配置示例：
 
@@ -228,6 +249,16 @@ plc_build_project(build_ruc_package=true)
   -> plc_verify_opcua  (fallback: plc_read_pvi)
 ```
 
+第二批工具可执行同等流程：
+
+```text
+plc_run_arsim_closed_loop(target="arsim", execute=true)
+  -> writes tools/.generated/reports/*_closed_loop_arsim.json
+
+plc_run_verification_suite(target="arsim")
+  -> writes tools/.generated/reports/*_verification_arsim.json
+```
+
 ### 测试验证结果（2026-05-22）
 
 | 工具 | 测试状态 | 实际输出 |
@@ -263,6 +294,7 @@ tools/plc_targets.local.json
 - `automation_studio.pvi_transfer_exe`
 - `targets.arsim`
 - `targets.test_plc`
+- `targets.test_plc_233`
 - `opcua.validation_node_ids`
 - `pvi.validation_variables`
 
@@ -279,17 +311,9 @@ tools/plc_targets.local.json
 
 计划继续推进：
 
-1. 创建 Prompt 模板，用于构建验证、下载前检查、功能修改和失败诊断。
-2. 生成统一验证报告：
-   - 构建摘要
-   - RUC 包信息
-   - 目标探针信息
-   - 下载日志
-   - OPC UA / PVI 读数
-3. 实现第二批 MCP 工具：
-   - `plc_run_arsim_closed_loop` — 一键 ARsim 闭环
-   - `plc_run_verification_suite` — 统合 OPC UA + PVI 验证
-   - `plc_get_target_config` / `plc_list_targets` — 目标配置查询
+1. 对当前测试 PLC `192.168.50.222` 执行只读探针验证。
+2. 如需下载到真实测试 PLC，先生成匹配真实 PLC CPU/AR 的物理目标 RUC 包。
+3. 根据现场验证结果，补充报告中的业务判定字段。
 
 详细计划见：
 

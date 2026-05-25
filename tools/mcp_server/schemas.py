@@ -177,4 +177,28 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             }
         ),
     },
+    {
+        "name": "plc_run_arsim_closed_loop",
+        "description": "Run the standard ARsim closed loop: build RUC package, start ARsim, probe, describe package, safety check, optional explicit download, and verification report.",
+        "inputSchema": build_schema(
+            {},
+            require_execute=True,
+            require_timeout=True,
+        ),
+    },
+    {
+        "name": "plc_run_verification_suite",
+        "description": "Run feedback verification and write a unified report. OPC UA is attempted first; PVI is used as a fallback.",
+        "inputSchema": object_schema({}),
+    },
+    {
+        "name": "plc_get_target_config",
+        "description": "Read the configured target entry, OPC UA whitelist, and PVI whitelist for a target.",
+        "inputSchema": object_schema({}),
+    },
+    {
+        "name": "plc_list_targets",
+        "description": "List configured PLC/ARsim targets with IP, role, and automatic-download permission.",
+        "inputSchema": object_schema({}),
+    },
 ]

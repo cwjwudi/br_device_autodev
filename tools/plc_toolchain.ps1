@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("Help", "Build", "StartArsim", "Probe", "DescribePackage", "CheckDownload", "Download", "VerifyOpcUa", "ReadPvi")]
+    [ValidateSet("Help", "Build", "StartArsim", "Probe", "DescribePackage", "CheckDownload", "Download", "VerifyOpcUa", "ReadPvi", "RunArsimClosedLoop", "RunVerificationSuite", "GetTargetConfig", "ListTargets")]
     [string]$Command = "Help",
 
     [string]$ProjectPath = "PrintDemo\Huitong_FrontEval.apj",
@@ -47,6 +47,23 @@ function Get-TargetConfig {
 function Write-ObjectJson {
     param([Parameter(Mandatory = $true)]$Object)
     $Object | ConvertTo-Json -Depth 16
+}
+
+function Save-ToolchainReport {
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)]$Report
+    )
+
+    $reportsDir = Join-Path $GeneratedDir "reports"
+    New-Item -ItemType Directory -Path $reportsDir -Force | Out-Null
+    $timestamp = (Get-Date).ToUniversalTime().ToString("yyyyMMdd_HHmmss")
+    $path = Join-Path $reportsDir "$($timestamp)_$Name.json"
+
+    $reportObject = [pscustomobject]$Report
+    $reportObject | Add-Member -NotePropertyName report_path -NotePropertyValue $path -Force
+    $reportObject | ConvertTo-Json -Depth 32 | Set-Content -LiteralPath $path -Encoding UTF8
+    return $reportObject
 }
 
 function Get-OutputLines {
@@ -106,6 +123,8 @@ function Convert-JsonProcessOutput {
 }
 
 function Invoke-StartArsim {
+    param([switch]$Quiet)
+
     $cfg = Read-ToolchainConfig
     $targetConfig = Get-TargetConfig $cfg
 
@@ -151,10 +170,19 @@ function Invoke-StartArsim {
         loader_path = $loader
     }
 
+    if ($Quiet) {
+        return [pscustomobject]$report
+    }
+
     Write-ObjectJson $report
 }
 
 function Invoke-Build {
+    param(
+        [switch]$Quiet,
+        [switch]$ForceBuildRucPackage
+    )
+
     $cfg = Read-ToolchainConfig
     $buildExe = Resolve-RepoPath $cfg.automation_studio.build_exe
     $project = Resolve-RepoPath $ProjectPath
@@ -167,7 +195,8 @@ function Invoke-Build {
     }
 
     $args = @($project, "-c", $Config)
-    if ($BuildRucPackage) {
+    $buildRuc = [bool]($BuildRucPackage -or $ForceBuildRucPackage)
+    if ($buildRuc) {
         $args += "-buildRUCPackage"
     }
 
@@ -198,11 +227,15 @@ function Invoke-Build {
         summary = $summaryLine
         project = $project
         config = $Config
-        build_ruc_package = [bool]$BuildRucPackage
+        build_ruc_package = $buildRuc
         log_path = $log
         warning_lines = @($warningLines)
         error_lines = @($errorLines)
         output_tail = Get-OutputTail $lines
+    }
+
+    if ($Quiet) {
+        return [pscustomobject]$report
     }
 
     Write-ObjectJson $report
@@ -408,6 +441,11 @@ function Test-DownloadSafety {
 }
 
 function Invoke-Download {
+    param(
+        [switch]$Quiet,
+        [switch]$ForceExecute
+    )
+
     $check = Test-DownloadSafety -Quiet
     if (-not $check.ok) {
         $report = [ordered]@{
@@ -419,11 +457,15 @@ function Invoke-Download {
             reasons = @($check.reasons)
             error = "Download safety check failed. Refusing to download."
         }
+        if ($Quiet) {
+            return [pscustomobject]$report
+        }
         Write-ObjectJson $report
         exit 2
     }
 
-    if (-not $Execute) {
+    $shouldExecute = [bool]($Execute -or $ForceExecute)
+    if (-not $shouldExecute) {
         $report = [ordered]@{
             command = "Download"
             ok = $true
@@ -431,6 +473,9 @@ function Invoke-Download {
             executed = $false
             safety_check = $check
             message = "Download safety check passed, but -Execute was not specified. No download performed."
+        }
+        if ($Quiet) {
+            return [pscustomobject]$report
         }
         Write-ObjectJson $report
         return
@@ -481,6 +526,10 @@ function Invoke-Download {
         verification = $verification
     }
 
+    if ($Quiet) {
+        return [pscustomobject]$report
+    }
+
     Write-ObjectJson $report
     if (-not $ok) {
         if ($downloadExitCode -ne 0) {
@@ -488,6 +537,137 @@ function Invoke-Download {
         }
         exit 1
     }
+}
+
+function Invoke-RunVerificationSuite {
+    param([switch]$Quiet)
+
+    $opcua = Invoke-VerifyOpcUa -Quiet
+    $pvi = $null
+    $method = "opcua"
+    $ok = [bool]$opcua.ok
+
+    if (-not $ok) {
+        $pvi = Invoke-ReadPvi -Quiet
+        $method = "pvi"
+        $ok = [bool]$pvi.ok
+    }
+
+    $report = Save-ToolchainReport -Name "verification_$Target" -Report ([ordered]@{
+        command = "RunVerificationSuite"
+        ok = $ok
+        target = $Target
+        generated_at = (Get-Date).ToUniversalTime().ToString("o")
+        method = $method
+        opcua = $opcua
+        pvi = $pvi
+    })
+
+    if ($Quiet) {
+        return $report
+    }
+
+    Write-ObjectJson $report
+    if (-not $ok) {
+        exit 1
+    }
+}
+
+function Invoke-RunArsimClosedLoop {
+    $cfg = Read-ToolchainConfig
+    $targetConfig = Get-TargetConfig $cfg
+    if ($targetConfig.role -notmatch "arsim") {
+        throw "RunArsimClosedLoop only supports ARsim targets. Target '$Target' has role '$($targetConfig.role)'."
+    }
+
+    $build = Invoke-Build -Quiet -ForceBuildRucPackage
+    $start = $null
+    $probe = $null
+    $package = $null
+    $check = $null
+    $download = $null
+    $verification = $null
+
+    if ($build.ok) {
+        $start = Invoke-StartArsim -Quiet
+    }
+    if ($start -and $start.ok) {
+        $probe = Invoke-Probe -Quiet
+    }
+    if ($probe -and $probe.ok) {
+        $package = Invoke-DescribePackage -Quiet
+        $check = Test-DownloadSafety -Quiet
+    }
+    if ($check -and $check.ok) {
+        $download = Invoke-Download -Quiet
+        if ($download.executed -and $download.ok) {
+            $verification = $download.verification
+            if (-not $verification) {
+                $verification = Invoke-RunVerificationSuite -Quiet
+            }
+        }
+    }
+
+    $ok = [bool]($build.ok -and $start.ok -and $probe.ok -and $package.ok -and $check.ok -and $download.ok)
+    if ($download -and $download.executed -and $verification) {
+        $ok = [bool]($ok -and $verification.ok)
+    }
+
+    $report = Save-ToolchainReport -Name "closed_loop_$Target" -Report ([ordered]@{
+        command = "RunArsimClosedLoop"
+        ok = $ok
+        target = $Target
+        generated_at = (Get-Date).ToUniversalTime().ToString("o")
+        build = $build
+        start_arsim = $start
+        target_probe = $probe
+        package = $package
+        download_check = $check
+        download = $download
+        verification = $verification
+    })
+
+    Write-ObjectJson $report
+    if (-not $ok) {
+        exit 1
+    }
+}
+
+function Invoke-GetTargetConfig {
+    $cfg = Read-ToolchainConfig
+    $targetConfig = Get-TargetConfig $cfg
+    $report = [ordered]@{
+        command = "GetTargetConfig"
+        ok = $true
+        target = $Target
+        target_config = $targetConfig
+        opcua = $cfg.opcua
+        pvi = $cfg.pvi
+    }
+
+    Write-ObjectJson $report
+}
+
+function Invoke-ListTargets {
+    $cfg = Read-ToolchainConfig
+    $targets = @(
+        foreach ($item in $cfg.targets.PSObject.Properties) {
+            [ordered]@{
+                name = $item.Name
+                ip = $item.Value.ip
+                role = $item.Value.role
+                allow_auto_download = [bool]$item.Value.allow_auto_download
+            }
+        }
+    )
+
+    $report = [ordered]@{
+        command = "ListTargets"
+        ok = $true
+        targets = $targets
+    }
+
+    Write-ObjectJson $report
 }
 
 function Invoke-VerifyOpcUa {
@@ -523,8 +703,15 @@ function Invoke-VerifyOpcUa {
     $nodesFile = Join-Path $GeneratedDir "opcua_nodes_$Target.json"
     ConvertTo-Json @($nodes) -Depth 4 | Set-Content -LiteralPath $nodesFile -Encoding UTF8
 
-    $output = & python $script --endpoint $endpoint --nodes-file $nodesFile 2>&1
-    $exitCode = $LASTEXITCODE
+    $oldErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $output = & python $script --endpoint $endpoint --nodes-file $nodesFile 2>&1
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $oldErrorActionPreference
+    }
     $lines = Get-OutputLines $output
     $report = Convert-JsonProcessOutput -CommandName "VerifyOpcUa" -Lines $lines -ExitCode $exitCode
     $report | Add-Member -NotePropertyName target -NotePropertyValue $Target -Force
@@ -582,8 +769,15 @@ function Invoke-ReadPvi {
         $args += @("--pvi-dll-dir", (Resolve-RepoPath $cfg.pvi.pvi_dll_dir))
     }
 
-    $output = & python @args 2>&1
-    $exitCode = $LASTEXITCODE
+    $oldErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $output = & python @args 2>&1
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $oldErrorActionPreference
+    }
     $lines = Get-OutputLines $output
     $report = Convert-JsonProcessOutput -CommandName "ReadPvi" -Lines $lines -ExitCode $exitCode
     $report | Add-Member -NotePropertyName target -NotePropertyValue $Target -Force
@@ -613,6 +807,10 @@ Usage:
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command VerifyOpcUa -Target arsim
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command ReadPvi -Target arsim
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command ReadPvi -Target arsim -PviVariable 'gstHmi.stOutputs.diSImage,SVG:strTransform'
+  powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command RunVerificationSuite -Target arsim
+  powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command RunArsimClosedLoop -Target arsim -Execute
+  powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command ListTargets
+  powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command GetTargetConfig -Target test_plc
 "@ | Write-Output
     }
     "Build" { Invoke-Build }
@@ -623,6 +821,10 @@ Usage:
     "Download" { Invoke-Download }
     "VerifyOpcUa" { Invoke-VerifyOpcUa }
     "ReadPvi" { Invoke-ReadPvi }
+    "RunArsimClosedLoop" { Invoke-RunArsimClosedLoop }
+    "RunVerificationSuite" { Invoke-RunVerificationSuite }
+    "GetTargetConfig" { Invoke-GetTargetConfig }
+    "ListTargets" { Invoke-ListTargets }
 }
 }
 catch {

@@ -51,6 +51,11 @@
       "arsim_loader_exe": "D:\\codex_ws\\motion_svg_test\\PrintDemo\\Temp\\Simulation\\Config1\\X20CP3687X\\ar000loader.exe"
     },
     "test_plc": {
+      "ip": "192.168.50.222",
+      "role": "dedicated_test_plc",
+      "allow_auto_download": true
+    },
+    "test_plc_233": {
       "ip": "192.168.50.233",
       "role": "dedicated_test_plc",
       "allow_auto_download": true

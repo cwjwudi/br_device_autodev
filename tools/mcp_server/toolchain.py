@@ -152,17 +152,43 @@ def summarize(command: str, data: dict[str, Any]) -> str:
         results = data.get("results") or []
         ok_count = sum(1 for item in results if item.get("ok"))
         return f"read {ok_count}/{len(results)} OPC UA nodes"
+    if command == "RunVerificationSuite":
+        method = data.get("method") or "unknown"
+        return f"verification {'OK' if data.get('ok') else 'FAILED'} via {method}"
+    if command == "RunArsimClosedLoop":
+        download = data.get("download") or {}
+        if download.get("executed"):
+            return f"ARsim closed loop {'OK' if data.get('ok') else 'FAILED'}"
+        return "ARsim build/check completed; execute not set, no download performed"
+    if command == "GetTargetConfig":
+        target_config = data.get("target_config") or {}
+        return f"{target_config.get('ip')} / {target_config.get('role')}"
+    if command == "ListTargets":
+        targets = data.get("targets") or []
+        return f"{len(targets)} target(s) configured"
     return str(data.get("summary") or command)
 
 
 def collect_logs(data: dict[str, Any]) -> list[str]:
     logs: list[str] = []
-    for key in ("log_path", "pil_path", "nodes_file", "variables_file"):
+    for key in ("log_path", "pil_path", "nodes_file", "variables_file", "report_path"):
         value = data.get(key)
         if value:
             logs.append(str(value))
 
-    for nested_key in ("probe", "package", "safety_check"):
+    for nested_key in (
+        "probe",
+        "package",
+        "safety_check",
+        "build",
+        "start_arsim",
+        "target_probe",
+        "download_check",
+        "download",
+        "verification",
+        "opcua",
+        "pvi",
+    ):
         nested = data.get(nested_key)
         if isinstance(nested, dict):
             logs.extend(collect_logs(nested))
@@ -220,6 +246,13 @@ def next_actions(tool: str, data: dict[str, Any]) -> list[str]:
         return ["Check the download log and target connectivity, then retry."]
     if tool == "plc_verify_opcua" and not data.get("ok"):
         return ["Check OPC UA server status on the target, node IDs, and network connectivity. Try plc_read_pvi as a fallback."]
+    if tool == "plc_run_arsim_closed_loop" and data.get("ok"):
+        download = data.get("download") or {}
+        if download.get("executed"):
+            return ["Review the generated report path for build, download, and verification details."]
+        return ["Re-run with execute=true if you want to download after reviewing the safety check."]
+    if tool == "plc_run_verification_suite" and not data.get("ok"):
+        return ["Review OPC UA and PVI results in the generated report."]
     return []
 
 
@@ -358,6 +391,60 @@ def plc_verify_opcua(arguments: dict[str, Any]) -> dict[str, Any]:
     return wrap_result("plc_verify_opcua", "VerifyOpcUa", data, target)
 
 
+def plc_run_arsim_closed_loop(arguments: dict[str, Any]) -> dict[str, Any]:
+    target = str(arguments.get("target") or "arsim")
+    execute = arguments.get("execute") is True
+    data = run_plc_toolchain(
+        "RunArsimClosedLoop",
+        target=target,
+        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
+        config=str(arguments.get("config") or DEFAULT_CONFIG),
+        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        execute=execute,
+        timeout_seconds=int(arguments.get("timeout_seconds") or 600),
+    )
+    return wrap_result("plc_run_arsim_closed_loop", "RunArsimClosedLoop", data, target)
+
+
+def plc_run_verification_suite(arguments: dict[str, Any]) -> dict[str, Any]:
+    target = str(arguments.get("target") or "arsim")
+    data = run_plc_toolchain(
+        "RunVerificationSuite",
+        target=target,
+        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
+        config=str(arguments.get("config") or DEFAULT_CONFIG),
+        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        timeout_seconds=int(arguments.get("timeout_seconds") or 120),
+    )
+    return wrap_result("plc_run_verification_suite", "RunVerificationSuite", data, target)
+
+
+def plc_get_target_config(arguments: dict[str, Any]) -> dict[str, Any]:
+    target = str(arguments.get("target") or "arsim")
+    data = run_plc_toolchain(
+        "GetTargetConfig",
+        target=target,
+        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
+        config=str(arguments.get("config") or DEFAULT_CONFIG),
+        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        timeout_seconds=int(arguments.get("timeout_seconds") or 30),
+    )
+    return wrap_result("plc_get_target_config", "GetTargetConfig", data, target)
+
+
+def plc_list_targets(arguments: dict[str, Any]) -> dict[str, Any]:
+    target = str(arguments.get("target") or "arsim")
+    data = run_plc_toolchain(
+        "ListTargets",
+        target=target,
+        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
+        config=str(arguments.get("config") or DEFAULT_CONFIG),
+        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        timeout_seconds=int(arguments.get("timeout_seconds") or 30),
+    )
+    return wrap_result("plc_list_targets", "ListTargets", data, target)
+
+
 TOOLS = {
     "plc_build_project": plc_build_project,
     "plc_start_arsim": plc_start_arsim,
@@ -367,4 +454,8 @@ TOOLS = {
     "plc_download_ruc": plc_download_ruc,
     "plc_verify_opcua": plc_verify_opcua,
     "plc_read_pvi": plc_read_pvi,
+    "plc_run_arsim_closed_loop": plc_run_arsim_closed_loop,
+    "plc_run_verification_suite": plc_run_verification_suite,
+    "plc_get_target_config": plc_get_target_config,
+    "plc_list_targets": plc_list_targets,
 }

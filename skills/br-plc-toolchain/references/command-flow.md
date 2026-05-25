@@ -4,6 +4,14 @@
 
 **目标：** 修改代码后，构建 → 下载到 ARsim → 验证反馈。
 
+快捷工具：
+
+```
+plc_run_arsim_closed_loop(arguments: { "target": "arsim", "execute": true })
+```
+
+该工具会执行下方同等步骤，并写入 `tools/.generated/reports/*_closed_loop_arsim.json`。
+
 ### 步骤
 
 ```
@@ -112,7 +120,7 @@
 
 ## 流程 5：测试 PLC 只读验证
 
-**用途：** 对 `test_plc` (192.168.50.233) 执行只读验证，不下载。
+**用途：** 对 `test_plc` (192.168.50.222, X20CP1685 / 6.5.1) 执行只读验证，不下载。
 
 ```
 1. plc_probe_target(target="test_plc")
@@ -121,6 +129,6 @@
 ```
 
 注意：
-- 当前 RUC 包是 ARsim 包 (`AR000`)，不能下载到 test_plc (`X20CP1586`)
+- 当前 RUC 包是 ARsim 包 (`AR000`)，不能下载到物理 `test_plc`
 - test_plc 只能做只读探针和反馈验证
 - 如需要下载 test_plc，先构建匹配的物理目标包

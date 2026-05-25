@@ -26,7 +26,7 @@ tools\plc_toolchain.ps1
 
 ## 已暴露工具
 
-全部 8 个第一批工具已实现：
+第一批 8 个工具和第二批 4 个工具均已实现：
 
 | MCP 工具 | CLI 命令 | 安全门 |
 |---|---|---|
@@ -38,6 +38,10 @@ tools\plc_toolchain.ps1
 | `plc_download_ruc` | `Download` | **必须 `execute=true`** |
 | `plc_verify_opcua` | `VerifyOpcUa` | 只读，默认白名单 |
 | `plc_read_pvi` | `ReadPvi` | 只读，默认白名单 |
+| `plc_run_arsim_closed_loop` | `RunArsimClosedLoop` | **下载仍必须 `execute=true`** |
+| `plc_run_verification_suite` | `RunVerificationSuite` | 只读，写统一报告 |
+| `plc_get_target_config` | `GetTargetConfig` | 只读 |
+| `plc_list_targets` | `ListTargets` | 只读 |
 
 ## 默认配置
 
@@ -87,6 +91,9 @@ echo "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name
 
 # OPC UA 验证
 echo "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"plc_verify_opcua\",\"arguments\":{}}}" | python tools\mcp_server\server.py
+
+# 目标列表
+echo "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"plc_list_targets\",\"arguments\":{}}}" | python tools\mcp_server\server.py
 ```
 
 ## MCP 客户端接入

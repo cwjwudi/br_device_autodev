@@ -17,32 +17,46 @@ def json_default(value):
 async def read_nodes(endpoint, node_ids, timeout):
     results = []
     client = Client(endpoint, timeout=timeout)
-    async with client:
-        namespace_array = await client.get_namespace_array()
-        for node_id in node_ids:
-            item = {
+    namespace_array = []
+    connection_error = None
+    try:
+        async with client:
+            namespace_array = await client.get_namespace_array()
+            for node_id in node_ids:
+                item = {
+                    "node_id": node_id,
+                    "ok": False,
+                }
+                try:
+                    node = client.get_node(node_id)
+                    value = await node.read_value()
+                    item.update(
+                        {
+                            "ok": True,
+                            "value": value,
+                            "value_type": type(value).__name__,
+                        }
+                    )
+                except Exception as exc:
+                    item["error"] = repr(exc)
+                results.append(item)
+    except Exception as exc:
+        connection_error = repr(exc)
+        results = [
+            {
                 "node_id": node_id,
                 "ok": False,
+                "error": connection_error,
             }
-            try:
-                node = client.get_node(node_id)
-                value = await node.read_value()
-                item.update(
-                    {
-                        "ok": True,
-                        "value": value,
-                        "value_type": type(value).__name__,
-                    }
-                )
-            except Exception as exc:
-                item["error"] = repr(exc)
-            results.append(item)
+            for node_id in node_ids
+        ]
 
     return {
         "command": "VerifyOpcUa",
         "ok": all(item["ok"] for item in results),
         "endpoint": endpoint,
         "namespace_array": namespace_array,
+        "connection_error": connection_error,
         "read_at": datetime.now(timezone.utc).isoformat(),
         "results": results,
     }

@@ -108,7 +108,7 @@ tools/mcp_server/
 | `plc_verify_opcua` | `VerifyOpcUa` | 读取 OPC UA 白名单节点 |
 | `plc_read_pvi` | `ReadPvi` | 读取 PVI 白名单变量 |
 
-第二批再实现：
+第二批已实现：
 
 | MCP Tool | 用途 |
 | --- | --- |
@@ -401,7 +401,7 @@ prompts/plc_toolchain/
 - references/safety.md 详细定义下载前五步检查清单。（已满足）
 - command-flow.md 覆盖 5 种标准操作流程及失败处置。（已满足）
 
-### M4：Prompt 模板
+### M4：Prompt 模板（已完成）
 
 目标：
 
@@ -413,7 +413,14 @@ prompts/plc_toolchain/
 - 每个 prompt 都能直接触发对应 MCP/Skill 流程。
 - Prompt 不包含易过期路径以外的实现细节。
 
-### M5：统一验证报告
+已完成内容：
+
+- `prompts/plc_toolchain/build_and_verify_arsim.md`
+- `prompts/plc_toolchain/safe_download_check.md`
+- `prompts/plc_toolchain/add_plc_feature_with_feedback.md`
+- `prompts/plc_toolchain/diagnose_download_failure.md`
+
+### M5：统一验证报告（已完成）
 
 目标：
 
@@ -425,6 +432,13 @@ prompts/plc_toolchain/
 - 一次 ARsim 闭环后生成单个 JSON 报告。
 - 报告可用于 CI 判断 pass/fail。
 
+已完成内容：
+
+- `RunVerificationSuite` 输出 `tools/.generated/reports/*_verification_<target>.json`。
+- `RunArsimClosedLoop` 输出 `tools/.generated/reports/*_closed_loop_<target>.json`。
+- MCP 已暴露 `plc_run_verification_suite` 和 `plc_run_arsim_closed_loop`。
+- 报告包含构建、包信息、目标探针、下载检查、下载结果和 OPC UA/PVI 验证结果。
+
 ## 推荐下一步执行顺序
 
 1. ✅ 改造 `tools/plc_toolchain.ps1`，让所有命令 JSON 更稳定。（M1 已完成）
@@ -432,15 +446,16 @@ prompts/plc_toolchain/
 3. ✅ 接入 `plc_build_project`、`plc_start_arsim`、`plc_describe_ruc_package`、`plc_download_ruc`、`plc_verify_opcua`。（M2 已完成）
 4. ✅ 完成 ARsim 闭环 MCP 调用验证。（全部 8 个工具已通过测试）
 5. ✅ 创建 `skills/br-plc-toolchain/`。（M3 已完成）
-6. 创建 `prompts/plc_toolchain/`。（M4 待做）
-7. 补统一验证报告。（M5 待做）
+6. ✅ 创建 `prompts/plc_toolchain/`。（M4 已完成）
+7. ✅ 补统一验证报告。（M5 已完成）
+8. ✅ 实现第二批 MCP 工具：闭环、验证套件、目标配置查询、目标列表。
 
 ## 待决策点
 
 1. MCP Server 是否只在本机 Codex 使用，还是需要给团队其他机器部署。
 2. Skill 是放仓库内随项目版本管理，还是安装到个人 Codex skills 目录。
 3. 是否允许 MCP 提供白名单变量写入能力，用于自动测试输入。
-4. 测试 PLC `192.168.50.233` 后续是否要加入真实下载闭环；如果要，需要生成匹配 `X20CP1586 / J4.93` 的 RUC 包。
+4. 测试 PLC `192.168.50.222` 后续是否要加入真实下载闭环；当前只读探针为 `X20CP1685 / 6.5.1 / WarmStart`，如果要下载，需要生成匹配该 CPU/AR 的 RUC 包。
 5. OPC UA 自动修改配置是否只做“生成建议 diff”，不自动应用。
 
 ## 风险
