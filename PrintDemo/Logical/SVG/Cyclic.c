@@ -1,5 +1,6 @@
 
 #include <bur/plctypes.h>
+#include <stdlib.h>
 
 #ifdef _DEFAULT_INCLUDES
 	#include <AsDefault.h>
@@ -26,15 +27,19 @@ static void SvgApplyCommands(SvgPuUnit_typ* pPu)
 		SvgCopyField(pPu, &pPu->stMap.stEmergencyStyle, pPu->stText.strEmergencyNormal);
 	}
 
-	if (pPu->stCmd.bLine1Visible) {
+	if (!pPu->stCmd.bRollerUpDown) {
+		SvgCopyField(pPu, &pPu->stMap.stLine1Duration, pPu->stText.strRollerUpDuration);
 		SvgCopyField(pPu, &pPu->stMap.stLine1Style, pPu->stText.strDisplayShow);
 	} else {
+		SvgCopyField(pPu, &pPu->stMap.stLine1Duration, pPu->stText.strRollerUpDuration);
 		SvgCopyField(pPu, &pPu->stMap.stLine1Style, pPu->stText.strDisplayHide);
 	}
 
-	if (pPu->stCmd.bLine2Visible) {
+	if (pPu->stCmd.bRollerUpDown) {
+		SvgCopyField(pPu, &pPu->stMap.stLine2Duration, pPu->stText.strRollerUpDuration);
 		SvgCopyField(pPu, &pPu->stMap.stLine2Style, pPu->stText.strDisplayShow);
 	} else {
+		SvgCopyField(pPu, &pPu->stMap.stLine2Duration, pPu->stText.strRollerUpDuration);
 		SvgCopyField(pPu, &pPu->stMap.stLine2Style, pPu->stText.strDisplayHide);
 	}
 
@@ -47,8 +52,10 @@ static void SvgApplyCommands(SvgPuUnit_typ* pPu)
 	}
 
 	if (pPu->stCmd.bRollerUpDown) {
+		SvgCopyField(pPu, &pPu->stMap.stRollerUpDuration, pPu->stText.strRollerUpDuration);
 		SvgCopyField(pPu, &pPu->stMap.stRollerUpTranslate, pPu->stText.strRollerUpDown);
 	} else {
+		SvgCopyField(pPu, &pPu->stMap.stRollerUpDuration, pPu->stText.strRollerUpDuration);
 		SvgCopyField(pPu, &pPu->stMap.stRollerUpTranslate, pPu->stText.strRollerUpHome);
 	}
 
@@ -87,6 +94,31 @@ static USINT SvgGetActivePuIndex(USINT usiPuCount)
 	return usiActiveSvgPu;
 }
 
+static BOOL SvgRandomBool(void)
+{
+	return (BOOL)(rand() & 1);
+}
+
+static void SvgRandomizePu(SvgPuUnit_typ* pPu)
+{
+	pPu->stCmd.bManualTestMode = 0;
+	pPu->stCmd.bEmergency = SvgRandomBool();
+	pPu->stCmd.bFan1Rotate = SvgRandomBool();
+	pPu->stCmd.bRollerUpDown = SvgRandomBool();
+	pPu->stCmd.bRollerDownGreen = SvgRandomBool();
+	pPu->stCmd.bColorBoxYellow = SvgRandomBool();
+	pPu->bTransformReady = 0;
+}
+
+static void SvgRunRandomMotionOnce(USINT usiPuCount)
+{
+	USINT usiIdx;
+
+	for (usiIdx = 0; usiIdx < usiPuCount; usiIdx++) {
+		SvgRandomizePu(&astSvgPu[usiIdx]);
+	}
+}
+
 void _CYCLIC ProgramCyclic(void)
 {
 	USINT usiIdx;
@@ -95,6 +127,11 @@ void _CYCLIC ProgramCyclic(void)
 
 	usiPuCount = SvgGetValidPuCount();
 	usiActiveIdx = SvgGetActivePuIndex(usiPuCount);
+
+	if (bRandomMotionTestMode && bCmdRandomMotionOnce && !bOldCmdRandomMotionOnce) {
+		SvgRunRandomMotionOnce(usiPuCount);
+	}
+	bOldCmdRandomMotionOnce = bCmdRandomMotionOnce;
 
 	if (astSvgPu[usiActiveIdx].stCmd.bManualTestMode) {
 		astSvgPu[usiActiveIdx].bTransformReady = 0;

@@ -5,7 +5,9 @@
   <TaskClass Name="Cyclic#2">
     <Task Name="MidTrans" Source="Middleware.MidTrans.prg" Memory="UserROM" Language="ANSIC" Debugging="true" />
   </TaskClass>
-  <TaskClass Name="Cyclic#3" />
+  <TaskClass Name="Cyclic#3">
+    <Task Name="LQR" Source="LQR.prg" Memory="UserROM" Language="ANSIC" Debugging="true" />
+  </TaskClass>
   <TaskClass Name="Cyclic#4">
     <Task Name="SVG" Source="SVG.prg" Memory="UserROM" Language="ANSIC" Debugging="true" />
   </TaskClass>

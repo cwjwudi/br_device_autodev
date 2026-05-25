@@ -1,0 +1,12 @@
+VAR
+	bLqrEnable : BOOL;
+	bLqrReset : BOOL;
+	bLqrUseManualGains : BOOL;
+	stLqrStatus : LqrStatus_typ;
+	rLqrMaxAbsU : REAL;
+	arLqrX : ARRAY[0..3] OF REAL;
+	arLqrXRef : ARRAY[0..3] OF REAL;
+	arLqrK : ARRAY[0..7] OF REAL;
+	arLqrU : ARRAY[0..1] OF REAL;
+	arLqrError : ARRAY[0..3] OF REAL;
+END_VAR

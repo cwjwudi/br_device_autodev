@@ -400,6 +400,10 @@ function Test-DownloadSafety {
     $reasons = New-Object System.Collections.Generic.List[string]
     $isArsimPackage = ($packageInfo.cpu_type -eq "AR000" -or $packageInfo.runtime_type -match "AR Simulation")
     $isArsimTarget = ($targetConfig.role -match "arsim")
+    $packageCpuMatchesTarget = $false
+    if ($probe.cpu_type) {
+        $packageCpuMatchesTarget = (($packageInfo.cpu_type -eq $probe.cpu_type) -or ($packageInfo.order_number -eq $probe.cpu_type))
+    }
 
     if (-not $targetConfig.allow_auto_download) {
         $reasons.Add("Target '$Target' does not allow automatic download.")
@@ -413,8 +417,8 @@ function Test-DownloadSafety {
     if ($isArsimPackage -and -not $isArsimTarget) {
         $reasons.Add("RUC package is for ARsim, but target '$Target' is not marked as ARsim.")
     }
-    if ((-not $isArsimPackage) -and $probe.cpu_type -and $packageInfo.cpu_type -and ($packageInfo.cpu_type -ne $probe.cpu_type)) {
-        $reasons.Add("RUC package CPU '$($packageInfo.cpu_type)' does not match target CPU '$($probe.cpu_type)'.")
+    if ((-not $isArsimPackage) -and $probe.cpu_type -and $packageInfo.cpu_type -and (-not $packageCpuMatchesTarget)) {
+        $reasons.Add("RUC package CPU '$($packageInfo.cpu_type)' / order '$($packageInfo.order_number)' does not match target CPU '$($probe.cpu_type)'.")
     }
 
     $ok = ($reasons.Count -eq 0)

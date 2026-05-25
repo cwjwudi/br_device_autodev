@@ -1,0 +1,107 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<BindingsSet id="Content_Motor" xmlns="http://www.br-automation.com/iat2015/binding/engineering/v2" xmlns:bt="http://www.br-automation.com/iat2015/bindingListTypes/engineering/v2" xmlns:be="http://www.br-automation.com/iat2015/bindingListEmbedded/engineering/v2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Bindings>
+
+
+
+
+
+<Binding mode="twoWay">
+<Source xsi:type="opcUa" refId="::AsGlobalPV:gstHmi.stOutputs.rPuBiasValue[0]" attribute="value" />
+<Target xsi:type="brease" contentRefId="Content_Motor" widgetRefId="OnlineChartGraph1" attribute="value" />
+</Binding>
+<Binding mode="twoWay">
+<Source xsi:type="opcUa" refId="::AsGlobalPV:gstHmi.stOutputs.rPuBiasLow[0]" attribute="value" />
+<Target xsi:type="brease" contentRefId="Content_Motor" widgetRefId="OnlineChartGraph2" attribute="value" />
+</Binding>
+<Binding mode="twoWay">
+<Source xsi:type="opcUa" refId="::AsGlobalPV:gstHmi.stOutputs.rPuBiasHigh[0]" attribute="value" />
+<Target xsi:type="brease" contentRefId="Content_Motor" widgetRefId="OnlineChartGraph3" attribute="value" />
+</Binding>
+<Binding mode="twoWay">
+<Source xsi:type="opcUa" refId="::AsGlobalPV:gstHmi.stOutputs.rPuBiasValue[1]" attribute="value" />
+<Target xsi:type="brease" contentRefId="Content_Motor" widgetRefId="OnlineChartGraph4" attribute="value" />
+</Binding>
+<Binding mode="twoWay">
+<Source xsi:type="opcUa" refId="::AsGlobalPV:gstHmi.stOutputs.rPuBiasHigh[1]" attribute="value" />
+<Target xsi:type="brease" contentRefId="Content_Motor" widgetRefId="OnlineChartGraph5" attribute="value" />
+</Binding>
+<Binding mode="twoWay">
+<Source xsi:type="opcUa" refId="::AsGlobalPV:gstHmi.stOutputs.rPuBiasLow[1]" attribute="value" />
+<Target xsi:type="brease" contentRefId="Content_Motor" widgetRefId="OnlineChartGraph6" attribute="value" />
+</Binding>
+<Binding mode="twoWay">
+<Source xsi:type="opcUa" refId="::AsGlobalPV:gstHmi.stOutputs.rPuBiasValue[2]" attribute="value" />
+<Target xsi:type="brease" contentRefId="Content_Motor" widgetRefId="OnlineChartGraph7" attribute="value" />
+</Binding>
+<Binding mode="twoWay">
+<Source xsi:type="opcUa" refId="::AsGlobalPV:gstHmi.stOutputs.rPuBiasLow[2]" attribute="value" />
+<Target xsi:type="brease" contentRefId="Content_Motor" widgetRefId="OnlineChartGraph8" attribute="value" />
+</Binding>
+<Binding mode="twoWay">
+<Source xsi:type="opcUa" refId="::AsGlobalPV:gstHmi.stOutputs.rPuBiasHigh[2]" attribute="value" />
+<Target xsi:type="brease" contentRefId="Content_Motor" widgetRefId="OnlineChartGraph9" attribute="value" />
+</Binding>
+<Binding mode="twoWay">
+<Source xsi:type="opcUa" refId="::AsGlobalPV:gstHmi.stOutputs.rPuBiasValue[3]" attribute="value" />
+<Target xsi:type="brease" contentRefId="Content_Motor" widgetRefId="OnlineChartGraph10" attribute="value" />
+</Binding>
+<Binding mode="twoWay">
+<Source xsi:type="opcUa" refId="::AsGlobalPV:gstHmi.stOutputs.rPuBiasLow[3]" attribute="value" />
+<Target xsi:type="brease" contentRefId="Content_Motor" widgetRefId="OnlineChartGraph11" attribute="value" />
+</Binding>
+<Binding mode="twoWay">
+<Source xsi:type="opcUa" refId="::AsGlobalPV:gstHmi.stOutputs.rPuBiasHigh[3]" attribute="value" />
+<Target xsi:type="brease" contentRefId="Content_Motor" widgetRefId="OnlineChartGraph12" attribute="value" />
+</Binding>
+
+<Binding mode="twoWay">
+<Source xsi:type="opcUa" refId="::AsGlobalPV:gstHmi.stOutputs.rPuBiasLow[4]" attribute="value" />
+<Target xsi:type="brease" contentRefId="Content_Motor" widgetRefId="OnlineChartGraph14" attribute="value" />
+</Binding>
+<Binding mode="twoWay">
+<Source xsi:type="opcUa" refId="::AsGlobalPV:gstHmi.stOutputs.rPuBiasLow[5]" attribute="value" />
+<Target xsi:type="brease" contentRefId="Content_Motor" widgetRefId="OnlineChartGraph17" attribute="value" />
+</Binding>
+<Binding mode="twoWay">
+<Source xsi:type="opcUa" refId="::AsGlobalPV:gstHmi.stOutputs.rPuBiasLow[6]" attribute="value" />
+<Target xsi:type="brease" contentRefId="Content_Motor" widgetRefId="OnlineChartGraph20" attribute="value" />
+</Binding>
+<Binding mode="twoWay">
+<Source xsi:type="opcUa" refId="::AsGlobalPV:gstHmi.stOutputs.rPuBiasLow[7]" attribute="value" />
+<Target xsi:type="brease" contentRefId="Content_Motor" widgetRefId="OnlineChartGraph23" attribute="value" />
+</Binding>
+<Binding mode="twoWay">
+<Source xsi:type="opcUa" refId="::AsGlobalPV:gstHmi.stOutputs.rPuBiasValue[4]" attribute="value" />
+<Target xsi:type="brease" contentRefId="Content_Motor" widgetRefId="OnlineChartGraph13" attribute="value" />
+</Binding>
+<Binding mode="twoWay">
+<Source xsi:type="opcUa" refId="::AsGlobalPV:gstHmi.stOutputs.rPuBiasValue[5]" attribute="value" />
+<Target xsi:type="brease" contentRefId="Content_Motor" widgetRefId="OnlineChartGraph16" attribute="value" />
+</Binding>
+<Binding mode="twoWay">
+<Source xsi:type="opcUa" refId="::AsGlobalPV:gstHmi.stOutputs.rPuBiasValue[6]" attribute="value" />
+<Target xsi:type="brease" contentRefId="Content_Motor" widgetRefId="OnlineChartGraph19" attribute="value" />
+</Binding>
+<Binding mode="twoWay">
+<Source xsi:type="opcUa" refId="::AsGlobalPV:gstHmi.stOutputs.rPuBiasValue[7]" attribute="value" />
+<Target xsi:type="brease" contentRefId="Content_Motor" widgetRefId="OnlineChartGraph22" attribute="value" />
+</Binding>
+<Binding mode="twoWay">
+<Source xsi:type="opcUa" refId="::AsGlobalPV:gstHmi.stOutputs.rPuBiasHigh[4]" attribute="value" />
+<Target xsi:type="brease" contentRefId="Content_Motor" widgetRefId="OnlineChartGraph15" attribute="value" />
+</Binding>
+<Binding mode="twoWay">
+<Source xsi:type="opcUa" refId="::AsGlobalPV:gstHmi.stOutputs.rPuBiasHigh[5]" attribute="value" />
+<Target xsi:type="brease" contentRefId="Content_Motor" widgetRefId="OnlineChartGraph18" attribute="value" />
+</Binding>
+<Binding mode="twoWay">
+<Source xsi:type="opcUa" refId="::AsGlobalPV:gstHmi.stOutputs.rPuBiasHigh[6]" attribute="value" />
+<Target xsi:type="brease" contentRefId="Content_Motor" widgetRefId="OnlineChartGraph21" attribute="value" />
+</Binding>
+<Binding mode="twoWay">
+<Source xsi:type="opcUa" refId="::AsGlobalPV:gstHmi.stOutputs.rPuBiasHigh[7]" attribute="value" />
+<Target xsi:type="brease" contentRefId="Content_Motor" widgetRefId="OnlineChartGraph24" attribute="value" />
+</Binding>
+</Bindings>
+</BindingsSet>

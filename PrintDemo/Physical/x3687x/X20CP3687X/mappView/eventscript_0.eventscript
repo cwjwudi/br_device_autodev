@@ -1,0 +1,120 @@
+/**
+ * @eventScriptSetId eventscript_0
+ * @contentId Content_X67
+ */
+
+// ── OPC UA 地址表 ────────────────────────────────────────────────────────
+// B&R 全局变量（GlobalMiddle.var）格式：::AsGlobalPV:变量路径
+// 若在 HMI 中提示找不到变量，请用 AS OPC UA 浏览器核实节点 ID 后修改此处
+const OPC = {
+    // ── 输入（HMI → PLC） ──────────────────────────────────────────────
+    bRefreshSimData:       '::AsGlobalPV:gstHmi.stInputs.bRefreshSimData',
+    bMoveCurveLeft:        '::AsGlobalPV:gstHmi.stInputs.bMoveCurveLeft',
+    bMoveCurveRight:       '::AsGlobalPV:gstHmi.stInputs.bMoveCurveRight',
+    bMoveLockBoxLeft:      '::AsGlobalPV:gstHmi.stInputs.bMoveLockBoxLeft',
+    bMoveLockBoxRight:     '::AsGlobalPV:gstHmi.stInputs.bMoveLockBoxRight',
+    bCmdLatchPos:          '::AsGlobalPV:gstHmi.stInputs.bCmdLatchPos',
+    bVisMarkIntervalAdd:   '::AsGlobalPV:gstHmi.stInputs.bVisMarkIntervalAdd',
+    bVisMarkIntervalMinus: '::AsGlobalPV:gstHmi.stInputs.bVisMarkIntervalMinus',
+    diLockBoxWidth:        '::AsGlobalPV:gstHmi.stInputs.diLockBoxWidth',
+    usiActivePU:           '::AsGlobalPV:gstMainInface.stToMain.usiActivePU',
+    // ── 输出（PLC → HMI 显示） ─────────────────────────────────────────
+    diPuWindowIntervalmm:  '::AsGlobalPV:gstHmi.stOutputs.diPuWindowIntervalmm',
+    diSImage:              '::AsGlobalPV:gstHmi.stOutputs.diSImage',
+};
+
+// ════════════════════════════════════════════════════════════════════════
+// 1. 刷新模拟数据
+// ════════════════════════════════════════════════════════════════════════
+widgets.MomentaryPushButton8.click(function(e) {
+    opcua(OPC.bRefreshSimData).setValueBool(true);
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// 2. 曲线左移 / 右移（按住期间保持 true，松手置 false）
+// ════════════════════════════════════════════════════════════════════════
+widgets.MomentaryPushButton1.mouseDown(function(e) {
+    opcua(OPC.bMoveCurveLeft).setValueBool(true);
+});
+widgets.MomentaryPushButton1.mouseUp(function(e) {
+    opcua(OPC.bMoveCurveLeft).setValueBool(false);
+});
+
+widgets.MomentaryPushButton2.mouseDown(function(e) {
+    opcua(OPC.bMoveCurveRight).setValueBool(true);
+});
+widgets.MomentaryPushButton2.mouseUp(function(e) {
+    opcua(OPC.bMoveCurveRight).setValueBool(false);
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// 3. 锁标窗口左移 / 右移
+// ════════════════════════════════════════════════════════════════════════
+widgets.MomentaryPushButton3.mouseDown(function(e) {
+    opcua(OPC.bMoveLockBoxLeft).setValueBool(true);
+});
+widgets.MomentaryPushButton3.mouseUp(function(e) {
+    opcua(OPC.bMoveLockBoxLeft).setValueBool(false);
+});
+
+widgets.MomentaryPushButton4.mouseDown(function(e) {
+    opcua(OPC.bMoveLockBoxRight).setValueBool(true);
+});
+widgets.MomentaryPushButton4.mouseUp(function(e) {
+    opcua(OPC.bMoveLockBoxRight).setValueBool(false);
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// 4. 锁标按钮（单次触发）
+// ════════════════════════════════════════════════════════════════════════
+// widgets.MomentaryPushButton5.click(function(e) {
+//     opcua(OPC.bCmdLatchPos).setValueBool(true);
+// });
+
+// ════════════════════════════════════════════════════════════════════════
+// 5. 横向跟首色：减小 / 增大
+// ════════════════════════════════════════════════════════════════════════
+widgets.MomentaryPushButton6.mouseDown(function(e) {
+    opcua(OPC.bVisMarkIntervalMinus).setValueBool(true);
+});
+widgets.MomentaryPushButton6.mouseUp(function(e) {
+    opcua(OPC.bVisMarkIntervalMinus).setValueBool(false);
+});
+
+widgets.MomentaryPushButton7.mouseDown(function(e) {
+    opcua(OPC.bVisMarkIntervalAdd).setValueBool(true);
+});
+widgets.MomentaryPushButton7.mouseUp(function(e) {
+    opcua(OPC.bVisMarkIntervalAdd).setValueBool(false);
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// 6. PU 选择 ToggleButton 互斥（点 PU1 → 其余自动取消选中）
+//    并将所选 PU 编号（从 1 开始）写入 PLC
+// ════════════════════════════════════════════════════════════════════════
+// function selectPU(puIndex) {
+//     widgets.ToggleButton1.setToggled(puIndex === 0);
+//     widgets.ToggleButton2.setToggled(puIndex === 1);
+//     widgets.ToggleButton3.setToggled(puIndex === 2);
+//     widgets.ToggleButton4.setToggled(puIndex === 3);
+//     opcua(OPC.usiActivePU).setValueNumber(puIndex + 1);
+// }
+
+// widgets.ToggleButton1.click(function(e) { selectPU(0); });
+// widgets.ToggleButton2.click(function(e) { selectPU(1); });
+// widgets.ToggleButton3.click(function(e) { selectPU(2); });
+// widgets.ToggleButton4.click(function(e) { selectPU(3); });
+
+// ════════════════════════════════════════════════════════════════════════
+// 7. PLC 输出 → HMI 数值显示（订阅变化推送，无需轮询）
+// ════════════════════════════════════════════════════════════════════════
+
+// 横向跟首色窗口间距（mm） → NumericOutput3（GroupBox3 内）
+opcua(OPC.diPuWindowIntervalmm).valueChanged(function(e) {
+    widgets.NumericOutput3.setValue(e.detail.newValue);
+});
+
+// 当前 sImage（色组索引） → NumericOutput2（当前色组+1）
+opcua(OPC.diSImage).valueChanged(function(e) {
+    widgets.NumericOutput2.setValue(e.detail.newValue);
+});

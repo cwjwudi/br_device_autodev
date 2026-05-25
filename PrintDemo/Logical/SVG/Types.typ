@@ -7,10 +7,13 @@ TYPE
 
 	SvgTransformMap_typ : 	STRUCT
 		stEmergencyStyle : SvgTransformField_typ;
+		stLine1Duration : SvgTransformField_typ;
 		stLine1Style : SvgTransformField_typ;
+		stLine2Duration : SvgTransformField_typ;
 		stLine2Style : SvgTransformField_typ;
 		stFan1Duration : SvgTransformField_typ;
 		stFan1Spin : SvgTransformField_typ;
+		stRollerUpDuration : SvgTransformField_typ;
 		stRollerUpTranslate : SvgTransformField_typ;
 		stRollerDownStyle : SvgTransformField_typ;
 		stColorBoxStyle : SvgTransformField_typ;
@@ -18,8 +21,6 @@ TYPE
 
 	SvgPuCommand_typ : 	STRUCT
 		bEmergency : BOOL;
-		bLine1Visible : BOOL;
-		bLine2Visible : BOOL;
 		bFan1Rotate : BOOL;
 		bRollerUpDown : BOOL;
 		bRollerDownGreen : BOOL;
@@ -37,6 +38,7 @@ TYPE
 		strFan1DurationRun : STRING[8];
 		strFan1SpinStop : STRING[16];
 		strFan1SpinRun : STRING[16];
+		strRollerUpDuration : STRING[8];
 		strRollerUpHome : STRING[16];
 		strRollerUpDown : STRING[16];
 		strRollerDownNormal : STRING[16];

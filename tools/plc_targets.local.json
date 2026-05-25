@@ -40,6 +40,31 @@
         "scope": "task",
         "task": "SVG",
         "name": "strTransform"
+      },
+      {
+        "scope": "task",
+        "task": "LQR",
+        "name": "bLqrEnable"
+      },
+      {
+        "scope": "task",
+        "task": "LQR",
+        "name": "arLqrX"
+      },
+      {
+        "scope": "task",
+        "task": "LQR",
+        "name": "arLqrXRef"
+      },
+      {
+        "scope": "task",
+        "task": "LQR",
+        "name": "arLqrU"
+      },
+      {
+        "scope": "task",
+        "task": "LQR",
+        "name": "stLqrStatus"
       }
     ]
   },
@@ -48,7 +73,7 @@
       "ip": "127.0.0.1",
       "role": "arsim",
       "allow_auto_download": true,
-      "arsim_loader_exe": "D:\\codex_ws\\motion_svg_test\\PrintDemo\\Temp\\Simulation\\Config1\\X20CP3687X\\ar000loader.exe"
+      "arsim_loader_exe": "D:\\codex_ws\\motion_svg_test\\PrintDemo\\Temp\\Simulation\\x1685\\X20CP1685\\ar000loader.exe"
     },
     "test_plc": {
       "ip": "192.168.50.222",

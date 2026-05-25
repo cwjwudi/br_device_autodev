@@ -7,6 +7,7 @@
     <Object Type="Package" Description="Global libraries">Libraries</Object>
     <Object Type="Package">mappView</Object>
     <Object Type="Package">Middleware</Object>
+    <Object Type="Program" Language="ANSIC">LQR</Object>
     <Object Type="Program" Language="ANSIC">SVG</Object>
   </Objects>
 </Package>
