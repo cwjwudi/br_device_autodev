@@ -1,0 +1,128 @@
+{
+  "name": "lqr_io_tests",
+  "target": "test_plc",
+  "cases": [
+    {
+      "name": "zero_state_zero_output",
+      "settle_ms": 150,
+      "writes": [
+        { "variable": "LQR:bLqrReset", "value": false },
+        { "variable": "LQR:bLqrEnable", "value": true },
+        { "variable": "LQR:rLqrMaxAbsU", "value": 100.0 },
+        { "variable": "LQR:arLqrX", "value": [0.0, 0.0, 0.0, 0.0] },
+        { "variable": "LQR:arLqrXRef", "value": [0.0, 0.0, 0.0, 0.0] },
+        { "variable": "LQR:arLqrK", "value": [2.0, 0.4, 0.0, 0.0, 0.0, 0.0, 2.0, 0.4] }
+      ],
+      "readback": [
+        "LQR:arLqrU",
+        "LQR:arLqrError",
+        "LQR:stLqrStatus"
+      ],
+      "checks": [
+        { "variable": "LQR:arLqrU[0]", "expected": 0.0, "tolerance": 0.001 },
+        { "variable": "LQR:arLqrU[1]", "expected": 0.0, "tolerance": 0.001 },
+        { "variable": "LQR:arLqrError[0]", "expected": 0.0, "tolerance": 0.001 },
+        { "variable": "LQR:stLqrStatus.bValid", "expected": true },
+        { "variable": "LQR:stLqrStatus.bSaturated", "expected": false },
+        { "variable": "LQR:stLqrStatus.usiErrorCode", "expected": 0 }
+      ]
+    },
+    {
+      "name": "nominal_tracking_error",
+      "settle_ms": 150,
+      "writes": [
+        { "variable": "LQR:bLqrReset", "value": false },
+        { "variable": "LQR:bLqrEnable", "value": true },
+        { "variable": "LQR:rLqrMaxAbsU", "value": 100.0 },
+        { "variable": "LQR:arLqrX", "value": [1.0, 0.0, -2.0, 0.5] },
+        { "variable": "LQR:arLqrXRef", "value": [0.0, 0.0, 0.0, 0.0] },
+        { "variable": "LQR:arLqrK", "value": [2.0, 0.4, 0.0, 0.0, 0.0, 0.0, 2.0, 0.4] }
+      ],
+      "readback": [
+        "LQR:arLqrU",
+        "LQR:arLqrError",
+        "LQR:stLqrStatus"
+      ],
+      "checks": [
+        { "variable": "LQR:arLqrU[0]", "expected": -2.0, "tolerance": 0.001 },
+        { "variable": "LQR:arLqrU[1]", "expected": 3.8, "tolerance": 0.001 },
+        { "variable": "LQR:arLqrError[0]", "expected": 1.0, "tolerance": 0.001 },
+        { "variable": "LQR:arLqrError[2]", "expected": -2.0, "tolerance": 0.001 },
+        { "variable": "LQR:stLqrStatus.bValid", "expected": true },
+        { "variable": "LQR:stLqrStatus.bSaturated", "expected": false },
+        { "variable": "LQR:stLqrStatus.usiErrorCode", "expected": 0 }
+      ]
+    },
+    {
+      "name": "saturation_limit",
+      "settle_ms": 150,
+      "writes": [
+        { "variable": "LQR:bLqrReset", "value": false },
+        { "variable": "LQR:bLqrEnable", "value": true },
+        { "variable": "LQR:rLqrMaxAbsU", "value": 5.0 },
+        { "variable": "LQR:arLqrX", "value": [10.0, 0.0, -10.0, 0.0] },
+        { "variable": "LQR:arLqrXRef", "value": [0.0, 0.0, 0.0, 0.0] },
+        { "variable": "LQR:arLqrK", "value": [2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0] }
+      ],
+      "readback": [
+        "LQR:arLqrU",
+        "LQR:stLqrStatus"
+      ],
+      "checks": [
+        { "variable": "LQR:arLqrU[0]", "expected": -5.0, "tolerance": 0.001 },
+        { "variable": "LQR:arLqrU[1]", "expected": 5.0, "tolerance": 0.001 },
+        { "variable": "LQR:stLqrStatus.bValid", "expected": true },
+        { "variable": "LQR:stLqrStatus.bSaturated", "expected": true },
+        { "variable": "LQR:stLqrStatus.usiErrorCode", "expected": 2 }
+      ]
+    },
+    {
+      "name": "disabled_zero_output",
+      "settle_ms": 150,
+      "writes": [
+        { "variable": "LQR:bLqrReset", "value": false },
+        { "variable": "LQR:bLqrEnable", "value": false },
+        { "variable": "LQR:rLqrMaxAbsU", "value": 100.0 },
+        { "variable": "LQR:arLqrX", "value": [1.0, 2.0, 3.0, 4.0] },
+        { "variable": "LQR:arLqrXRef", "value": [0.0, 0.0, 0.0, 0.0] },
+        { "variable": "LQR:arLqrK", "value": [2.0, 0.4, 0.0, 0.0, 0.0, 0.0, 2.0, 0.4] }
+      ],
+      "readback": [
+        "LQR:arLqrU",
+        "LQR:stLqrStatus"
+      ],
+      "checks": [
+        { "variable": "LQR:arLqrU[0]", "expected": 0.0, "tolerance": 0.001 },
+        { "variable": "LQR:arLqrU[1]", "expected": 0.0, "tolerance": 0.001 },
+        { "variable": "LQR:stLqrStatus.bValid", "expected": false },
+        { "variable": "LQR:stLqrStatus.bEnabled", "expected": false },
+        { "variable": "LQR:stLqrStatus.usiErrorCode", "expected": 0 }
+      ]
+    },
+    {
+      "name": "reset_clears_output",
+      "settle_ms": 150,
+      "writes": [
+        { "variable": "LQR:bLqrEnable", "value": true },
+        { "variable": "LQR:bLqrReset", "value": true },
+        { "variable": "LQR:rLqrMaxAbsU", "value": 100.0 },
+        { "variable": "LQR:arLqrX", "value": [5.0, -2.0, 3.0, -1.0] },
+        { "variable": "LQR:arLqrXRef", "value": [0.0, 0.0, 0.0, 0.0] },
+        { "variable": "LQR:arLqrK", "value": [2.0, 0.4, 0.0, 0.0, 0.0, 0.0, 2.0, 0.4] }
+      ],
+      "readback": [
+        "LQR:arLqrU",
+        "LQR:arLqrError",
+        "LQR:stLqrStatus"
+      ],
+      "checks": [
+        { "variable": "LQR:arLqrU[0]", "expected": 0.0, "tolerance": 0.001 },
+        { "variable": "LQR:arLqrU[1]", "expected": 0.0, "tolerance": 0.001 },
+        { "variable": "LQR:arLqrError[0]", "expected": 0.0, "tolerance": 0.001 },
+        { "variable": "LQR:arLqrError[2]", "expected": 0.0, "tolerance": 0.001 },
+        { "variable": "LQR:stLqrStatus.bValid", "expected": false },
+        { "variable": "LQR:stLqrStatus.usiErrorCode", "expected": 0 }
+      ]
+    }
+  ]
+}

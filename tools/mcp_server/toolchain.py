@@ -8,8 +8,9 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PLC_TOOLCHAIN = REPO_ROOT / "tools" / "plc_toolchain.ps1"
+GENERATED_DIR = REPO_ROOT / "tools" / ".generated"
 DEFAULT_PROJECT_PATH = "PrintDemo\\Huitong_FrontEval.apj"
-DEFAULT_CONFIG = "Config1"
+DEFAULT_CONFIG = "x1685"
 DEFAULT_TARGETS_PATH = "tools\\plc_targets.local.json"
 
 
@@ -21,6 +22,13 @@ class ToolchainError(RuntimeError):
         self.exit_code = exit_code
 
 
+def write_json_argument_file(prefix: str, payload: Any) -> str:
+    GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+    path = GENERATED_DIR / f"{prefix}.json"
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return str(path)
+
+
 def run_plc_toolchain(
     command: str,
     *,
@@ -30,10 +38,14 @@ def run_plc_toolchain(
     targets_path: str = DEFAULT_TARGETS_PATH,
     package_path: str | None = None,
     transfer_pil_path: str | None = None,
+    writes_path: str | None = None,
+    suite_path: str | None = None,
+    case_name: str | None = None,
     pvi_variables: list[str] | None = None,
     opcua_node_ids: list[str] | None = None,
     build_ruc_package: bool = False,
     execute: bool = False,
+    settle_ms: int | None = None,
     start_wait_seconds: int | None = None,
     timeout_seconds: int = 60,
 ) -> dict[str, Any]:
@@ -59,6 +71,12 @@ def run_plc_toolchain(
         args.extend(["-PackagePath", package_path])
     if transfer_pil_path:
         args.extend(["-TransferPilPath", transfer_pil_path])
+    if writes_path:
+        args.extend(["-WritesPath", writes_path])
+    if suite_path:
+        args.extend(["-SuitePath", suite_path])
+    if case_name:
+        args.extend(["-CaseName", case_name])
     if pvi_variables:
         args.extend(["-PviVariable", ",".join(pvi_variables)])
     if opcua_node_ids:
@@ -70,6 +88,8 @@ def run_plc_toolchain(
         args.append("-Execute")
     if start_wait_seconds is not None:
         args.extend(["-StartWaitSeconds", str(start_wait_seconds)])
+    if settle_ms is not None:
+        args.extend(["-SettleMs", str(settle_ms)])
 
     completed = subprocess.run(
         args,
@@ -124,6 +144,12 @@ def summarize(command: str, data: dict[str, Any]) -> str:
         variables = data.get("variables") or []
         ok_count = sum(1 for item in variables if item.get("ok"))
         return f"read {ok_count}/{len(variables)} PVI variables"
+    if command == "WritePvi":
+        writes = data.get("writes") or []
+        ok_count = sum(1 for item in writes if item.get("ok"))
+        if not data.get("executed"):
+            return "write blocked: execute=true is required"
+        return f"wrote {ok_count}/{len(writes)} PVI variables"
     if command == "Build":
         errors = data.get("parsed_errors")
         warnings = data.get("parsed_warnings")
@@ -155,6 +181,15 @@ def summarize(command: str, data: dict[str, Any]) -> str:
     if command == "RunVerificationSuite":
         method = data.get("method") or "unknown"
         return f"verification {'OK' if data.get('ok') else 'FAILED'} via {method}"
+    if command == "RunIoTestCase":
+        cases = data.get("cases") or []
+        name = cases[0].get("name") if cases else data.get("case_name")
+        return f"IO test case {name or ''} {'OK' if data.get('ok') else 'FAILED'}".strip()
+    if command == "RunTestSuite":
+        return f"IO suite {'OK' if data.get('ok') else 'FAILED'}: {data.get('cases_passed', 0)}/{data.get('cases_total', 0)} passed"
+    if command == "ResetTestHarness":
+        reset = data.get("reset") or data
+        return f"test harness reset {'OK' if reset.get('ok') else 'FAILED'}"
     if command == "RunArsimClosedLoop":
         download = data.get("download") or {}
         if download.get("executed"):
@@ -171,7 +206,7 @@ def summarize(command: str, data: dict[str, Any]) -> str:
 
 def collect_logs(data: dict[str, Any]) -> list[str]:
     logs: list[str] = []
-    for key in ("log_path", "pil_path", "nodes_file", "variables_file", "report_path"):
+    for key in ("log_path", "pil_path", "nodes_file", "variables_file", "writes_file", "suite_path", "report_path"):
         value = data.get(key)
         if value:
             logs.append(str(value))
@@ -188,6 +223,9 @@ def collect_logs(data: dict[str, Any]) -> list[str]:
         "verification",
         "opcua",
         "pvi",
+        "reset",
+        "suite_reset",
+        "final_reset",
     ):
         nested = data.get(nested_key)
         if isinstance(nested, dict):
@@ -229,6 +267,14 @@ def next_actions(tool: str, data: dict[str, Any]) -> list[str]:
         return ["Do not download. Fix the reported package/target mismatch first."]
     if tool == "plc_read_pvi" and not data.get("ok"):
         return ["Check PVI Manager, target reachability, and variable whitelist names."]
+    if tool == "plc_write_pvi" and not data.get("ok"):
+        return ["Do not retry writes until execute=true, target role, and pvi.write_whitelist have been checked."]
+    if tool in ("plc_run_io_test_case", "plc_run_test_suite") and data.get("ok"):
+        return ["Review the generated IO test report for writes, readback, checks, and restore results."]
+    if tool in ("plc_run_io_test_case", "plc_run_test_suite") and not data.get("ok"):
+        return ["Review the generated IO test report and confirm restore/reset completed before retrying."]
+    if tool == "plc_reset_test_harness" and not data.get("ok"):
+        return ["Check PVI connectivity and pvi.restore_writes before running IO tests."]
     if tool == "plc_build_project" and data.get("ok"):
         return ["Run plc_describe_ruc_package to inspect the built RUC package, then plc_check_download."]
     if tool == "plc_build_project" and not data.get("ok"):
@@ -297,6 +343,26 @@ def plc_read_pvi(arguments: dict[str, Any]) -> dict[str, Any]:
         timeout_seconds=int(arguments.get("timeout_seconds") or 60),
     )
     return wrap_result("plc_read_pvi", "ReadPvi", data, target)
+
+
+def plc_write_pvi(arguments: dict[str, Any]) -> dict[str, Any]:
+    target = str(arguments.get("target") or "arsim")
+    writes = arguments.get("writes")
+    if not isinstance(writes, list) or not writes:
+        raise ValueError("writes must be a non-empty array of {variable, value} objects.")
+    writes_path = write_json_argument_file(f"mcp_write_pvi_{target}", writes)
+    execute = arguments.get("execute") is True
+    data = run_plc_toolchain(
+        "WritePvi",
+        target=target,
+        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
+        config=str(arguments.get("config") or DEFAULT_CONFIG),
+        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        writes_path=writes_path,
+        execute=execute,
+        timeout_seconds=int(arguments.get("timeout_seconds") or 90),
+    )
+    return wrap_result("plc_write_pvi", "WritePvi", data, target)
 
 
 def plc_check_download(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -419,6 +485,60 @@ def plc_run_verification_suite(arguments: dict[str, Any]) -> dict[str, Any]:
     return wrap_result("plc_run_verification_suite", "RunVerificationSuite", data, target)
 
 
+def plc_run_io_test_case(arguments: dict[str, Any]) -> dict[str, Any]:
+    target = str(arguments.get("target") or "test_plc")
+    case_name = arguments.get("case_name")
+    if not case_name:
+        raise ValueError("case_name is required.")
+    execute = arguments.get("execute") is True
+    data = run_plc_toolchain(
+        "RunIoTestCase",
+        target=target,
+        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
+        config=str(arguments.get("config") or DEFAULT_CONFIG),
+        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        suite_path=str(arguments.get("suite_path") or "tests\\plc\\lqr_io_tests.json"),
+        case_name=str(case_name),
+        execute=execute,
+        settle_ms=int(arguments.get("settle_ms") or 100),
+        timeout_seconds=int(arguments.get("timeout_seconds") or 180),
+    )
+    return wrap_result("plc_run_io_test_case", "RunIoTestCase", data, target)
+
+
+def plc_run_test_suite(arguments: dict[str, Any]) -> dict[str, Any]:
+    target = str(arguments.get("target") or "test_plc")
+    execute = arguments.get("execute") is True
+    data = run_plc_toolchain(
+        "RunTestSuite",
+        target=target,
+        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
+        config=str(arguments.get("config") or DEFAULT_CONFIG),
+        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        suite_path=str(arguments.get("suite_path") or "tests\\plc\\lqr_io_tests.json"),
+        execute=execute,
+        settle_ms=int(arguments.get("settle_ms") or 100),
+        timeout_seconds=int(arguments.get("timeout_seconds") or 600),
+    )
+    return wrap_result("plc_run_test_suite", "RunTestSuite", data, target)
+
+
+def plc_reset_test_harness(arguments: dict[str, Any]) -> dict[str, Any]:
+    target = str(arguments.get("target") or "test_plc")
+    execute = arguments.get("execute") is True
+    data = run_plc_toolchain(
+        "ResetTestHarness",
+        target=target,
+        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
+        config=str(arguments.get("config") or DEFAULT_CONFIG),
+        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        suite_path=str(arguments.get("suite_path") or "tests\\plc\\lqr_io_tests.json"),
+        execute=execute,
+        timeout_seconds=int(arguments.get("timeout_seconds") or 120),
+    )
+    return wrap_result("plc_reset_test_harness", "ResetTestHarness", data, target)
+
+
 def plc_get_target_config(arguments: dict[str, Any]) -> dict[str, Any]:
     target = str(arguments.get("target") or "arsim")
     data = run_plc_toolchain(
@@ -454,8 +574,12 @@ TOOLS = {
     "plc_download_ruc": plc_download_ruc,
     "plc_verify_opcua": plc_verify_opcua,
     "plc_read_pvi": plc_read_pvi,
+    "plc_write_pvi": plc_write_pvi,
     "plc_run_arsim_closed_loop": plc_run_arsim_closed_loop,
     "plc_run_verification_suite": plc_run_verification_suite,
+    "plc_run_io_test_case": plc_run_io_test_case,
+    "plc_run_test_suite": plc_run_test_suite,
+    "plc_reset_test_harness": plc_reset_test_harness,
     "plc_get_target_config": plc_get_target_config,
     "plc_list_targets": plc_list_targets,
 }

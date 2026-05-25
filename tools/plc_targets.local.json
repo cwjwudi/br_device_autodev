@@ -23,6 +23,140 @@
     "enabled": true,
     "verify_after_download": false,
     "pvi_dll_dir": null,
+    "read_whitelist": [
+      {
+        "scope": "task",
+        "task": "LQR",
+        "name": "bLqrEnable"
+      },
+      {
+        "scope": "task",
+        "task": "LQR",
+        "name": "bLqrReset"
+      },
+      {
+        "scope": "task",
+        "task": "LQR",
+        "name": "rLqrMaxAbsU"
+      },
+      {
+        "scope": "task",
+        "task": "LQR",
+        "name": "arLqrX"
+      },
+      {
+        "scope": "task",
+        "task": "LQR",
+        "name": "arLqrXRef"
+      },
+      {
+        "scope": "task",
+        "task": "LQR",
+        "name": "arLqrK"
+      },
+      {
+        "scope": "task",
+        "task": "LQR",
+        "name": "arLqrU"
+      },
+      {
+        "scope": "task",
+        "task": "LQR",
+        "name": "arLqrError"
+      },
+      {
+        "scope": "task",
+        "task": "LQR",
+        "name": "stLqrStatus"
+      }
+    ],
+    "write_whitelist": [
+      {
+        "scope": "task",
+        "task": "LQR",
+        "name": "bLqrEnable",
+        "type": "BOOL"
+      },
+      {
+        "scope": "task",
+        "task": "LQR",
+        "name": "bLqrReset",
+        "type": "BOOL"
+      },
+      {
+        "scope": "task",
+        "task": "LQR",
+        "name": "arLqrX",
+        "type": "REAL[4]"
+      },
+      {
+        "scope": "task",
+        "task": "LQR",
+        "name": "arLqrXRef",
+        "type": "REAL[4]"
+      },
+      {
+        "scope": "task",
+        "task": "LQR",
+        "name": "arLqrK",
+        "type": "REAL[8]"
+      },
+      {
+        "scope": "task",
+        "task": "LQR",
+        "name": "rLqrMaxAbsU",
+        "type": "REAL"
+      }
+    ],
+    "restore_writes": [
+      {
+        "variable": "LQR:bLqrEnable",
+        "value": false
+      },
+      {
+        "variable": "LQR:bLqrReset",
+        "value": true
+      },
+      {
+        "variable": "LQR:arLqrX",
+        "value": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "variable": "LQR:arLqrXRef",
+        "value": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "variable": "LQR:arLqrK",
+        "value": [
+          2.0,
+          0.4,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          2.0,
+          0.4
+        ]
+      },
+      {
+        "variable": "LQR:rLqrMaxAbsU",
+        "value": 100.0
+      },
+      {
+        "variable": "LQR:bLqrReset",
+        "value": false
+      }
+    ],
     "validation_variables": [
       {
         "scope": "global",

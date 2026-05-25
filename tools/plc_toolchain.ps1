@@ -1,15 +1,19 @@
 param(
-    [ValidateSet("Help", "Build", "StartArsim", "Probe", "DescribePackage", "CheckDownload", "Download", "VerifyOpcUa", "ReadPvi", "RunArsimClosedLoop", "RunVerificationSuite", "GetTargetConfig", "ListTargets")]
+    [ValidateSet("Help", "Build", "StartArsim", "Probe", "DescribePackage", "CheckDownload", "Download", "VerifyOpcUa", "ReadPvi", "WritePvi", "RunIoTestCase", "RunTestSuite", "ResetTestHarness", "RunArsimClosedLoop", "RunVerificationSuite", "GetTargetConfig", "ListTargets")]
     [string]$Command = "Help",
 
     [string]$ProjectPath = "PrintDemo\Huitong_FrontEval.apj",
-    [string]$Config = "Config1",
+    [string]$Config = "x1685",
     [string]$Target = "test_plc",
     [string]$TargetsPath = "tools\plc_targets.local.json",
-    [string]$PackagePath = "PrintDemo\Binaries\Config1\X20CP3687X\RUCPackage\RUCPackage.zip",
-    [string]$TransferPilPath = "PrintDemo\Binaries\Config1\X20CP3687X\RUCPackage\Transfer.pil",
+    [string]$PackagePath = "PrintDemo\Binaries\x1685\X20CP1685\RUCPackage\RUCPackage.zip",
+    [string]$TransferPilPath = "PrintDemo\Binaries\x1685\X20CP1685\RUCPackage\Transfer.pil",
     [string[]]$OpcUaNodeId,
     [string[]]$PviVariable,
+    [string]$WritesPath,
+    [string]$SuitePath = "tests\plc\lqr_io_tests.json",
+    [string]$CaseName,
+    [int]$SettleMs = 100,
     [switch]$BuildRucPackage,
     [int]$StartWaitSeconds = 3,
     [switch]$Execute
@@ -750,6 +754,9 @@ function Invoke-ReadPvi {
             }
         )
     }
+    elseif ($cfg.pvi.read_whitelist) {
+        $variables = @($cfg.pvi.read_whitelist)
+    }
     elseif ($cfg.pvi.validation_variables) {
         $variables = @($cfg.pvi.validation_variables)
     }
@@ -797,6 +804,131 @@ function Invoke-ReadPvi {
     }
 }
 
+function Invoke-WritePvi {
+    param([switch]$Quiet)
+
+    if (-not $WritesPath) {
+        throw "WritePvi requires -WritesPath pointing to a JSON array of write objects."
+    }
+
+    $cfg = Read-ToolchainConfig
+    $targetConfig = Get-TargetConfig $cfg
+    if ($targetConfig.role -match "production") {
+        throw "Refusing to write PVI variables to production target '$Target'."
+    }
+    if ($cfg.pvi.enabled -eq $false) {
+        throw "PVI is disabled in pvi.enabled."
+    }
+
+    $script = Resolve-RepoPath "tools\pvi_write.py"
+    $writes = Resolve-RepoPath $WritesPath
+    if (-not (Test-Path -LiteralPath $writes)) {
+        throw "Writes file was not found: $writes"
+    }
+
+    $args = @(
+        $script,
+        "--target", $Target,
+        "--targets-file", (Resolve-RepoPath $TargetsPath),
+        "--writes-file", $writes,
+        "--cpu-name", $Target
+    )
+    if ($Execute) {
+        $args += "--execute"
+    }
+    if ($cfg.pvi.pvi_dll_dir) {
+        $args += @("--pvi-dll-dir", (Resolve-RepoPath $cfg.pvi.pvi_dll_dir))
+    }
+
+    $oldErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $output = & python @args 2>&1
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $oldErrorActionPreference
+    }
+    $lines = Get-OutputLines $output
+    $report = Convert-JsonProcessOutput -CommandName "WritePvi" -Lines $lines -ExitCode $exitCode
+    $report | Add-Member -NotePropertyName target -NotePropertyValue $Target -Force
+    $report | Add-Member -NotePropertyName writes_file -NotePropertyValue $writes -Force
+
+    if ($Quiet) {
+        return $report
+    }
+
+    Write-ObjectJson $report
+    if (-not $report.ok) {
+        exit 1
+    }
+}
+
+function Invoke-IoTestRunner {
+    param(
+        [Parameter(Mandatory = $true)][string]$RunnerCommand,
+        [switch]$Quiet
+    )
+
+    $cfg = Read-ToolchainConfig
+    $targetConfig = Get-TargetConfig $cfg
+    if ($targetConfig.role -match "production") {
+        throw "Refusing to run IO tests on production target '$Target'."
+    }
+    if ($cfg.pvi.enabled -eq $false) {
+        throw "PVI is disabled in pvi.enabled."
+    }
+
+    $script = Resolve-RepoPath "tools\plc_io_test_runner.py"
+    $suite = Resolve-RepoPath $SuitePath
+    $args = @(
+        $script,
+        "--target", $Target,
+        "--targets-file", (Resolve-RepoPath $TargetsPath),
+        "--suite", $suite,
+        "--cpu-name", $Target,
+        "--settle-ms", ([string]$SettleMs)
+    )
+    if ($Execute) {
+        $args += "--execute"
+    }
+    if ($RunnerCommand -eq "RunIoTestCase") {
+        if (-not $CaseName) {
+            throw "RunIoTestCase requires -CaseName."
+        }
+        $args += @("--case-name", $CaseName)
+    }
+    elseif ($RunnerCommand -eq "ResetTestHarness") {
+        $args += "--reset-only"
+    }
+    if ($cfg.pvi.pvi_dll_dir) {
+        $args += @("--pvi-dll-dir", (Resolve-RepoPath $cfg.pvi.pvi_dll_dir))
+    }
+
+    $oldErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $output = & python @args 2>&1
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $oldErrorActionPreference
+    }
+    $lines = Get-OutputLines $output
+    $report = Convert-JsonProcessOutput -CommandName $RunnerCommand -Lines $lines -ExitCode $exitCode
+    $report | Add-Member -NotePropertyName target -NotePropertyValue $Target -Force
+    $report | Add-Member -NotePropertyName suite_path -NotePropertyValue $suite -Force
+
+    if ($Quiet) {
+        return $report
+    }
+
+    Write-ObjectJson $report
+    if (-not $report.ok) {
+        exit 1
+    }
+}
+
 try {
 switch ($Command) {
     "Help" {
@@ -811,6 +943,10 @@ Usage:
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command VerifyOpcUa -Target arsim
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command ReadPvi -Target arsim
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command ReadPvi -Target arsim -PviVariable 'gstHmi.stOutputs.diSImage,SVG:strTransform'
+  powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command WritePvi -Target test_plc -WritesPath tools\.generated\pvi_writes.json -Execute
+  powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command ResetTestHarness -Target test_plc -Execute
+  powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command RunIoTestCase -Target test_plc -SuitePath tests\plc\lqr_io_tests.json -CaseName zero_state_zero_output -Execute
+  powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command RunTestSuite -Target test_plc -SuitePath tests\plc\lqr_io_tests.json -Execute
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command RunVerificationSuite -Target arsim
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command RunArsimClosedLoop -Target arsim -Execute
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command ListTargets
@@ -825,6 +961,10 @@ Usage:
     "Download" { Invoke-Download }
     "VerifyOpcUa" { Invoke-VerifyOpcUa }
     "ReadPvi" { Invoke-ReadPvi }
+    "WritePvi" { Invoke-WritePvi }
+    "RunIoTestCase" { Invoke-IoTestRunner -RunnerCommand "RunIoTestCase" }
+    "RunTestSuite" { Invoke-IoTestRunner -RunnerCommand "RunTestSuite" }
+    "ResetTestHarness" { Invoke-IoTestRunner -RunnerCommand "ResetTestHarness" }
     "RunArsimClosedLoop" { Invoke-RunArsimClosedLoop }
     "RunVerificationSuite" { Invoke-RunVerificationSuite }
     "GetTargetConfig" { Invoke-GetTargetConfig }

@@ -17,7 +17,7 @@ COMMON_PROPERTIES: dict[str, Any] = {
     "config": {
         "type": "string",
         "description": "Automation Studio configuration name.",
-        "default": "Config1",
+        "default": "x1685",
     },
     "targets_path": {
         "type": "string",
@@ -53,7 +53,7 @@ def build_schema(
     if require_execute:
         merged["execute"] = {
             "type": "boolean",
-            "description": "Must be set to true to actually execute the download. Required for safety.",
+            "description": "Must be set to true to actually perform the gated action. Required for safety.",
         }
     if require_timeout:
         merged.setdefault(
@@ -112,7 +112,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             {
                 "package_path": {
                     "type": "string",
-                    "description": "Optional path to the RUC package zip. Defaults to PrintDemo/Binaries/Config1/X20CP3687X/RUCPackage/RUCPackage.zip.",
+                    "description": "Optional path to the RUC package zip. Defaults to PrintDemo/Binaries/x1685/X20CP1685/RUCPackage/RUCPackage.zip.",
                 },
             },
         ),
@@ -178,6 +178,30 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         ),
     },
     {
+        "name": "plc_write_pvi",
+        "description": "Write PVI test harness variables that are explicitly listed in pvi.write_whitelist. Requires execute=true and refuses production targets.",
+        "inputSchema": build_schema(
+            {
+                "writes": {
+                    "type": "array",
+                    "description": "Write objects such as {\"variable\":\"LQR:bLqrEnable\",\"value\":true}. Every variable must be in pvi.write_whitelist.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "variable": {"type": "string"},
+                            "value": {},
+                        },
+                        "required": ["variable", "value"],
+                        "additionalProperties": False,
+                    },
+                    "minItems": 1,
+                },
+            },
+            require_execute=True,
+            require_timeout=True,
+        ),
+    },
+    {
         "name": "plc_run_arsim_closed_loop",
         "description": "Run the standard ARsim closed loop: build RUC package, start ARsim, probe, describe package, safety check, optional explicit download, and verification report.",
         "inputSchema": build_schema(
@@ -190,6 +214,67 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "name": "plc_run_verification_suite",
         "description": "Run feedback verification and write a unified report. OPC UA is attempted first; PVI is used as a fallback.",
         "inputSchema": object_schema({}),
+    },
+    {
+        "name": "plc_run_io_test_case",
+        "description": "Run one PLC IO test case from a suite: reset, whitelisted PVI writes, settle, readback, checks, and restore.",
+        "inputSchema": build_schema(
+            {
+                "suite_path": {
+                    "type": "string",
+                    "description": "Path to a PLC IO test suite JSON file.",
+                    "default": "tests\\plc\\lqr_io_tests.json",
+                },
+                "case_name": {
+                    "type": "string",
+                    "description": "Name of the test case to run.",
+                },
+                "settle_ms": {
+                    "type": "integer",
+                    "description": "Default milliseconds to wait after writes when the case does not override settle_ms.",
+                    "minimum": 0,
+                    "default": 100,
+                },
+            },
+            require_execute=True,
+            require_timeout=True,
+        ),
+    },
+    {
+        "name": "plc_run_test_suite",
+        "description": "Run a full PLC IO test suite and write a report with per-case writes, readback, checks, and restore results.",
+        "inputSchema": build_schema(
+            {
+                "suite_path": {
+                    "type": "string",
+                    "description": "Path to a PLC IO test suite JSON file.",
+                    "default": "tests\\plc\\lqr_io_tests.json",
+                },
+                "settle_ms": {
+                    "type": "integer",
+                    "description": "Default milliseconds to wait after writes when cases do not override settle_ms.",
+                    "minimum": 0,
+                    "default": 100,
+                },
+            },
+            require_execute=True,
+            require_timeout=True,
+        ),
+    },
+    {
+        "name": "plc_reset_test_harness",
+        "description": "Restore/reset the PLC test harness using pvi.restore_writes. Requires execute=true and refuses production targets.",
+        "inputSchema": build_schema(
+            {
+                "suite_path": {
+                    "type": "string",
+                    "description": "Optional suite path used only for report context.",
+                    "default": "tests\\plc\\lqr_io_tests.json",
+                },
+            },
+            require_execute=True,
+            require_timeout=True,
+        ),
     },
     {
         "name": "plc_get_target_config",
