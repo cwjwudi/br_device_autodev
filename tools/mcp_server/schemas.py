@@ -178,6 +178,34 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         ),
     },
     {
+        "name": "plc_read_logger",
+        "description": "Read a whitelisted PLC/AR logger module through PVITransfer Logger. Returns report/log paths and a compact summary, never raw HTML/CSV content.",
+        "inputSchema": object_schema(
+            {
+                "logger_type": {
+                    "type": "string",
+                    "description": "Logger module type, for example System, User, or Connectivity.",
+                    "default": "System",
+                },
+                "logger_name": {
+                    "type": "string",
+                    "description": "Logger module name, for example $arlogsys, $arlogusr, or $arlogconn.",
+                    "default": "$arlogsys",
+                },
+                "format": {
+                    "type": "string",
+                    "description": "Output format. Supported values: .html, .csvx, .arl, .logpkg.",
+                    "default": ".html",
+                    "enum": [".html", ".csvx", ".arl", ".logpkg"],
+                },
+                "output_path": {
+                    "type": "string",
+                    "description": "Optional output file or directory. Must stay inside the repository. Defaults to tools/.generated/logger/.",
+                },
+            }
+        ),
+    },
+    {
         "name": "plc_write_pvi",
         "description": "Write PVI test harness variables that are explicitly listed in pvi.write_whitelist. Requires execute=true and refuses production targets.",
         "inputSchema": build_schema(

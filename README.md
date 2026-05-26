@@ -346,6 +346,43 @@ M6 安全边界：
 - 输出变量默认只读，不写。
 - 每次写入必须记录 write、readback、restore 和报告路径。
 
+M7：Logger 日志读取（已实现，2026-05-26 验证）。
+
+目标是通过 PVITransfer `Logger` 命令只读抓取 PLC/AR logger 模块，用于下载失败、运行异常、WarmStart/ColdStart、Connectivity/OPC UA 等诊断。
+
+已实现内容：
+
+1. 新增 `tools/plc_logger_read.py`，负责白名单校验、生成 `.pil`、调用 PVITransfer 和返回稳定 JSON。
+2. `tools/plc_toolchain.ps1` 增加 `ReadLogger`。
+3. MCP 增加 `plc_read_logger`。
+4. `tools/plc_targets.local.json` 已扩展：
+   - `logger.enabled`
+   - `logger.default_format`
+   - `logger.allowed_modules`
+   - `logger.blocked_modules`
+5. 输出日志到 `tools/.generated/logger/*`，MCP 只返回路径和摘要，不直接输出大段 HTML/CSV 内容。
+6. 测试报告归档在 `docs/PLC_LOGGER_READ_TEST_REPORT.md`。
+
+已验证命令：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command ReadLogger -Target test_plc -LoggerType System -LoggerName '$arlogsys' -Format .html
+```
+
+2026-05-26 验证结果：
+
+- `test_plc` (`192.168.50.222`) System logger 读取成功。
+- 生成 `.html` logger 报告和 PVITransfer log。
+- MCP `plc_read_logger` 返回结构化 JSON。
+- `Safety / $safety` 默认拒绝。
+
+M7 安全边界：
+
+- Logger 读取只读，不清空、不删除、不修改 PLC logger。
+- 只允许读取 `logger.allowed_modules` 中的模块。
+- Safety logger 默认禁用。
+- 生产目标默认不自动读取，现场诊断需先明确授权方式。
+
 详细计划见：
 
 - `docs/PLC_TOOLCHAIN_IMPLEMENTATION_PLAN.md`

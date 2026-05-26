@@ -202,6 +202,30 @@
       }
     ]
   },
+  "logger": {
+    "enabled": true,
+    "default_format": ".html",
+    "allowed_modules": [
+      {
+        "type": "System",
+        "name": "$arlogsys"
+      },
+      {
+        "type": "User",
+        "name": "$arlogusr"
+      },
+      {
+        "type": "Connectivity",
+        "name": "$arlogconn"
+      }
+    ],
+    "blocked_modules": [
+      {
+        "type": "Safety",
+        "name": "$safety"
+      }
+    ]
+  },
   "targets": {
     "arsim": {
       "ip": "127.0.0.1",

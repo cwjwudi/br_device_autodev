@@ -41,6 +41,10 @@ def run_plc_toolchain(
     writes_path: str | None = None,
     suite_path: str | None = None,
     case_name: str | None = None,
+    logger_type: str | None = None,
+    logger_name: str | None = None,
+    logger_format: str | None = None,
+    output_path: str | None = None,
     pvi_variables: list[str] | None = None,
     opcua_node_ids: list[str] | None = None,
     build_ruc_package: bool = False,
@@ -77,6 +81,14 @@ def run_plc_toolchain(
         args.extend(["-SuitePath", suite_path])
     if case_name:
         args.extend(["-CaseName", case_name])
+    if logger_type:
+        args.extend(["-LoggerType", logger_type])
+    if logger_name:
+        args.extend(["-LoggerName", logger_name])
+    if logger_format:
+        args.extend(["-Format", logger_format])
+    if output_path:
+        args.extend(["-OutputPath", output_path])
     if pvi_variables:
         args.extend(["-PviVariable", ",".join(pvi_variables)])
     if opcua_node_ids:
@@ -144,6 +156,10 @@ def summarize(command: str, data: dict[str, Any]) -> str:
         variables = data.get("variables") or []
         ok_count = sum(1 for item in variables if item.get("ok"))
         return f"read {ok_count}/{len(variables)} PVI variables"
+    if command == "ReadLogger":
+        if data.get("ok"):
+            return f"read {data.get('logger_type')} / {data.get('logger_name')} logger to {data.get('format')}"
+        return str(data.get("error_summary") or "logger read failed")
     if command == "WritePvi":
         writes = data.get("writes") or []
         ok_count = sum(1 for item in writes if item.get("ok"))
@@ -206,9 +222,11 @@ def summarize(command: str, data: dict[str, Any]) -> str:
 
 def collect_logs(data: dict[str, Any]) -> list[str]:
     logs: list[str] = []
-    for key in ("log_path", "pil_path", "nodes_file", "variables_file", "writes_file", "suite_path", "report_path"):
+    for key in ("log_path", "pil_path", "output_path", "nodes_file", "variables_file", "writes_file", "suite_path", "report_path"):
         value = data.get(key)
         if value:
+            if key == "output_path" and data.get("output_exists") is not True:
+                continue
             logs.append(str(value))
 
     for nested_key in (
@@ -267,6 +285,10 @@ def next_actions(tool: str, data: dict[str, Any]) -> list[str]:
         return ["Do not download. Fix the reported package/target mismatch first."]
     if tool == "plc_read_pvi" and not data.get("ok"):
         return ["Check PVI Manager, target reachability, and variable whitelist names."]
+    if tool == "plc_read_logger" and data.get("ok"):
+        return ["Open the generated logger report path for detailed diagnostics."]
+    if tool == "plc_read_logger" and not data.get("ok"):
+        return ["Check target reachability, logger.allowed_modules, and the PVITransfer log path."]
     if tool == "plc_write_pvi" and not data.get("ok"):
         return ["Do not retry writes until execute=true, target role, and pvi.write_whitelist have been checked."]
     if tool in ("plc_run_io_test_case", "plc_run_test_suite") and data.get("ok"):
@@ -343,6 +365,29 @@ def plc_read_pvi(arguments: dict[str, Any]) -> dict[str, Any]:
         timeout_seconds=int(arguments.get("timeout_seconds") or 60),
     )
     return wrap_result("plc_read_pvi", "ReadPvi", data, target)
+
+
+def plc_read_logger(arguments: dict[str, Any]) -> dict[str, Any]:
+    target = str(arguments.get("target") or "test_plc")
+    logger_type = str(arguments.get("logger_type") or "System")
+    logger_name = str(arguments.get("logger_name") or "$arlogsys")
+    logger_format = str(arguments.get("format") or ".html")
+    output_path = arguments.get("output_path")
+    if output_path is not None and not isinstance(output_path, str):
+        raise ValueError("output_path must be a string.")
+    data = run_plc_toolchain(
+        "ReadLogger",
+        target=target,
+        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
+        config=str(arguments.get("config") or DEFAULT_CONFIG),
+        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        logger_type=logger_type,
+        logger_name=logger_name,
+        logger_format=logger_format,
+        output_path=output_path,
+        timeout_seconds=int(arguments.get("timeout_seconds") or 150),
+    )
+    return wrap_result("plc_read_logger", "ReadLogger", data, target)
 
 
 def plc_write_pvi(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -574,6 +619,7 @@ TOOLS = {
     "plc_download_ruc": plc_download_ruc,
     "plc_verify_opcua": plc_verify_opcua,
     "plc_read_pvi": plc_read_pvi,
+    "plc_read_logger": plc_read_logger,
     "plc_write_pvi": plc_write_pvi,
     "plc_run_arsim_closed_loop": plc_run_arsim_closed_loop,
     "plc_run_verification_suite": plc_run_verification_suite,

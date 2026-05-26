@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("Help", "Build", "StartArsim", "Probe", "DescribePackage", "CheckDownload", "Download", "VerifyOpcUa", "ReadPvi", "WritePvi", "RunIoTestCase", "RunTestSuite", "ResetTestHarness", "RunArsimClosedLoop", "RunVerificationSuite", "GetTargetConfig", "ListTargets")]
+    [ValidateSet("Help", "Build", "StartArsim", "Probe", "DescribePackage", "CheckDownload", "Download", "VerifyOpcUa", "ReadPvi", "ReadLogger", "WritePvi", "RunIoTestCase", "RunTestSuite", "ResetTestHarness", "RunArsimClosedLoop", "RunVerificationSuite", "GetTargetConfig", "ListTargets")]
     [string]$Command = "Help",
 
     [string]$ProjectPath = "PrintDemo\Huitong_FrontEval.apj",
@@ -10,6 +10,10 @@ param(
     [string]$TransferPilPath = "PrintDemo\Binaries\x1685\X20CP1685\RUCPackage\Transfer.pil",
     [string[]]$OpcUaNodeId,
     [string[]]$PviVariable,
+    [string]$LoggerType = "System",
+    [string]$LoggerName = '$arlogsys',
+    [string]$Format = ".html",
+    [string]$OutputPath,
     [string]$WritesPath,
     [string]$SuitePath = "tests\plc\lqr_io_tests.json",
     [string]$CaseName,
@@ -651,6 +655,7 @@ function Invoke-GetTargetConfig {
         target_config = $targetConfig
         opcua = $cfg.opcua
         pvi = $cfg.pvi
+        logger = $cfg.logger
     }
 
     Write-ObjectJson $report
@@ -804,6 +809,47 @@ function Invoke-ReadPvi {
     }
 }
 
+function Invoke-ReadLogger {
+    param([switch]$Quiet)
+
+    $cfg = Read-ToolchainConfig
+    $script = Resolve-RepoPath "tools\plc_logger_read.py"
+    $args = @(
+        $script,
+        "--target", $Target,
+        "--targets-file", (Resolve-RepoPath $TargetsPath),
+        "--logger-type", $LoggerType,
+        "--logger-name", $LoggerName,
+        "--format", $Format,
+        "--pvi-transfer-path", (Resolve-RepoPath $cfg.automation_studio.pvi_transfer_exe)
+    )
+    if ($OutputPath) {
+        $args += @("--output-path", (Resolve-RepoPath $OutputPath))
+    }
+
+    $oldErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $output = & python @args 2>&1
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $oldErrorActionPreference
+    }
+    $lines = Get-OutputLines $output
+    $report = Convert-JsonProcessOutput -CommandName "ReadLogger" -Lines $lines -ExitCode $exitCode
+    $report | Add-Member -NotePropertyName target -NotePropertyValue $Target -Force
+
+    if ($Quiet) {
+        return $report
+    }
+
+    Write-ObjectJson $report
+    if (-not $report.ok) {
+        exit 1
+    }
+}
+
 function Invoke-WritePvi {
     param([switch]$Quiet)
 
@@ -943,6 +989,7 @@ Usage:
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command VerifyOpcUa -Target arsim
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command ReadPvi -Target arsim
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command ReadPvi -Target arsim -PviVariable 'gstHmi.stOutputs.diSImage,SVG:strTransform'
+  powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command ReadLogger -Target test_plc -LoggerType System -LoggerName '`$arlogsys' -Format .html
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command WritePvi -Target test_plc -WritesPath tools\.generated\pvi_writes.json -Execute
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command ResetTestHarness -Target test_plc -Execute
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command RunIoTestCase -Target test_plc -SuitePath tests\plc\lqr_io_tests.json -CaseName zero_state_zero_output -Execute
@@ -961,6 +1008,7 @@ Usage:
     "Download" { Invoke-Download }
     "VerifyOpcUa" { Invoke-VerifyOpcUa }
     "ReadPvi" { Invoke-ReadPvi }
+    "ReadLogger" { Invoke-ReadLogger }
     "WritePvi" { Invoke-WritePvi }
     "RunIoTestCase" { Invoke-IoTestRunner -RunnerCommand "RunIoTestCase" }
     "RunTestSuite" { Invoke-IoTestRunner -RunnerCommand "RunTestSuite" }

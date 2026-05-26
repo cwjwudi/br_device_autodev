@@ -126,6 +126,12 @@ tools/mcp_server/
 | `plc_run_test_suite` | 批量执行 JSON 测试套件并生成汇总报告 | 每条 case 独立记录 pass/fail |
 | `plc_reset_test_harness` | 将测试 harness 变量恢复到安全状态 | 只写 reset 白名单变量 |
 
+第四批已实现：Logger 只读诊断能力（M7）：
+
+| MCP Tool | 用途 | 安全门 |
+| --- | --- | --- |
+| `plc_read_logger` | 通过 PVITransfer `Logger` 命令读取 PLC/AR logger 模块，输出 html/csvx/arl/logpkg | 只读；模块必须在 `logger.allowed_modules` 白名单；默认禁用 Safety |
+
 ### 参数约定
 
 所有工具统一接收：
@@ -154,6 +160,14 @@ tools/mcp_server/
 - `expected`：期望值、容差和比较方式。
 - `settle_ms`：写入后等待 PLC 周期执行的时间。
 - `restore`：测试完成后的恢复动作，默认启用。
+
+Logger 读取工具额外支持：
+
+- `logger_type`：Logger module type，例如 `System`、`User`、`Connectivity`。
+- `logger_name`：Logger module name，例如 `$arlogsys`、`$arlogusr`、`$arlogconn`。
+- `format`：输出格式，建议首批支持 `.html`、`.csvx`、`.arl`、`.logpkg`。
+- `output_path`：可选输出路径，默认写入 `tools/.generated/logger/`。
+- `include_summary`：可选，后续用于解析 `.csvx` 并返回结构化摘要。
 
 ### 返回格式
 
@@ -198,6 +212,14 @@ M6 写入测试守卫：
 4. `role=production` 直接拒绝写入测试。
 5. 每次写入前后必须记录 readback 和报告路径。
 6. 测试结束必须执行 restore/reset，失败时也要尝试恢复安全状态。
+
+M7 Logger 读取守卫：
+
+1. `plc_read_logger` 只读，不提供清空、删除、修改 Logger 的能力。
+2. 只允许读取 `tools/plc_targets.local.json` 中 `logger.allowed_modules` 的模块。
+3. Safety logger 默认禁用；如未来需要，必须单独设计显式确认和审计流程。
+4. 生产目标默认不自动读取；如需现场诊断，应先明确目标角色和授权方式。
+5. 输出文件默认写入 `tools/.generated/logger/`，并在 JSON 返回值中记录路径。
 
 ## Skill 规划
 
@@ -523,6 +545,61 @@ tests/plc/
 - 写入动作全部可审计，报告包含写入前后的关键变量值。
 - 不修改 Safety，不写物理 I/O，不写生产 PLC。
 
+### M7：Logger 日志读取（已实现，2026-05-26）
+
+目标：
+
+- 从“构建/下载工具自身日志”扩展到“PLC/AR logger 模块读取”。
+- 用于下载失败、运行异常、WarmStart/ColdStart、Connectivity/OPC UA 等诊断。
+- 基于 PVITransfer `Logger` 命令实现，只读读取白名单 logger 模块。
+- 输出 `tools/.generated/logger/*`，并在 MCP 返回值中给出报告路径。
+
+已新增：
+
+```text
+tools/
+  plc_logger_read.py
+  plc_toolchain.ps1  # ReadLogger
+tools/mcp_server/
+  toolchain.py       # plc_read_logger registry/call wrapper
+  schemas.py         # logger 参数 schema
+```
+
+`tools/plc_targets.local.json` 已扩展：
+
+```json
+{
+  "logger": {
+    "enabled": true,
+    "default_format": ".html",
+    "allowed_modules": [
+      { "type": "System", "name": "$arlogsys" },
+      { "type": "User", "name": "$arlogusr" },
+      { "type": "Connectivity", "name": "$arlogconn" }
+    ],
+    "blocked_modules": [
+      { "type": "Safety", "name": "$safety" }
+    ]
+  }
+}
+```
+
+已验证命令：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command ReadLogger -Target test_plc -LoggerType System -LoggerName '$arlogsys' -Format .html
+```
+
+验收：
+
+- ✅ CLI `ReadLogger` 可读取 `test_plc` 的 System logger 并生成 `.html`。
+- ✅ MCP `plc_read_logger` 返回稳定 JSON，包含 `ok`、`output_path`、`log_path`。
+- ✅ 读取不在白名单内的模块时返回 `ok=false`。
+- ✅ `Safety / $safety` 默认拒绝。
+- ✅ `.csvx` 输出可做轻量结构化摘要解析，解析失败只写 `summary_parse_error`。
+- ✅ 任何实际 PVITransfer 调用都会保留 PVITransfer 日志，便于追溯。
+- ✅ 详细验证报告已归档：`docs/PLC_LOGGER_READ_TEST_REPORT.md`。
+
 ## 推荐下一步执行顺序
 
 1. ✅ 改造 `tools/plc_toolchain.ps1`，让所有命令 JSON 更稳定。（M1 已完成）
@@ -534,6 +611,7 @@ tests/plc/
 7. ✅ 补统一验证报告。（M5 已完成）
 8. ✅ 实现第二批 MCP 工具：闭环、验证套件、目标配置查询、目标列表。
 9. 设计并实现 M6 输入输出测试闭环：白名单写入、测试用例、套件报告。
+10. ✅ 实现 M7 Logger 日志读取：PVITransfer `Logger`、模块白名单、报告输出、可选 CSVX 解析。
 
 ## 待决策点
 
@@ -542,6 +620,7 @@ tests/plc/
 3. 是否允许 MCP 提供白名单变量写入能力，用于自动测试输入。（M6 建议只允许测试 harness 白名单写入）
 4. 测试 PLC `192.168.50.222` 后续是否要加入真实下载闭环；当前只读探针为 `X20CP1685 / 6.5.1 / WarmStart`，如果要下载，需要生成匹配该 CPU/AR 的 RUC 包。
 5. OPC UA 自动修改配置是否只做“生成建议 diff”，不自动应用。
+6. Logger 读取是否允许 production 目标只读诊断；Safety logger 是否必须单独确认。
 
 ## 风险
 
@@ -551,3 +630,4 @@ tests/plc/
 - OPC UA 全量开放变量有客户设备安全风险，必须保持默认关闭。
 - PowerShell 数组参数容易被调用方传错，MCP 应负责把数组写入临时 JSON 文件再调用 CLI。
 - 写入测试一旦白名单设计过宽，会变成危险的任意变量写入能力；M6 必须默认拒绝未知变量和生产目标。
+- Logger 输出可能包含生产、网络、账号或安全诊断信息；M7 必须使用模块白名单，Safety logger 默认不读取。
