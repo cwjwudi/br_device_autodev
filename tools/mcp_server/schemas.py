@@ -4,6 +4,10 @@ from typing import Any
 
 
 COMMON_PROPERTIES: dict[str, Any] = {
+    "environment": {
+        "type": "string",
+        "description": "Named PLC toolchain environment from tools/plc_environments.json. Explicit target/project_path/config/targets_path arguments override the environment defaults.",
+    },
     "target": {
         "type": "string",
         "description": "Target name from tools/plc_targets.local.json. Defaults to arsim.",
@@ -21,7 +25,7 @@ COMMON_PROPERTIES: dict[str, Any] = {
     },
     "targets_path": {
         "type": "string",
-        "description": "Toolchain target configuration JSON path.",
+        "description": "Toolchain target configuration JSON path. Overrides environment.targets_path when supplied.",
         "default": "tools\\plc_targets.local.json",
     },
     "timeout_seconds": {
@@ -312,6 +316,11 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "name": "plc_list_targets",
         "description": "List configured PLC/ARsim targets with IP, role, and automatic-download permission.",
+        "inputSchema": object_schema({}),
+    },
+    {
+        "name": "plc_list_environments",
+        "description": "List named PLC toolchain environments from tools/plc_environments.json for one-step switching.",
         "inputSchema": object_schema({}),
     },
 ]

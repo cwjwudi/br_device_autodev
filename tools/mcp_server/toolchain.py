@@ -12,6 +12,7 @@ GENERATED_DIR = REPO_ROOT / "tools" / ".generated"
 DEFAULT_PROJECT_PATH = "PrintDemo\\Huitong_FrontEval.apj"
 DEFAULT_CONFIG = "x1685"
 DEFAULT_TARGETS_PATH = "tools\\plc_targets.local.json"
+DEFAULT_ENVIRONMENTS_PATH = "tools\\plc_environments.json"
 
 
 class ToolchainError(RuntimeError):
@@ -27,6 +28,47 @@ def write_json_argument_file(prefix: str, payload: Any) -> str:
     path = GENERATED_DIR / f"{prefix}.json"
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return str(path)
+
+
+def load_environment(name: str | None) -> dict[str, Any]:
+    if not name:
+        return {}
+
+    path = REPO_ROOT / DEFAULT_ENVIRONMENTS_PATH
+    if not path.exists():
+        raise ValueError(f"Environment map was not found: {DEFAULT_ENVIRONMENTS_PATH}")
+
+    environments = json.loads(path.read_text(encoding="utf-8-sig"))
+    if name not in environments:
+        choices = ", ".join(sorted(environments))
+        raise ValueError(f"Unknown PLC environment '{name}'. Available environments: {choices}")
+    env = environments[name]
+    if not isinstance(env, dict):
+        raise ValueError(f"PLC environment '{name}' must be a JSON object.")
+    return env
+
+
+def resolve_call_options(arguments: dict[str, Any], *, default_target: str) -> dict[str, str]:
+    env_name = arguments.get("environment")
+    if env_name is not None and not isinstance(env_name, str):
+        raise ValueError("environment must be a string.")
+    env = load_environment(env_name)
+
+    def pick(name: str, default: str) -> str:
+        value = arguments.get(name)
+        if value not in (None, ""):
+            return str(value)
+        env_value = env.get(name)
+        if env_value not in (None, ""):
+            return str(env_value)
+        return default
+
+    return {
+        "target": pick("target", default_target),
+        "project_path": pick("project_path", DEFAULT_PROJECT_PATH),
+        "config": pick("config", DEFAULT_CONFIG),
+        "targets_path": pick("targets_path", DEFAULT_TARGETS_PATH),
+    }
 
 
 def run_plc_toolchain(
@@ -217,6 +259,9 @@ def summarize(command: str, data: dict[str, Any]) -> str:
     if command == "ListTargets":
         targets = data.get("targets") or []
         return f"{len(targets)} target(s) configured"
+    if command == "ListEnvironments":
+        environments = data.get("environments") or []
+        return f"{len(environments)} environment(s) configured"
     return str(data.get("summary") or command)
 
 
@@ -338,29 +383,31 @@ def wrap_result(tool: str, command: str, data: dict[str, Any], target: str) -> d
 
 
 def plc_probe_target(arguments: dict[str, Any]) -> dict[str, Any]:
-    target = str(arguments.get("target") or "arsim")
+    options = resolve_call_options(arguments, default_target="arsim")
+    target = options["target"]
     data = run_plc_toolchain(
         "Probe",
         target=target,
-        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
-        config=str(arguments.get("config") or DEFAULT_CONFIG),
-        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        project_path=options["project_path"],
+        config=options["config"],
+        targets_path=options["targets_path"],
         timeout_seconds=int(arguments.get("timeout_seconds") or 60),
     )
     return wrap_result("plc_probe_target", "Probe", data, target)
 
 
 def plc_read_pvi(arguments: dict[str, Any]) -> dict[str, Any]:
-    target = str(arguments.get("target") or "arsim")
+    options = resolve_call_options(arguments, default_target="arsim")
+    target = options["target"]
     pvi_variables = arguments.get("pvi_variables")
     if pvi_variables is not None and not isinstance(pvi_variables, list):
         raise ValueError("pvi_variables must be an array of strings.")
     data = run_plc_toolchain(
         "ReadPvi",
         target=target,
-        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
-        config=str(arguments.get("config") or DEFAULT_CONFIG),
-        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        project_path=options["project_path"],
+        config=options["config"],
+        targets_path=options["targets_path"],
         pvi_variables=[str(item) for item in pvi_variables] if pvi_variables else None,
         timeout_seconds=int(arguments.get("timeout_seconds") or 60),
     )
@@ -368,7 +415,8 @@ def plc_read_pvi(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def plc_read_logger(arguments: dict[str, Any]) -> dict[str, Any]:
-    target = str(arguments.get("target") or "test_plc")
+    options = resolve_call_options(arguments, default_target="test_plc")
+    target = options["target"]
     logger_type = str(arguments.get("logger_type") or "System")
     logger_name = str(arguments.get("logger_name") or "$arlogsys")
     logger_format = str(arguments.get("format") or ".html")
@@ -378,9 +426,9 @@ def plc_read_logger(arguments: dict[str, Any]) -> dict[str, Any]:
     data = run_plc_toolchain(
         "ReadLogger",
         target=target,
-        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
-        config=str(arguments.get("config") or DEFAULT_CONFIG),
-        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        project_path=options["project_path"],
+        config=options["config"],
+        targets_path=options["targets_path"],
         logger_type=logger_type,
         logger_name=logger_name,
         logger_format=logger_format,
@@ -391,7 +439,8 @@ def plc_read_logger(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def plc_write_pvi(arguments: dict[str, Any]) -> dict[str, Any]:
-    target = str(arguments.get("target") or "arsim")
+    options = resolve_call_options(arguments, default_target="arsim")
+    target = options["target"]
     writes = arguments.get("writes")
     if not isinstance(writes, list) or not writes:
         raise ValueError("writes must be a non-empty array of {variable, value} objects.")
@@ -400,9 +449,9 @@ def plc_write_pvi(arguments: dict[str, Any]) -> dict[str, Any]:
     data = run_plc_toolchain(
         "WritePvi",
         target=target,
-        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
-        config=str(arguments.get("config") or DEFAULT_CONFIG),
-        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        project_path=options["project_path"],
+        config=options["config"],
+        targets_path=options["targets_path"],
         writes_path=writes_path,
         execute=execute,
         timeout_seconds=int(arguments.get("timeout_seconds") or 90),
@@ -411,13 +460,14 @@ def plc_write_pvi(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def plc_check_download(arguments: dict[str, Any]) -> dict[str, Any]:
-    target = str(arguments.get("target") or "arsim")
+    options = resolve_call_options(arguments, default_target="arsim")
+    target = options["target"]
     data = run_plc_toolchain(
         "CheckDownload",
         target=target,
-        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
-        config=str(arguments.get("config") or DEFAULT_CONFIG),
-        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        project_path=options["project_path"],
+        config=options["config"],
+        targets_path=options["targets_path"],
         package_path=arguments.get("package_path"),
         transfer_pil_path=arguments.get("transfer_pil_path"),
         timeout_seconds=int(arguments.get("timeout_seconds") or 90),
@@ -426,14 +476,15 @@ def plc_check_download(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def plc_build_project(arguments: dict[str, Any]) -> dict[str, Any]:
-    target = str(arguments.get("target") or "arsim")
+    options = resolve_call_options(arguments, default_target="arsim")
+    target = options["target"]
     build_ruc = bool(arguments.get("build_ruc_package") or False)
     data = run_plc_toolchain(
         "Build",
         target=target,
-        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
-        config=str(arguments.get("config") or DEFAULT_CONFIG),
-        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        project_path=options["project_path"],
+        config=options["config"],
+        targets_path=options["targets_path"],
         build_ruc_package=build_ruc,
         timeout_seconds=int(arguments.get("timeout_seconds") or 300),
     )
@@ -441,13 +492,14 @@ def plc_build_project(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def plc_start_arsim(arguments: dict[str, Any]) -> dict[str, Any]:
-    target = str(arguments.get("target") or "arsim")
+    options = resolve_call_options(arguments, default_target="arsim")
+    target = options["target"]
     data = run_plc_toolchain(
         "StartArsim",
         target=target,
-        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
-        config=str(arguments.get("config") or DEFAULT_CONFIG),
-        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        project_path=options["project_path"],
+        config=options["config"],
+        targets_path=options["targets_path"],
         start_wait_seconds=int(arguments.get("start_wait_seconds") or 3),
         timeout_seconds=int(arguments.get("timeout_seconds") or 30),
     )
@@ -455,13 +507,14 @@ def plc_start_arsim(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def plc_describe_ruc_package(arguments: dict[str, Any]) -> dict[str, Any]:
-    target = str(arguments.get("target") or "arsim")
+    options = resolve_call_options(arguments, default_target="arsim")
+    target = options["target"]
     data = run_plc_toolchain(
         "DescribePackage",
         target=target,
-        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
-        config=str(arguments.get("config") or DEFAULT_CONFIG),
-        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        project_path=options["project_path"],
+        config=options["config"],
+        targets_path=options["targets_path"],
         package_path=arguments.get("package_path"),
         timeout_seconds=int(arguments.get("timeout_seconds") or 30),
     )
@@ -469,14 +522,15 @@ def plc_describe_ruc_package(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def plc_download_ruc(arguments: dict[str, Any]) -> dict[str, Any]:
-    target = str(arguments.get("target") or "arsim")
+    options = resolve_call_options(arguments, default_target="arsim")
+    target = options["target"]
     execute = arguments.get("execute") is True
     data = run_plc_toolchain(
         "Download",
         target=target,
-        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
-        config=str(arguments.get("config") or DEFAULT_CONFIG),
-        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        project_path=options["project_path"],
+        config=options["config"],
+        targets_path=options["targets_path"],
         package_path=arguments.get("package_path"),
         transfer_pil_path=arguments.get("transfer_pil_path"),
         execute=execute,
@@ -486,16 +540,17 @@ def plc_download_ruc(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def plc_verify_opcua(arguments: dict[str, Any]) -> dict[str, Any]:
-    target = str(arguments.get("target") or "arsim")
+    options = resolve_call_options(arguments, default_target="arsim")
+    target = options["target"]
     opcua_node_ids = arguments.get("opcua_node_ids")
     if opcua_node_ids is not None and not isinstance(opcua_node_ids, list):
         raise ValueError("opcua_node_ids must be an array of strings.")
     data = run_plc_toolchain(
         "VerifyOpcUa",
         target=target,
-        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
-        config=str(arguments.get("config") or DEFAULT_CONFIG),
-        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        project_path=options["project_path"],
+        config=options["config"],
+        targets_path=options["targets_path"],
         opcua_node_ids=[str(item) for item in opcua_node_ids] if opcua_node_ids else None,
         timeout_seconds=int(arguments.get("timeout_seconds") or 60),
     )
@@ -503,14 +558,15 @@ def plc_verify_opcua(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def plc_run_arsim_closed_loop(arguments: dict[str, Any]) -> dict[str, Any]:
-    target = str(arguments.get("target") or "arsim")
+    options = resolve_call_options(arguments, default_target="arsim")
+    target = options["target"]
     execute = arguments.get("execute") is True
     data = run_plc_toolchain(
         "RunArsimClosedLoop",
         target=target,
-        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
-        config=str(arguments.get("config") or DEFAULT_CONFIG),
-        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        project_path=options["project_path"],
+        config=options["config"],
+        targets_path=options["targets_path"],
         execute=execute,
         timeout_seconds=int(arguments.get("timeout_seconds") or 600),
     )
@@ -518,20 +574,22 @@ def plc_run_arsim_closed_loop(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def plc_run_verification_suite(arguments: dict[str, Any]) -> dict[str, Any]:
-    target = str(arguments.get("target") or "arsim")
+    options = resolve_call_options(arguments, default_target="arsim")
+    target = options["target"]
     data = run_plc_toolchain(
         "RunVerificationSuite",
         target=target,
-        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
-        config=str(arguments.get("config") or DEFAULT_CONFIG),
-        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        project_path=options["project_path"],
+        config=options["config"],
+        targets_path=options["targets_path"],
         timeout_seconds=int(arguments.get("timeout_seconds") or 120),
     )
     return wrap_result("plc_run_verification_suite", "RunVerificationSuite", data, target)
 
 
 def plc_run_io_test_case(arguments: dict[str, Any]) -> dict[str, Any]:
-    target = str(arguments.get("target") or "test_plc")
+    options = resolve_call_options(arguments, default_target="test_plc")
+    target = options["target"]
     case_name = arguments.get("case_name")
     if not case_name:
         raise ValueError("case_name is required.")
@@ -539,9 +597,9 @@ def plc_run_io_test_case(arguments: dict[str, Any]) -> dict[str, Any]:
     data = run_plc_toolchain(
         "RunIoTestCase",
         target=target,
-        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
-        config=str(arguments.get("config") or DEFAULT_CONFIG),
-        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        project_path=options["project_path"],
+        config=options["config"],
+        targets_path=options["targets_path"],
         suite_path=str(arguments.get("suite_path") or "tests\\plc\\lqr_io_tests.json"),
         case_name=str(case_name),
         execute=execute,
@@ -552,14 +610,15 @@ def plc_run_io_test_case(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def plc_run_test_suite(arguments: dict[str, Any]) -> dict[str, Any]:
-    target = str(arguments.get("target") or "test_plc")
+    options = resolve_call_options(arguments, default_target="test_plc")
+    target = options["target"]
     execute = arguments.get("execute") is True
     data = run_plc_toolchain(
         "RunTestSuite",
         target=target,
-        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
-        config=str(arguments.get("config") or DEFAULT_CONFIG),
-        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        project_path=options["project_path"],
+        config=options["config"],
+        targets_path=options["targets_path"],
         suite_path=str(arguments.get("suite_path") or "tests\\plc\\lqr_io_tests.json"),
         execute=execute,
         settle_ms=int(arguments.get("settle_ms") or 100),
@@ -569,14 +628,15 @@ def plc_run_test_suite(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def plc_reset_test_harness(arguments: dict[str, Any]) -> dict[str, Any]:
-    target = str(arguments.get("target") or "test_plc")
+    options = resolve_call_options(arguments, default_target="test_plc")
+    target = options["target"]
     execute = arguments.get("execute") is True
     data = run_plc_toolchain(
         "ResetTestHarness",
         target=target,
-        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
-        config=str(arguments.get("config") or DEFAULT_CONFIG),
-        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        project_path=options["project_path"],
+        config=options["config"],
+        targets_path=options["targets_path"],
         suite_path=str(arguments.get("suite_path") or "tests\\plc\\lqr_io_tests.json"),
         execute=execute,
         timeout_seconds=int(arguments.get("timeout_seconds") or 120),
@@ -585,29 +645,67 @@ def plc_reset_test_harness(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def plc_get_target_config(arguments: dict[str, Any]) -> dict[str, Any]:
-    target = str(arguments.get("target") or "arsim")
+    options = resolve_call_options(arguments, default_target="arsim")
+    target = options["target"]
     data = run_plc_toolchain(
         "GetTargetConfig",
         target=target,
-        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
-        config=str(arguments.get("config") or DEFAULT_CONFIG),
-        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        project_path=options["project_path"],
+        config=options["config"],
+        targets_path=options["targets_path"],
         timeout_seconds=int(arguments.get("timeout_seconds") or 30),
     )
     return wrap_result("plc_get_target_config", "GetTargetConfig", data, target)
 
 
 def plc_list_targets(arguments: dict[str, Any]) -> dict[str, Any]:
-    target = str(arguments.get("target") or "arsim")
+    options = resolve_call_options(arguments, default_target="arsim")
+    target = options["target"]
     data = run_plc_toolchain(
         "ListTargets",
         target=target,
-        project_path=str(arguments.get("project_path") or DEFAULT_PROJECT_PATH),
-        config=str(arguments.get("config") or DEFAULT_CONFIG),
-        targets_path=str(arguments.get("targets_path") or DEFAULT_TARGETS_PATH),
+        project_path=options["project_path"],
+        config=options["config"],
+        targets_path=options["targets_path"],
         timeout_seconds=int(arguments.get("timeout_seconds") or 30),
     )
     return wrap_result("plc_list_targets", "ListTargets", data, target)
+
+
+def plc_list_environments(arguments: dict[str, Any]) -> dict[str, Any]:
+    path = REPO_ROOT / DEFAULT_ENVIRONMENTS_PATH
+    if not path.exists():
+        data = {
+            "command": "ListEnvironments",
+            "ok": False,
+            "environments_path": str(path),
+            "error": f"Environment map was not found: {DEFAULT_ENVIRONMENTS_PATH}",
+        }
+        return wrap_result("plc_list_environments", "ListEnvironments", data, "")
+
+    raw = json.loads(path.read_text(encoding="utf-8-sig"))
+    environments = []
+    for name, env in sorted(raw.items()):
+        if not isinstance(env, dict):
+            continue
+        environments.append(
+            {
+                "name": name,
+                "description": env.get("description"),
+                "project_path": env.get("project_path"),
+                "config": env.get("config"),
+                "target": env.get("target"),
+                "targets_path": env.get("targets_path"),
+            }
+        )
+
+    data = {
+        "command": "ListEnvironments",
+        "ok": True,
+        "environments_path": str(path),
+        "environments": environments,
+    }
+    return wrap_result("plc_list_environments", "ListEnvironments", data, "")
 
 
 TOOLS = {
@@ -628,4 +726,5 @@ TOOLS = {
     "plc_reset_test_harness": plc_reset_test_harness,
     "plc_get_target_config": plc_get_target_config,
     "plc_list_targets": plc_list_targets,
+    "plc_list_environments": plc_list_environments,
 }

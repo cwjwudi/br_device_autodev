@@ -6,8 +6,8 @@ param(
     [string]$Config = "x1685",
     [string]$Target = "test_plc",
     [string]$TargetsPath = "tools\plc_targets.local.json",
-    [string]$PackagePath = "PrintDemo\Binaries\x1685\X20CP1685\RUCPackage\RUCPackage.zip",
-    [string]$TransferPilPath = "PrintDemo\Binaries\x1685\X20CP1685\RUCPackage\Transfer.pil",
+    [string]$PackagePath = "",
+    [string]$TransferPilPath = "",
     [string[]]$OpcUaNodeId,
     [string[]]$PviVariable,
     [string]$LoggerType = "System",
@@ -35,6 +35,34 @@ function Resolve-RepoPath {
     }
 
     return [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $Path))
+}
+
+function Resolve-RucPackagePath {
+    if ($PackagePath) {
+        return Resolve-RepoPath $PackagePath
+    }
+
+    $binariesDir = Resolve-RepoPath (Join-Path "PrintDemo\Binaries" $Config)
+    $matches = @()
+    if (Test-Path -LiteralPath $binariesDir) {
+        $matches = @(Get-ChildItem -LiteralPath $binariesDir -Recurse -Filter "RUCPackage.zip" -File |
+            Sort-Object LastWriteTime -Descending)
+    }
+    if ($matches.Count -gt 0) {
+        return $matches[0].FullName
+    }
+
+    return Resolve-RepoPath (Join-Path "PrintDemo\Binaries" (Join-Path $Config "RUCPackage\RUCPackage.zip"))
+}
+
+function Resolve-TransferPilPath {
+    if ($TransferPilPath) {
+        return Resolve-RepoPath $TransferPilPath
+    }
+
+    $package = Resolve-RucPackagePath
+    $packageDir = Split-Path -Parent $package
+    return Join-Path $packageDir "Transfer.pil"
 }
 
 function Read-ToolchainConfig {
@@ -305,27 +333,39 @@ function Invoke-Probe {
     $pil = New-ProbePil $targetConfig.ip
     $log = Join-Path $GeneratedDir "probe_$Target.log"
 
-    $output = & powershell -NoProfile -ExecutionPolicy Bypass `
-        -File $wrapper `
-        -PilPath $pil `
-        -LogPath $log `
-        -PviTransferPath $pviTransfer 2>&1
-    $exitCode = $LASTEXITCODE
+    $report = $null
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        $output = & powershell -NoProfile -ExecutionPolicy Bypass `
+            -File $wrapper `
+            -PilPath $pil `
+            -LogPath $log `
+            -PviTransferPath $pviTransfer 2>&1
+        $exitCode = $LASTEXITCODE
 
-    $lines = @($output | ForEach-Object { $_.ToString() })
-    $report = [ordered]@{
-        command = "Probe"
-        ok = (($exitCode -eq 0) -or ((Get-PviCommandValue $lines "CPUType") -and (Get-PviCommandValue $lines "SSWVersion")))
-        process_exit_code = $exitCode
-        target = $Target
-        ip = $targetConfig.ip
-        role = $targetConfig.role
-        cpu_type = Get-PviCommandValue $lines "CPUType"
-        ar_version = Get-PviCommandValue $lines "SSWVersion"
-        plc_status = Get-PviCommandValue $lines "PLCStatus"
-        log_path = $log
-        pil_path = $pil
-        output_tail = Get-OutputTail $lines
+        $lines = @($output | ForEach-Object { $_.ToString() })
+        $cpuType = Get-PviCommandValue $lines "CPUType"
+        $arVersion = Get-PviCommandValue $lines "SSWVersion"
+        $report = [ordered]@{
+            command = "Probe"
+            ok = (($exitCode -eq 0) -or ($cpuType -and $arVersion))
+            process_exit_code = $exitCode
+            target = $Target
+            ip = $targetConfig.ip
+            role = $targetConfig.role
+            cpu_type = $cpuType
+            ar_version = $arVersion
+            plc_status = Get-PviCommandValue $lines "PLCStatus"
+            log_path = $log
+            pil_path = $pil
+            output_tail = Get-OutputTail $lines
+        }
+
+        if ($report.ok -and $report.cpu_type) {
+            break
+        }
+        if ($attempt -lt 3) {
+            Start-Sleep -Seconds 2
+        }
     }
 
     if ($Quiet) {
@@ -339,7 +379,7 @@ function Invoke-Probe {
 }
 
 function Get-PackageInfo {
-    $package = Resolve-RepoPath $PackagePath
+    $package = Resolve-RucPackagePath
     if (-not (Test-Path -LiteralPath $package)) {
         throw "RUC package was not found: $package"
     }
@@ -419,7 +459,7 @@ function Test-DownloadSafety {
     if ($targetConfig.role -match "production") {
         $reasons.Add("Target '$Target' is marked as production.")
     }
-    if ($probe.process_exit_code -ne 0 -or -not $probe.cpu_type) {
+    if (-not $probe.ok -or -not $probe.cpu_type) {
         $reasons.Add("Target probe did not return a valid CPU type.")
     }
     if ($isArsimPackage -and -not $isArsimTarget) {
@@ -497,19 +537,31 @@ function Invoke-Download {
     $targetConfig = Get-TargetConfig $cfg
     $wrapper = Resolve-RepoPath "tools\invoke_pvitransfer_silent.ps1"
     $pviTransfer = Resolve-RepoPath $cfg.automation_studio.pvi_transfer_exe
-    $pil = Resolve-RepoPath $TransferPilPath
+    $pil = Resolve-TransferPilPath
     $log = Join-Path (Split-Path -Parent $pil) "pvi_download_$Target.log"
     $conn = "'/IF=tcpip', '/IP=$($targetConfig.ip) /COMT=2500 /AM=* /PT=11169', 'WT=60', 'IGNORE'"
 
-    $output = & powershell -NoProfile -ExecutionPolicy Bypass `
-        -File $wrapper `
-        -PilPath $pil `
-        -LogPath $log `
-        -PviTransferPath $pviTransfer `
-        -Conn $conn 2>&1
-    $downloadExitCode = $LASTEXITCODE
-    $lines = Get-OutputLines $output
-    $downloadOk = (($downloadExitCode -eq 0) -and (($lines -join "`n") -match "SUCCESSFUL"))
+    $output = $null
+    $downloadExitCode = 1
+    $lines = @()
+    $downloadOk = $false
+    for ($attempt = 1; $attempt -le 2; $attempt++) {
+        if ($attempt -gt 1) {
+            Start-Sleep -Seconds 5
+        }
+        $output = & powershell -NoProfile -ExecutionPolicy Bypass `
+            -File $wrapper `
+            -PilPath $pil `
+            -LogPath $log `
+            -PviTransferPath $pviTransfer `
+            -Conn $conn 2>&1
+        $downloadExitCode = $LASTEXITCODE
+        $lines = Get-OutputLines $output
+        $downloadOk = (($downloadExitCode -eq 0) -and (($lines -join "`n") -match "Transfer .* SUCCESSFUL"))
+        if ($downloadOk) {
+            break
+        }
+    }
     $verification = $null
 
     if ($downloadOk -and $cfg.opcua.verify_after_download -eq $true) {

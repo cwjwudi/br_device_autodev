@@ -42,22 +42,46 @@ tools\plc_toolchain.ps1
 | `plc_run_verification_suite` | `RunVerificationSuite` | 只读，写统一报告 |
 | `plc_get_target_config` | `GetTargetConfig` | 只读 |
 | `plc_list_targets` | `ListTargets` | 只读 |
+| `plc_list_environments` | MCP 环境清单 | 只读 |
 
 ## 默认配置
 
 - 默认目标：`arsim`
 - 默认工程：`PrintDemo\Huitong_FrontEval.apj`
-- 默认配置：`Config1`
+- 默认配置：`x1685`
 - 配置文件：`tools\plc_targets.local.json`
+
+## 环境切换
+
+MCP 支持通过 `environment` 参数一键切换环境。环境清单在：
+
+```text
+tools\plc_environments.json
+```
+
+当前已配置：
+
+- `default`：使用 `tools\plc_targets.local.json`。
+- `cwj_as6_x3687x`：今天验证通过的本机 AS6 + `x3687x` ARsim 环境，目标配置文件为 `tools\plc_targets.cwj_as6_x3687x.json`。
+- `cwj_test_plc_x1685`：同一套本机 AS6 配置，用于 `192.168.50.222` 物理测试 PLC 和 `x1685` config。
+
+示例：
+
+```json
+{"environment":"cwj_as6_x3687x"}
+```
+
+显式传入的 `target`、`project_path`、`config`、`targets_path` 会覆盖环境默认值。
 
 ## 通用参数
 
 所有工具均接收：
 
 - `target`：目标名称，默认 `arsim`
+- `environment`：环境名，来自 `tools\plc_environments.json`
 - `project_path`：AS 工程路径
-- `config`：配置名称，默认 `Config1`
-- `targets_path`：目标配置 JSON 路径
+- `config`：配置名称，默认 `x1685`
+- `targets_path`：目标配置 JSON 路径，可覆盖 `environment` 中的配置
 - `timeout_seconds`：超时秒数
 
 ## 返回结构

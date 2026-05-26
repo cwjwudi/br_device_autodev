@@ -17,6 +17,9 @@
 - 反馈验证优先使用 OPC UA，其次 PVI。
 - 禁止直接对生产 PLC 自动下载，除非用户明确确认。
 - 优先在 ARsim 或测试 PLC 上验证。
+- ARsim 仿真必须按实际 Automation Studio config 名称处理，不要写死 `Config1`、`x1685` 或 `x3687x`。例如 `x1685`、`x3687x` 都是 config 名。
+- 若要开启某个 config 的仿真模式，检查并按需修改 `PrintDemo/Physical/<config>/Hardware.hw` 中 CPU 模块下的 `Simulation` 参数为 `Value="1"`，然后重新构建该 config。
+- 重新构建开启仿真的 config 后，ARsim loader 通常生成在 `PrintDemo/Temp/Simulation/<config>/<CPU>/ar000loader.exe`，例如 `PrintDemo/Temp/Simulation/x3687x/X20CP3687X/ar000loader.exe`。`tools/plc_targets.local.json` 的 `targets.arsim.arsim_loader_exe` 应与实际生成路径一致。
 
 ## MCP Server
 
@@ -33,7 +36,7 @@
 | `plc_verify_opcua` | 读取 OPC UA 白名单节点 |
 | `plc_read_pvi` | 读取 PVI 白名单变量 |
 
-标准闭环顺序：build -> start_arsim -> probe -> describe_package -> check_download -> download(execute=true) -> verify_opcua / read_pvi
+标准闭环顺序：确认实际 config 和 Simulation 设置 -> build -> start_arsim -> probe -> describe_package -> check_download -> download(execute=true) -> verify_opcua / read_pvi
 
 ## 安全规则
 

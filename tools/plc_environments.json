@@ -1,0 +1,22 @@
+{
+  "default": {
+    "description": "Default repository-local target config. Explicit tool arguments can override all fields.",
+    "project_path": "PrintDemo\\Huitong_FrontEval.apj",
+    "config": "x1685",
+    "targets_path": "tools\\plc_targets.local.json"
+  },
+  "cwj_as6_x3687x": {
+    "description": "CWJ local AS6 environment verified with x3687x ARsim and test_plc 192.168.50.222.",
+    "project_path": "PrintDemo\\Huitong_FrontEval.apj",
+    "config": "x3687x",
+    "target": "arsim",
+    "targets_path": "tools\\plc_targets.cwj_as6_x3687x.json"
+  },
+  "cwj_test_plc_x1685": {
+    "description": "CWJ local AS6 environment for the physical X20CP1685 test PLC at 192.168.50.222.",
+    "project_path": "PrintDemo\\Huitong_FrontEval.apj",
+    "config": "x1685",
+    "target": "test_plc",
+    "targets_path": "tools\\plc_targets.cwj_as6_x3687x.json"
+  }
+}

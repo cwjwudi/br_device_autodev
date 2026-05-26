@@ -4,10 +4,18 @@
 
 **目标：** 修改代码后，构建 → 下载到 ARsim → 验证反馈。
 
+### config 和 Simulation 前置检查
+
+- 先确认本次使用的 Automation Studio config 名，例如 `x1685` 或 `x3687x`；这些名字必须来自项目实际配置，不要写死 `Config1`。
+- 若该 config 需要以 ARsim 方式运行，检查 `PrintDemo/Physical/<config>/Hardware.hw`，确保 CPU 模块下存在 `<Parameter ID="Simulation" Value="1" />`。
+- 修改 Simulation 设置后必须重新构建该 config；构建成功后，仿真文件应生成到 `PrintDemo/Temp/Simulation/<config>/<CPU>/`。
+- `plc_start_arsim` 使用的 loader 必须是实际生成的 `PrintDemo/Temp/Simulation/<config>/<CPU>/ar000loader.exe`。示例：`PrintDemo/Temp/Simulation/x3687x/X20CP3687X/ar000loader.exe`。
+- 如果 `plc_start_arsim` 报 loader 不存在，先核对 config 名、CPU 目录、Simulation 设置和 `tools/plc_targets.local.json` 中的 `targets.arsim.arsim_loader_exe`。
+
 快捷工具：
 
 ```
-plc_run_arsim_closed_loop(arguments: { "target": "arsim", "execute": true })
+plc_run_arsim_closed_loop(arguments: { "config": "<actual_config>", "target": "arsim", "execute": true })
 ```
 
 该工具会执行下方同等步骤，并写入 `tools/.generated/reports/*_closed_loop_arsim.json`。
@@ -16,42 +24,42 @@ plc_run_arsim_closed_loop(arguments: { "target": "arsim", "execute": true })
 
 ```
 1. plc_build_project
-   arguments: { "build_ruc_package": true }
+   arguments: { "config": "<actual_config>", "build_ruc_package": true }
    成功条件: ok=true, parsed_errors=0
    失败: 报告 error_lines，停止
 
 2. plc_start_arsim
-   arguments: { "target": "arsim" }
+   arguments: { "config": "<actual_config>", "target": "arsim" }
    成功条件: ok=true（可能复用已有进程）
-   失败: 检查 ar000loader.exe 路径
+   失败: 检查 Simulation 设置和 ar000loader.exe 路径
 
 3. plc_probe_target
-   arguments: { "target": "arsim" }
+   arguments: { "config": "<actual_config>", "target": "arsim" }
    成功条件: ok=true, cpu_type 非空
    失败: 检查 ARsim 是否运行
 
 4. plc_describe_ruc_package
-   arguments: { "target": "arsim" }
+   arguments: { "config": "<actual_config>", "target": "arsim" }
    成功条件: ok=true, 返回包元信息
    失败: 检查 RUC 包是否存在
 
 5. plc_check_download
-   arguments: { "target": "arsim" }
+   arguments: { "config": "<actual_config>", "target": "arsim" }
    成功条件: ok=true, reasons=[]
    失败: 报告 reasons 中每条拒绝原因，停止
 
 6. plc_download_ruc
-   arguments: { "target": "arsim", "execute": true }
+   arguments: { "config": "<actual_config>", "target": "arsim", "execute": true }
    成功条件: ok=true, executed=true, download_ok=true
    失败: 检查 safety_check 和下载日志
 
 7. plc_verify_opcua
-   arguments: { "target": "arsim" }
+   arguments: { "config": "<actual_config>", "target": "arsim" }
    成功条件: ok=true, 所有节点 ok=true
    失败: 转到步骤 8 (PVI 备用)
 
 8. plc_read_pvi (备用)
-   arguments: { "target": "arsim" }
+   arguments: { "config": "<actual_config>", "target": "arsim" }
    成功条件: ok=true, 所有变量 ok=true
    失败: 检查 PVI Manager
 ```

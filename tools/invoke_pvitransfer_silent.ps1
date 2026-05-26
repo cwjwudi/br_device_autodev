@@ -23,6 +23,24 @@ $workDir = Split-Path -Parent $resolvedPil
 
 Remove-Item -LiteralPath $resolvedLog -ErrorAction SilentlyContinue
 
+function Read-LogLines {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    for ($attempt = 0; $attempt -lt 10; $attempt++) {
+        try {
+            return @(Get-Content -LiteralPath $Path -Encoding Default -ErrorAction Stop)
+        }
+        catch [System.IO.IOException] {
+            Start-Sleep -Milliseconds 100
+        }
+        catch {
+            throw
+        }
+    }
+
+    return @()
+}
+
 $args = @(
     "-silent",
     "-$resolvedPil",
@@ -43,7 +61,7 @@ $process = Start-Process `
 $printedLines = 0
 while (-not $process.HasExited) {
     if (Test-Path -LiteralPath $resolvedLog) {
-        $lines = Get-Content -LiteralPath $resolvedLog -Encoding Default
+        $lines = Read-LogLines -Path $resolvedLog
         if ($lines.Count -gt $printedLines) {
             $lines[$printedLines..($lines.Count - 1)] | Write-Output
             $printedLines = $lines.Count
@@ -54,7 +72,7 @@ while (-not $process.HasExited) {
 }
 
 if (Test-Path -LiteralPath $resolvedLog) {
-    $lines = Get-Content -LiteralPath $resolvedLog -Encoding Default
+    $lines = Read-LogLines -Path $resolvedLog
     if ($lines.Count -gt $printedLines) {
         $lines[$printedLines..($lines.Count - 1)] | Write-Output
     }
