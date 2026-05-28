@@ -1,0 +1,16 @@
+VAR
+	HMI_MW_U00_Bridge_Cmd_EnableReq : BOOL;
+	HMI_MW_U00_Bridge_Par_Target : REAL;
+	HMI_MW_U00_Bridge_Par_Mode : USINT;
+	HMI_MW_U00_Bridge_Sts_Ready : BOOL;
+	HMI_MW_U00_Bridge_Sts_Enabled : BOOL;
+	HMI_MW_U00_Bridge_Act_Target : REAL;
+	HMI_MW_U00_Bridge_Act_Value : REAL;
+	HMI_MW_U00_Bridge_Sts_Mode : USINT;
+	HMI_MW_U00_Bridge_Diag_Cycle : UDINT;
+	HMI_MW_U00_Bridge_InOut_Trim : REAL;
+	HMI_MW_U00_Bridge_InOut_Offset : DINT;
+	HMI_MW_U00_Bridge_InOut_Recipe : USINT;
+	stHmiBridgeCtrl : HmiBridgeCtrl_typ;
+	stHmiBridgeOld : HmiBridgeOld_typ;
+END_VAR

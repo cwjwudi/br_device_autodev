@@ -3,6 +3,7 @@
 <Package xmlns="http://br-automation.co.at/AS/Package">
   <Objects>
     <Object Type="Program" Language="ANSIC">MidTrans</Object>
+    <Object Type="Program" Language="ANSIC">HmiBridge</Object>
     <Object Type="File">GlobalMiddle.typ</Object>
     <Object Type="File">GlobalMiddle.var</Object>
   </Objects>

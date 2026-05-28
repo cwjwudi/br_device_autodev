@@ -11,7 +11,9 @@
   <TaskClass Name="Cyclic#4">
     <Task Name="SVG" Source="SVG.prg" Memory="UserROM" Language="ANSIC" Debugging="true" />
   </TaskClass>
-  <TaskClass Name="Cyclic#5" />
+  <TaskClass Name="Cyclic#5">
+    <Task Name="HmiBridge" Source="Middleware.HmiBridge.prg" Memory="UserROM" Language="ANSIC" Debugging="true" />
+  </TaskClass>
   <TaskClass Name="Cyclic#6" />
   <TaskClass Name="Cyclic#7" />
   <TaskClass Name="Cyclic#8" />
