@@ -3,6 +3,7 @@
     "description": "Default repository-local target config. Explicit tool arguments can override all fields.",
     "project_path": "PrintDemo\\Huitong_FrontEval.apj",
     "config": "x1685",
+    "target": "arsim",
     "targets_path": "tools\\plc_targets.local.json"
   },
   "cwj_as6_x3687x": {

@@ -134,6 +134,11 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                     "type": "string",
                     "description": "Optional Transfer.pil path.",
                 },
+                "force_arsim_download": {
+                    "type": "boolean",
+                    "description": "If true, allow an explicit ARsim target download even when the RUC package CPU/order does not match the probed ARsim CPU. Never applies to physical or production targets.",
+                    "default": False,
+                },
             }
         ),
     },
@@ -149,6 +154,11 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "transfer_pil_path": {
                     "type": "string",
                     "description": "Optional Transfer.pil path.",
+                },
+                "force_arsim_download": {
+                    "type": "boolean",
+                    "description": "If true with execute=true, allow an explicit ARsim target download even when the RUC package CPU/order does not match the probed ARsim CPU. Never applies to physical or production targets.",
+                    "default": False,
                 },
             },
             require_execute=True,
@@ -170,7 +180,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "plc_read_pvi",
-        "description": "Read whitelisted or explicitly supplied PLC variables via PVI using hilch/Pvi.py. This is read-only feedback verification.",
+        "description": "Read PLC variables via PVI using hilch/Pvi.py. Default whitelist mode requires configured variables; Agent-directed mode allows explicit variables after policy checks.",
         "inputSchema": object_schema(
             {
                 "pvi_variables": {
@@ -211,12 +221,12 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "plc_write_pvi",
-        "description": "Write PVI test harness variables that are explicitly listed in pvi.write_whitelist. Requires execute=true and refuses production targets.",
+        "description": "Write PVI variables under access_policy. Default whitelist mode requires pvi.write_whitelist; Agent-directed mode allows explicit variables after policy checks. Requires execute=true and refuses production targets.",
         "inputSchema": build_schema(
             {
                 "writes": {
                     "type": "array",
-                    "description": "Write objects such as {\"variable\":\"LQR:bLqrEnable\",\"value\":true}. Every variable must be in pvi.write_whitelist.",
+                    "description": "Write objects such as {\"variable\":\"LQR:bLqrEnable\",\"value\":true}. Every variable must pass the current access_policy.",
                     "items": {
                         "type": "object",
                         "properties": {
@@ -249,7 +259,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "plc_run_io_test_case",
-        "description": "Run one PLC IO test case from a suite: reset, whitelisted PVI writes, settle, readback, checks, and restore.",
+        "description": "Run one PLC IO test case from a suite: reset, access-policy-gated PVI writes, settle, readback, checks, and restore.",
         "inputSchema": build_schema(
             {
                 "suite_path": {
@@ -322,5 +332,31 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "name": "plc_list_environments",
         "description": "List named PLC toolchain environments from tools/plc_environments.json for one-step switching.",
         "inputSchema": object_schema({}),
+    },
+    {
+        "name": "plc_list_variables",
+        "description": "Build and list the PLC variable catalog from project source files and target access policy. Use before Agent-directed reads/writes.",
+        "inputSchema": object_schema({}),
+    },
+    {
+        "name": "plc_search_variables",
+        "description": "Search PLC variables by text, module/task, and read/write access under the current access_policy.",
+        "inputSchema": object_schema(
+            {
+                "query": {
+                    "type": "string",
+                    "description": "Free-text search over variable name, task/module, PVI name, OPC UA node, type, and source path.",
+                },
+                "module": {
+                    "type": "string",
+                    "description": "Optional task/module name, for example LQR or SVG.",
+                },
+                "access": {
+                    "type": "string",
+                    "description": "Optional access filter.",
+                    "enum": ["read", "write"],
+                },
+            }
+        ),
     },
 ]

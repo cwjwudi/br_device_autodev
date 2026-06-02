@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Run PLC input/output tests through whitelisted PVI writes and reads."""
+"""Run PLC input/output tests through access-policy-gated PVI writes and reads."""
 
 from __future__ import annotations
 
@@ -13,8 +13,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from plc_access_policy import canonical_variable, pvi_read_map, validate_pvi_read
 from pvi_read import load_json_file, read_variables
-from pvi_write import canonical_variable, load_target_config, validate_writes, whitelist_map, write_variables
+from pvi_write import load_target_config, validate_writes, write_variables
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -85,9 +86,7 @@ def load_suite(path: str) -> dict[str, Any]:
 
 
 def read_whitelist(config: dict[str, Any]) -> set[str]:
-    pvi = config.get("pvi") or {}
-    entries = pvi.get("read_whitelist") or pvi.get("validation_variables") or []
-    return {canonical_variable(entry) for entry in entries}
+    return set(pvi_read_map(config))
 
 
 def base_check_variable(variable: str, allowed: set[str]) -> str | None:
@@ -110,20 +109,37 @@ def validate_case_access(config: dict[str, Any], target_config: dict[str, Any], 
             errors.append(f"Case '{case.get('name')}' has a write item without variable.")
             continue
         normalized_writes.append({"variable": canonical_variable(variable), "value": item.get("value")})
-    errors.extend(validate_writes(config=config, target_config=target_config, writes=normalized_writes, execute=execute))
+    errors.extend(
+        validate_writes(
+            config=config,
+            target_config=target_config,
+            targets_file=str(config.get("_targets_file") or ""),
+            writes=normalized_writes,
+            execute=execute,
+        )
+    )
 
-    allowed_reads = read_whitelist(config)
+    read_variables_to_check = []
     for variable in as_list(case.get("readback")):
         key = canonical_variable(variable)
-        if key not in allowed_reads:
-            errors.append(f"Readback variable '{key}' is not in pvi.read_whitelist.")
+        read_variables_to_check.append(key)
     for check in as_list(case.get("checks")):
         variable = str(check.get("variable", ""))
         if not variable:
             errors.append(f"Case '{case.get('name')}' has a check without variable.")
             continue
-        if base_check_variable(canonical_variable(variable), allowed_reads) is None:
-            errors.append(f"Check variable '{variable}' is not covered by pvi.read_whitelist.")
+        key = canonical_variable(variable)
+        base = key.split("[", 1)[0].split(".", 1)[0]
+        read_variables_to_check.append(base)
+    errors.extend(
+        validate_pvi_read(
+            config=config,
+            target_config=target_config,
+            targets_file=str(config.get("_targets_file") or ""),
+            variables=read_variables_to_check,
+            explicit=True,
+        )
+    )
     return errors
 
 
@@ -300,6 +316,7 @@ def save_report(args: argparse.Namespace, report: dict[str, Any], name: str) -> 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
     config, target_config = load_target_config(args.targets_file, args.target)
+    config["_targets_file"] = args.targets_file
     suite = load_suite(args.suite) if not args.reset_only else {"name": "reset_test_harness", "cases": []}
 
     report: dict[str, Any] = {

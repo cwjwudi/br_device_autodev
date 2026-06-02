@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +26,7 @@ class ToolchainError(RuntimeError):
 
 def write_json_argument_file(prefix: str, payload: Any) -> str:
     GENERATED_DIR.mkdir(parents=True, exist_ok=True)
-    path = GENERATED_DIR / f"{prefix}.json"
+    path = GENERATED_DIR / f"{prefix}_{uuid.uuid4().hex}.json"
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return str(path)
 
@@ -91,6 +92,7 @@ def run_plc_toolchain(
     opcua_node_ids: list[str] | None = None,
     build_ruc_package: bool = False,
     execute: bool = False,
+    force_arsim_download: bool = False,
     settle_ms: int | None = None,
     start_wait_seconds: int | None = None,
     timeout_seconds: int = 60,
@@ -140,6 +142,8 @@ def run_plc_toolchain(
         args.append("-BuildRucPackage")
     if execute:
         args.append("-Execute")
+    if force_arsim_download:
+        args.append("-ForceArsimDownload")
     if start_wait_seconds is not None:
         args.extend(["-StartWaitSeconds", str(start_wait_seconds)])
     if settle_ms is not None:
@@ -181,6 +185,10 @@ def run_plc_toolchain(
 
 
 def summarize(command: str, data: dict[str, Any]) -> str:
+    if command in ("ListVariables", "SearchVariables"):
+        variables = data.get("variables") or []
+        mode = ((data.get("access_policy") or {}).get("mode") or "unknown")
+        return f"{len(variables)} variable(s), access_policy={mode}"
     if command == "Probe":
         return " / ".join(
             str(v)
@@ -206,6 +214,9 @@ def summarize(command: str, data: dict[str, Any]) -> str:
         writes = data.get("writes") or []
         ok_count = sum(1 for item in writes if item.get("ok"))
         if not data.get("executed"):
+            errors = data.get("errors") or []
+            if errors:
+                return "write blocked: " + "; ".join(str(item) for item in errors)
             return "write blocked: execute=true is required"
         return f"wrote {ok_count}/{len(writes)} PVI variables"
     if command == "Build":
@@ -267,7 +278,7 @@ def summarize(command: str, data: dict[str, Any]) -> str:
 
 def collect_logs(data: dict[str, Any]) -> list[str]:
     logs: list[str] = []
-    for key in ("log_path", "pil_path", "output_path", "nodes_file", "variables_file", "writes_file", "suite_path", "report_path"):
+    for key in ("log_path", "pil_path", "output_path", "nodes_file", "variables_file", "writes_file", "suite_path", "report_path", "catalog_path"):
         value = data.get(key)
         if value:
             if key == "output_path" and data.get("output_exists") is not True:
@@ -335,7 +346,7 @@ def next_actions(tool: str, data: dict[str, Any]) -> list[str]:
     if tool == "plc_read_logger" and not data.get("ok"):
         return ["Check target reachability, logger.allowed_modules, and the PVITransfer log path."]
     if tool == "plc_write_pvi" and not data.get("ok"):
-        return ["Do not retry writes until execute=true, target role, and pvi.write_whitelist have been checked."]
+        return ["Do not retry writes until execute=true, target role, access_policy, and variable names have been checked."]
     if tool in ("plc_run_io_test_case", "plc_run_test_suite") and data.get("ok"):
         return ["Review the generated IO test report for writes, readback, checks, and restore results."]
     if tool in ("plc_run_io_test_case", "plc_run_test_suite") and not data.get("ok"):
@@ -470,6 +481,7 @@ def plc_check_download(arguments: dict[str, Any]) -> dict[str, Any]:
         targets_path=options["targets_path"],
         package_path=arguments.get("package_path"),
         transfer_pil_path=arguments.get("transfer_pil_path"),
+        force_arsim_download=arguments.get("force_arsim_download") is True,
         timeout_seconds=int(arguments.get("timeout_seconds") or 90),
     )
     return wrap_result("plc_check_download", "CheckDownload", data, target)
@@ -534,6 +546,7 @@ def plc_download_ruc(arguments: dict[str, Any]) -> dict[str, Any]:
         package_path=arguments.get("package_path"),
         transfer_pil_path=arguments.get("transfer_pil_path"),
         execute=execute,
+        force_arsim_download=arguments.get("force_arsim_download") is True,
         timeout_seconds=int(arguments.get("timeout_seconds") or 180),
     )
     return wrap_result("plc_download_ruc", "Download", data, target)
@@ -708,6 +721,72 @@ def plc_list_environments(arguments: dict[str, Any]) -> dict[str, Any]:
     return wrap_result("plc_list_environments", "ListEnvironments", data, "")
 
 
+def run_symbol_index(arguments: dict[str, Any], *, search: bool) -> dict[str, Any]:
+    options = resolve_call_options(arguments, default_target="arsim")
+    script = REPO_ROOT / "tools" / "plc_symbol_index.py"
+    catalog_path = REPO_ROOT / "tools" / ".generated" / "plc_symbol_catalog.json"
+    args = [
+        "python",
+        str(script),
+        "--targets-file",
+        options["targets_path"],
+        "--output-file",
+        str(catalog_path),
+    ]
+    query = arguments.get("query")
+    module = arguments.get("module")
+    access = arguments.get("access")
+    if search and query:
+        args.extend(["--query", str(query)])
+    if search and module:
+        args.extend(["--module", str(module)])
+    if search and access:
+        args.extend(["--access", str(access)])
+
+    completed = subprocess.run(
+        args,
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        timeout=int(arguments.get("timeout_seconds") or 30),
+        check=False,
+    )
+    stdout = completed.stdout.strip()
+    stderr = completed.stderr.strip()
+    if not stdout:
+        raise ToolchainError(
+            "PLC symbol index returned no JSON output.",
+            stdout=stdout,
+            stderr=stderr,
+            exit_code=completed.returncode,
+        )
+    try:
+        data = json.loads(stdout)
+    except json.JSONDecodeError as exc:
+        raise ToolchainError(
+            f"PLC symbol index returned invalid JSON: {exc}",
+            stdout=stdout,
+            stderr=stderr,
+            exit_code=completed.returncode,
+        ) from exc
+    if stderr:
+        data.setdefault("stderr", stderr)
+    data.setdefault("process_exit_code", completed.returncode)
+    return data
+
+
+def plc_list_variables(arguments: dict[str, Any]) -> dict[str, Any]:
+    data = run_symbol_index(arguments, search=False)
+    options = resolve_call_options(arguments, default_target="arsim")
+    return wrap_result("plc_list_variables", "ListVariables", data, options["target"])
+
+
+def plc_search_variables(arguments: dict[str, Any]) -> dict[str, Any]:
+    data = run_symbol_index(arguments, search=True)
+    options = resolve_call_options(arguments, default_target="arsim")
+    return wrap_result("plc_search_variables", "SearchVariables", data, options["target"])
+
+
 TOOLS = {
     "plc_build_project": plc_build_project,
     "plc_start_arsim": plc_start_arsim,
@@ -727,4 +806,6 @@ TOOLS = {
     "plc_get_target_config": plc_get_target_config,
     "plc_list_targets": plc_list_targets,
     "plc_list_environments": plc_list_environments,
+    "plc_list_variables": plc_list_variables,
+    "plc_search_variables": plc_search_variables,
 }

@@ -2,7 +2,7 @@
 
 ## 反馈验证优先级
 
-1. **OPC UA** — 首选方案，读取 `opcua.validation_node_ids` 白名单节点
+1. **OPC UA** — 首选方案，默认读取 `opcua.validation_node_ids` 白名单节点
 2. **PVI** — 备用方案，当 OPC UA 不可用时使用
 
 ## OPC UA 验证
@@ -32,7 +32,7 @@ plc_verify_opcua(arguments: {
 })
 ```
 
-传入自定义节点时会覆盖默认白名单。
+传入自定义节点时会覆盖默认节点列表，但仍受 `access_policy` 约束。默认 `whitelist` 模式下，自定义节点也必须在 `opcua.validation_node_ids` 中；只有用户手动切换到动态模式后，Agent 才能读取白名单外节点。
 
 ### 端点
 
@@ -66,6 +66,31 @@ plc_read_pvi(arguments: {
 
 - 全局变量：直接写变量名，如 `gstHmi.stOutputs.diSImage`
 - Task 变量：`<TaskName>:<VarName>` 格式，如 `SVG:strTransform`
+- 自定义变量仍受 `access_policy` 约束。默认 `whitelist` 模式下必须在 PVI 读取白名单中；动态模式下应先调用 `plc_search_variables` 查询变量。
+
+### PVI 动态变量诊断
+
+PVI 动态读取失败时，先区分两类问题：
+
+| 现象 | 含义 | 下一步 |
+|---|---|---|
+| MCP 返回策略错误、`access_policy`、`blocked_name_patterns` 或目标角色错误 | 策略门控拒绝 | 检查当前 `access_policy.mode`、`allow_dynamic_*`、目标 `role` 和变量名 |
+| PVI 返回 `Object not found` / `11033` | 策略已经放行，但当前运行映像里找不到该 PVI 对象 | 确认对应任务/变量已参与构建，ARsim/PLC 已下载最新映像，任务正在运行 |
+| PVI 连接失败 / ANSL 建链失败 | 目标或 PVI 通道不可达 | 先 `plc_probe_target`，检查 ARsim/PVI Manager/IP/端口 |
+
+因此，`Object not found` 不应直接解释为“白名单拦截”。它更常见地表示当前 ARsim 或 PLC 上运行的程序版本还没有该任务/变量。
+
+### 动态 PVI 写入读回
+
+动态写入必须形成读写闭环：
+
+```text
+plc_read_pvi       → 记录 before、数据类型和变量属性
+plc_write_pvi      → 传 execute=true，优先写入 before 的同值
+plc_read_pvi       → 独立读回，确认 readback
+```
+
+默认优先写同值，因为它能验证 PVI 写入通路，同时避免改变控制逻辑状态。只有用户明确要求改变状态，或测试 suite 提供 restore/reset，才写入不同值。
 
 ## 验证内容
 
@@ -90,8 +115,9 @@ plc_read_pvi(arguments: {
 验证重点：问题诊断。
 
 1. 逐个读取相关变量
-2. 使用自定义节点 ID 覆盖白名单
+2. 使用 `plc_search_variables` 查询相关变量，再按 `access_policy` 读取自定义节点或变量
 3. 对比 OPC UA 和 PVI 的两个读数交叉验证
+4. 对动态写入，优先执行“读当前值 -> 写同值 -> 独立读回”，并记录 before/readback
 
 ## 报告格式
 

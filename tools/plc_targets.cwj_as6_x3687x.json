@@ -5,6 +5,26 @@
     "build_exe": "C:\\Program Files (x86)\\BRAutomation\\AS6\\bin-en\\BR.AS.Build.exe",
     "pvi_transfer_exe": "C:\\Program Files (x86)\\BRAutomation\\PVI6\\PVI\\Tools\\PVITransfer\\PVITransfer.exe"
   },
+  "access_policy": {
+    "mode": "whitelist",
+    "allow_dynamic_pvi_read": false,
+    "allow_dynamic_pvi_write": false,
+    "allow_dynamic_opcua_read": false,
+    "allow_dynamic_opcua_write": false,
+    "allowed_target_roles": [
+      "arsim",
+      "dedicated_test_plc"
+    ],
+    "blocked_name_patterns": [
+      "*safety*",
+      "*safeio*",
+      "*physicalio*",
+      "*iomap*",
+      "*system*",
+      "sys:*"
+    ],
+    "catalog_path": "tools/.generated/plc_symbol_catalog.json"
+  },
   "opcua": {
     "auto_expose_all": false,
     "exposure_mode": "whitelist",

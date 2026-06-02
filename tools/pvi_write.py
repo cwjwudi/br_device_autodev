@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Write B&R PLC test harness variables via PVI with whitelist gates."""
+"""Write B&R PLC variables via PVI with access-policy gates."""
 
 from __future__ import annotations
 
@@ -9,10 +9,8 @@ import os
 import sys
 from typing import Any
 
+from plc_access_policy import canonical_variable, pvi_write_map, validate_pvi_write
 from pvi_read import load_json_file, normalize_value, parse_variable_spec
-
-
-BLOCKED_NAME_PARTS = ("safety", "safeio", "physicalio", "iomap", "system", "sys:")
 
 
 def load_target_config(targets_file: str, target: str) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -22,13 +20,6 @@ def load_target_config(targets_file: str, target: str) -> tuple[dict[str, Any], 
     if not target_config:
         raise ValueError(f"Target '{target}' was not found in {targets_file}.")
     return config, target_config
-
-
-def canonical_variable(spec: Any) -> str:
-    parsed = parse_variable_spec(spec)
-    if parsed.get("scope") == "task":
-        return f"{parsed.get('task')}:{parsed['name']}"
-    return str(parsed["name"])
 
 
 def normalize_write_item(item: Any) -> dict[str, Any]:
@@ -48,24 +39,6 @@ def normalize_write_item(item: Any) -> dict[str, Any]:
         "name": parsed["name"],
         "value": item["value"],
     }
-
-
-def whitelist_map(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    entries = ((config.get("pvi") or {}).get("write_whitelist") or [])
-    result: dict[str, dict[str, Any]] = {}
-    for entry in entries:
-        if isinstance(entry, dict):
-            variable = canonical_variable(entry)
-            result[variable] = dict(entry)
-        else:
-            variable = canonical_variable(entry)
-            result[variable] = {"variable": variable}
-    return result
-
-
-def is_blocked_name(variable: str) -> bool:
-    lowered = variable.lower()
-    return any(part in lowered for part in BLOCKED_NAME_PARTS)
 
 
 def coerce_scalar(value: Any, declared_type: str | None) -> Any:
@@ -91,30 +64,17 @@ def validate_writes(
     *,
     config: dict[str, Any],
     target_config: dict[str, Any],
+    targets_file: str,
     writes: list[dict[str, Any]],
     execute: bool,
 ) -> list[str]:
-    errors: list[str] = []
-    pvi_config = config.get("pvi") or {}
-    allowed = whitelist_map(config)
-
-    if pvi_config.get("enabled") is False:
-        errors.append("PVI is disabled in pvi.enabled.")
-    if str(target_config.get("role", "")).lower() == "production":
-        errors.append("Refusing to write PVI variables to a production target.")
-    if not execute:
-        errors.append("PVI writes require explicit execute=true.")
-    if not allowed:
-        errors.append("No pvi.write_whitelist entries are configured.")
-
-    for item in writes:
-        variable = item["variable"]
-        if variable not in allowed:
-            errors.append(f"Variable '{variable}' is not in pvi.write_whitelist.")
-        if is_blocked_name(variable):
-            errors.append(f"Variable '{variable}' matches a blocked Safety/I/O/system name pattern.")
-
-    return errors
+    return validate_pvi_write(
+        config=config,
+        target_config=target_config,
+        targets_file=targets_file,
+        variables=[item["variable"] for item in writes],
+        execute=execute,
+    )
 
 
 def write_variables(args: argparse.Namespace, writes: list[dict[str, Any]]) -> dict[str, Any]:
@@ -123,6 +83,7 @@ def write_variables(args: argparse.Namespace, writes: list[dict[str, Any]]) -> d
     validation_errors = validate_writes(
         config=config,
         target_config=target_config,
+        targets_file=args.targets_file,
         writes=normalized_writes,
         execute=args.execute,
     )
@@ -145,7 +106,7 @@ def write_variables(args: argparse.Namespace, writes: list[dict[str, Any]]) -> d
 
     from pvi import Connection, Cpu, Device, Line, PviError, Task, Variable
 
-    allowed = whitelist_map(config)
+    allowed = pvi_write_map(config)
     connection = None
     results: list[dict[str, Any]] = []
     try:
@@ -178,7 +139,7 @@ def write_variables(args: argparse.Namespace, writes: list[dict[str, Any]]) -> d
                 connection.sleep(args.variable_wait_ms)
                 result["data_type"] = variable.dataType
                 result["before"] = normalize_value(variable.value)
-                declared_type = allowed[item["variable"]].get("type")
+                declared_type = (allowed.get(item["variable"]) or {}).get("type")
                 variable.value = coerce_value(item["value"], declared_type)
                 connection.sleep(args.write_wait_ms)
                 result["readback"] = normalize_value(variable.value)

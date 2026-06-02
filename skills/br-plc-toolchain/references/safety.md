@@ -28,13 +28,37 @@
 
 4. **兼容性检查** (`plc_check_download`)
    - ARsim 包 (`cpu_type=AR000`) ↔ 物理 PLC → 拒绝
-   - 物理包 ↔ ARsim 目标 → 拒绝
-   - 包 CPU ≠ 目标 CPU → 拒绝
+   - 物理包 ↔ ARsim 目标 → 默认拒绝
+   - 包 CPU ≠ 目标 CPU → 默认拒绝
    - 包 Runtime ≠ 目标 Runtime → 拒绝
+   - 只有用户明确授权且目标 `role=arsim` 时，`force_arsim_download=true` 才可把 ARsim 目标上的 CPU/型号不匹配降级为 warning
 
 5. **显式确认** (`plc_download_ruc`)
    - 必须传入 `execute=true`
    - 缺少此参数 → MCP 返回 dry-run 摘要，不下载
+
+## ARsim 强制下载规则
+
+ARsim 强制下载是为本机仿真调试准备的例外流程，用于处理 ARsim 探针 CPU/order 与 RUC 包元信息不一致，或 ARsim 首次安装需要特殊 `Transfer.pil` 的情况。
+
+允许条件：
+
+1. 用户在当前任务中明确授权 ARsim 强制下载。
+2. 目标必须是 `target=arsim` 且配置角色为 `role=arsim`。
+3. 仍必须完成 `plc_probe_target`、`plc_describe_ruc_package`、`plc_check_download`。
+4. 实际下载仍必须传入 `execute=true`。
+
+禁止条件：
+
+1. 不得用于 `dedicated_test_plc`、任何物理 PLC 或 `role=production`。
+2. 不得跳过 production、`allow_auto_download`、Safety、`execute=true` 等安全门。
+3. 不得把“ARsim CPU/order mismatch 可放行”推广到物理目标。
+
+实现行为：
+
+- `plc_check_download(force_arsim_download=true)` 只在 ARsim 目标上把 CPU/型号不匹配记录为 warning。
+- `plc_download_ruc(force_arsim_download=true, execute=true)` 会在需要时生成临时 `Transfer_force_arsim_*.pil`。
+- 临时 PIL 只替换 `InstallRestriction=AllowUpdatesWithoutDataLoss` 为 `InstallRestriction=AllowInitialInstallation`，用于满足 ARsim 首次安装；原始 `Transfer.pil` 不应被覆盖。
 
 ## 生产 PLC 规则
 
@@ -54,31 +78,33 @@
 ## OPC UA 安全
 
 1. **默认不开放全部变量**。`opcua.auto_expose_all` 必须为 `false`
-2. OPC UA 暴露级别：`whitelist`
-3. 可读节点通过 `opcua.validation_node_ids` 白名单控制
+2. 默认访问模式为 `access_policy.mode=whitelist`
+3. 默认可读节点通过 `opcua.validation_node_ids` 白名单控制
 4. MCP 工具 `plc_verify_opcua` 仅支持读取，**不支持写入**
-5. 不提供 "列出所有 OPC UA 节点" 的工具
+5. 只有用户手动切换到 `agent_directed` 并启用 `allow_dynamic_opcua_read=true` 后，Agent 才能传入白名单外 OPC UA 节点尝试读取
 6. 如在 AS 工程中修改 OPC UA 配置，必须人工审查
 
 ## PVI 安全
 
-1. PVI 读取默认白名单变量，通过 `pvi.validation_variables` 控制
-2. MCP 工具 `plc_read_pvi` 仅支持读取，**不支持写入**
-3. 读取变量值的变化仅用于验证，不用于控制
+1. PVI 读取默认白名单变量，通过 `pvi.read_whitelist` 或 `pvi.validation_variables` 控制
+2. `plc_read_pvi` 可在 `agent_directed` 模式下读取 Agent 传入的白名单外变量
+3. 白名单外动态读取必须先调用 `plc_search_variables` 或 `plc_list_variables` 查找变量
+4. 读取变量值的变化仅用于验证，不用于控制
 
-## M6 PVI 写入测试安全（待实现）
+## PVI 写入测试安全
 
-M6 允许新增 PVI 写入能力，但只能用于输入输出测试 harness，不能变成通用写变量工具。
+PVI 写入能力默认只能用于输入输出测试 harness。若用户手动将 `access_policy.mode` 切换为 `agent_directed`，Agent 可以选择白名单外变量尝试写入，但仍不能绕过目标角色、名称黑名单、`execute=true` 和审计报告。
 
 强制规则：
 
 1. `plc_write_pvi` 必须显式传入 `execute=true`
-2. 只允许写 `tools/plc_targets.local.json` 中的 `pvi.write_whitelist`
-3. 禁止写 Safety、物理 I/O、系统变量、未列入测试 harness 的业务变量
+2. 默认 `whitelist` 模式只允许写 `tools/plc_targets.local.json` 中的 `pvi.write_whitelist`
+3. `agent_directed` 模式下，Agent 必须先搜索变量，再传入写入请求
 4. 禁止写 `role=production` 的目标
-5. 输出变量默认只读，不写，例如 LQR 的 `arLqrU`、`arLqrError`、`stLqrStatus`
+5. 禁止写 Safety、物理 I/O、系统变量，变量名匹配 `access_policy.blocked_name_patterns` 时直接拒绝
 6. 每个测试用例结束后必须执行 restore/reset
 7. 写入前后都要读取关键变量，并写入报告
+8. 动态写入优先执行“读当前值 -> 写同值 -> 独立读回”的低副作用验证；只有用户明确要求改变状态或测试 suite 定义了 restore/reset 时，才写入不同值
 
 建议 LQR 写入白名单：
 

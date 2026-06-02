@@ -1,9 +1,29 @@
 {
   "automation_studio": {
     "version": "AS6.5",
-    "bin_dir": "C:\\Program Files (x86)\\BRAutomation\\AS6\\bin-en",
-    "build_exe": "C:\\Program Files (x86)\\BRAutomation\\AS6\\bin-en\\BR.AS.Build.exe",
-    "pvi_transfer_exe": "C:\\Program Files (x86)\\BRAutomation\\PVI6\\PVI\\Tools\\PVITransfer\\PVITransfer.exe"
+    "bin_dir": "D:\\BRAutomation\\AS65\\AS6\\bin-en",
+    "build_exe": "D:\\BRAutomation\\AS65\\AS6\\bin-en\\BR.AS.Build.exe",
+    "pvi_transfer_exe": "D:\\BRAutomation\\AS65\\PVI6\\PVI\\Tools\\PVITransfer\\PVITransfer.exe"
+  },
+  "access_policy": {
+    "mode": "agent_directed",
+    "allow_dynamic_pvi_read": true,
+    "allow_dynamic_pvi_write": true,
+    "allow_dynamic_opcua_read": true,
+    "allow_dynamic_opcua_write": true,
+    "allowed_target_roles": [
+      "arsim",
+      "dedicated_test_plc"
+    ],
+    "blocked_name_patterns": [
+      "*safety*",
+      "*safeio*",
+      "*physicalio*",
+      "*iomap*",
+      "*system*",
+      "sys:*"
+    ],
+    "catalog_path": "tools/.generated/plc_symbol_catalog.json"
   },
   "opcua": {
     "auto_expose_all": false,
@@ -231,7 +251,7 @@
       "ip": "127.0.0.1",
       "role": "arsim",
       "allow_auto_download": true,
-      "arsim_loader_exe": "C:\\Users\\CWJ\\codex_ws\\br_device_autodev\\PrintDemo\\Temp\\Simulation\\x3687x\\X20CP3687X\\ar000loader.exe"
+      "arsim_loader_exe": "D:\\codex_ws\\motion_svg_test\\PrintDemo\\Temp\\Simulation\\x1685\\X20CP1685\\ar000loader.exe"
     },
     "test_plc": {
       "ip": "192.168.50.222",

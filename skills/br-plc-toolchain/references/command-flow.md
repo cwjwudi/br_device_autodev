@@ -47,11 +47,15 @@ plc_run_arsim_closed_loop(arguments: { "config": "<actual_config>", "target": "a
    arguments: { "config": "<actual_config>", "target": "arsim" }
    成功条件: ok=true, reasons=[]
    失败: 报告 reasons 中每条拒绝原因，停止
+   例外: 如果用户明确授权 ARsim 强制下载，可重试
+         { "config": "<actual_config>", "target": "arsim", "force_arsim_download": true }
 
 6. plc_download_ruc
    arguments: { "config": "<actual_config>", "target": "arsim", "execute": true }
    成功条件: ok=true, executed=true, download_ok=true
    失败: 检查 safety_check 和下载日志
+   例外: 用户明确授权 ARsim 强制下载时，可传
+         { "config": "<actual_config>", "target": "arsim", "execute": true, "force_arsim_download": true }
 
 7. plc_verify_opcua
    arguments: { "config": "<actual_config>", "target": "arsim" }
@@ -123,8 +127,11 @@ plc_run_arsim_closed_loop(arguments: { "config": "<actual_config>", "target": "a
 | 探针无响应 | ARsim 未启动或 IP 不通 | `plc_start_arsim`，检查 IP |
 | 包不存在 | 未构建或未生成 RUC | `plc_build_project(build_ruc_package=true)` |
 | 安全检查失败 | CPU/Runtime 不匹配 | 对比 `describe_package` 和 `probe` 输出 |
+| ARsim 包/探针 CPU 不一致 | ARsim 探针返回虚拟 CPU/order，或包仍是物理构建 | 先确认 `Simulation=1` 并重新构建；用户授权后仅对 ARsim 使用 `force_arsim_download=true` |
+| 提示需要 initial installation | ARsim 当前无可更新映像，原 `Transfer.pil` 只允许 update | 用户授权 ARsim 强制下载时，工具会生成临时 `Transfer_force_arsim_*.pil` 使用初装限制 |
 | 下载超时 | 目标忙或网络问题 | 检查 PVI 连接，重试 |
 | OPC UA 读不到 | OPC UA 服务未就绪 | 等待几秒重试，换用 PVI |
+| PVI `Object not found` | 当前运行映像未包含任务/变量，或任务未启动 | 重新确认 build/download 成功，再读变量；不要先判定为策略拦截 |
 
 ## 流程 5：测试 PLC 只读验证
 
@@ -141,7 +148,7 @@ plc_run_arsim_closed_loop(arguments: { "config": "<actual_config>", "target": "a
 - test_plc 只能做只读探针和反馈验证
 - 如需要下载 test_plc，先构建匹配的物理目标包
 
-## 流程 6：输入输出测试闭环（M6 待实现）
+## 流程 6：输入输出测试闭环
 
 **用途：** 对 LQR 等控制逻辑执行真实输入输出测试。
 
@@ -161,24 +168,27 @@ plc_run_arsim_closed_loop(arguments: { "config": "<actual_config>", "target": "a
 5. plc_download_ruc(target="<target>", execute=true)
    → 仅安全检查通过后下载
 
-6. plc_reset_test_harness(target="<target>", execute=true)
+6. plc_search_variables(target="<target>", module="LQR")
+   → Agent 查询变量目录，确定输入变量和读回变量
+
+7. plc_reset_test_harness(target="<target>", execute=true)
    → 清空上一次测试状态
 
-7. plc_run_test_suite(
+8. plc_run_test_suite(
      target="<target>",
      suite="tests/plc/lqr_io_tests.json",
      execute=true
    )
-   → 白名单写入输入、等待、读取输出、比较期望值
+   → 按 access_policy 写入输入、等待、读取输出、比较期望值
 
-8. plc_reset_test_harness(target="<target>", execute=true)
+9. plc_reset_test_harness(target="<target>", execute=true)
    → 测试后恢复安全状态
 ```
 
 ### 成功判定
 
 - 构建和下载安全检查通过
-- 每个测试用例的写入均来自 `pvi.write_whitelist`
+- 每个测试用例的写入均通过 `access_policy` 校验
 - 每个测试用例的断言均通过
 - restore/reset 成功
 - 报告写入 `tools/.generated/reports/*_io_test_<suite>.json`
@@ -187,7 +197,46 @@ plc_run_arsim_closed_loop(arguments: { "config": "<actual_config>", "target": "a
 
 | 失败场景 | 处理方式 |
 |---|---|
-| 写入变量不在白名单 | 拒绝执行，报告变量名 |
+| 写入变量不符合 access_policy | 拒绝执行，报告变量名 |
 | 目标为 production | 拒绝执行 |
 | 断言失败 | 保留 actual/expected/tolerance，继续或按 suite 策略停止 |
 | restore 失败 | 标记高风险，报告最后一次 readback |
+
+## 流程 7：动态 PVI 读写验证
+
+**用途：** 用户把 `access_policy.mode` 切换为 `agent_directed` 或 `catalog_policy` 后，让 Agent 自行选择变量并验证 PVI 动态读写通路。
+
+前置条件：
+
+- 先读取当前 `tools/plc_targets.local.json` 或 `targets_path`，确认本次实际模式和 `allow_dynamic_pvi_read/write`。
+- 目标必须是 `role=arsim` 或 `role=dedicated_test_plc`，禁止 production。
+- 白名单外变量必须先通过 `plc_search_variables` 或 `plc_list_variables` 找到，不凭空猜测。
+
+推荐流程：
+
+```text
+1. plc_search_variables(target="<target>", module="<module>", writable=true)
+   → 找到候选变量，避开 Safety/物理 I/O/system 名称
+
+2. plc_read_pvi(target="<target>", pvi_variables=["Task:Var"])
+   → 读取当前值、数据类型和 PVI 路径
+
+3. plc_write_pvi(
+     target="<target>",
+     writes=[{"variable":"Task:Var","value":<current_value>}],
+     execute=true
+   )
+   → 优先写回当前值，证明写入通路且降低副作用
+
+4. plc_read_pvi(target="<target>", pvi_variables=["Task:Var"])
+   → 独立读回，确认值一致
+```
+
+失败诊断：
+
+| 失败场景 | 处理方式 |
+|---|---|
+| 策略拒绝 | 报告 `access_policy`、目标角色、变量名命中的黑名单或缺少的动态开关 |
+| PVI `Object not found` | 先确认当前运行映像已重新构建并下载，任务和变量对象存在 |
+| 写入失败但读取成功 | 检查变量属性是否可写、数据类型是否匹配、是否缺少 `execute=true` |
+| 写入不同值后读回异常 | 立即 restore/reset 或写回原值，并报告最后一次 readback |
