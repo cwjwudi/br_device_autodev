@@ -1,0 +1,32 @@
+/* INPUT: HMI -> PLC control */
+HMI_INPUT(HMI_MW_U00_Bridge_Cmd_EnableReq,
+	stHmiBridgeCtrl.stInput.bEnableReq)
+HMI_INPUT(HMI_MW_U00_Bridge_Par_Target,
+	stHmiBridgeCtrl.stInput.rTargetValue)
+HMI_INPUT(HMI_MW_U00_Bridge_Par_Mode,
+	stHmiBridgeCtrl.stInput.usiModeSelect)
+
+/* OUTPUT: PLC control -> HMI */
+HMI_OUTPUT(HMI_MW_U00_Bridge_Sts_Ready,
+	stHmiBridgeCtrl.stOutput.bReady)
+HMI_OUTPUT(HMI_MW_U00_Bridge_Sts_Enabled,
+	stHmiBridgeCtrl.stOutput.bEnabledEcho)
+HMI_OUTPUT(HMI_MW_U00_Bridge_Act_Target,
+	stHmiBridgeCtrl.stOutput.rAcceptedTarget)
+HMI_OUTPUT(HMI_MW_U00_Bridge_Act_Value,
+	stHmiBridgeCtrl.stOutput.rActualValue)
+HMI_OUTPUT(HMI_MW_U00_Bridge_Sts_Mode,
+	stHmiBridgeCtrl.stOutput.usiAcceptedMode)
+HMI_OUTPUT(HMI_MW_U00_Bridge_Diag_Cycle,
+	stHmiBridgeCtrl.stOutput.udiCycleCounter)
+
+/* IN_OUT: HMI <-> PLC control */
+HMI_INOUT(HMI_MW_U00_Bridge_InOut_Trim,
+	stHmiBridgeOld.stInOut.rTrimValue,
+	stHmiBridgeCtrl.stInOut.rTrimValue)
+HMI_INOUT(HMI_MW_U00_Bridge_InOut_Offset,
+	stHmiBridgeOld.stInOut.diSharedOffset,
+	stHmiBridgeCtrl.stInOut.diSharedOffset)
+HMI_INOUT(HMI_MW_U00_Bridge_InOut_Recipe,
+	stHmiBridgeOld.stInOut.usiRecipeNo,
+	stHmiBridgeCtrl.stInOut.usiRecipeNo)
