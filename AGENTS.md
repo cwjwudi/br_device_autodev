@@ -30,6 +30,9 @@
 | 工具 | 说明 |
 |---|---|
 | `plc_build_project` | 构建 AS 工程，可选生成 RUC 包 |
+| `plc_find_library_for_symbol` | 按缺失符号搜索本机可信 AS Library |
+| `plc_plan_project_library` | 检查库版本、递归依赖和 Technology Package 兼容性 |
+| `plc_add_project_library` | 事务式添加库并默认重新构建，失败自动回滚（需 execute=true） |
 | `plc_start_arsim` | 启动或复用 ARsim 实例 |
 | `plc_probe_target` | 只读探针：CPU/AR/PLC 状态 |
 | `plc_describe_ruc_package` | 读取 RUC 包元信息 |
@@ -41,6 +44,8 @@
 | `plc_write_pvi` | 在 `access_policy` 和 `execute=true` 门控下写入 PVI 变量 |
 
 标准闭环顺序：确认实际 config 和 Simulation 设置 -> build -> start_arsim -> probe -> describe_package -> check_download -> download(execute=true) -> verify_opcua / read_pvi
+
+缺失 Library 顺序：build 获取缺失符号 -> find_library_for_symbol -> plan_project_library -> add_project_library(execute=true)。只允许使用本机可信 AS 安装库，禁止自动添加 Safety 库。
 
 ## 安全规则
 

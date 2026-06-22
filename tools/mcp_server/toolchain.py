@@ -9,6 +9,7 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PLC_TOOLCHAIN = REPO_ROOT / "tools" / "plc_toolchain.ps1"
+AS_LIBRARY_MANAGER = REPO_ROOT / "tools" / "as_library_manager.py"
 GENERATED_DIR = REPO_ROOT / "tools" / ".generated"
 DEFAULT_PROJECT_PATH = "PrintDemo\\Huitong_FrontEval.apj"
 DEFAULT_CONFIG = "x1685"
@@ -153,13 +154,15 @@ def run_plc_toolchain(
         args,
         cwd=REPO_ROOT,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         capture_output=True,
         timeout=timeout_seconds,
         check=False,
     )
 
-    stdout = completed.stdout.strip()
-    stderr = completed.stderr.strip()
+    stdout = (completed.stdout or "").strip()
+    stderr = (completed.stderr or "").strip()
     if not stdout:
         raise ToolchainError(
             "PLC toolchain returned no JSON output.",
@@ -185,6 +188,22 @@ def run_plc_toolchain(
 
 
 def summarize(command: str, data: dict[str, Any]) -> str:
+    if command == "FindLibraryForSymbol":
+        matches = data.get("matches") or []
+        return f"found {len(matches)} library candidate(s) for {data.get('symbol')}"
+    if command == "PlanLibraryAdd":
+        additions = data.get("libraries_to_add") or []
+        if data.get("ok"):
+            return f"plan adds {len(additions)} library/libraries"
+        return "; ".join(str(item) for item in (data.get("errors") or [])) or "library plan failed"
+    if command == "AddProjectLibrary":
+        if data.get("already_satisfied"):
+            return f"library {data.get('requested_library')} is already present"
+        if data.get("rollback", {}).get("ok"):
+            return "validation build failed; library transaction rolled back"
+        if data.get("executed"):
+            return f"added {len(data.get('added_libraries') or [])} library/libraries"
+        return "; ".join(str(item) for item in (data.get("errors") or [])) or "library add was not executed"
     if command in ("ListVariables", "SearchVariables"):
         variables = data.get("variables") or []
         mode = ((data.get("access_policy") or {}).get("mode") or "unknown")
@@ -278,7 +297,7 @@ def summarize(command: str, data: dict[str, Any]) -> str:
 
 def collect_logs(data: dict[str, Any]) -> list[str]:
     logs: list[str] = []
-    for key in ("log_path", "pil_path", "output_path", "nodes_file", "variables_file", "writes_file", "suite_path", "report_path", "catalog_path"):
+    for key in ("log_path", "pil_path", "output_path", "nodes_file", "variables_file", "writes_file", "suite_path", "report_path", "catalog_path", "transaction_path"):
         value = data.get(key)
         if value:
             if key == "output_path" and data.get("output_exists") is not True:
@@ -333,6 +352,18 @@ def collect_warnings(data: dict[str, Any]) -> list[str]:
 
 
 def next_actions(tool: str, data: dict[str, Any]) -> list[str]:
+    if tool == "plc_find_library_for_symbol" and data.get("ok"):
+        return ["Use plc_plan_project_library with the selected exact library name before modifying the project."]
+    if tool == "plc_plan_project_library" and data.get("ok"):
+        return ["Review libraries_to_add, then call plc_add_project_library with execute=true."]
+    if tool == "plc_add_project_library" and data.get("ok"):
+        if data.get("validated_by_build"):
+            return ["Review the build result and project diff before continuing with download or runtime verification."]
+        return ["Run plc_build_project before downloading or testing the changed project."]
+    if tool == "plc_add_project_library" and not data.get("ok"):
+        if data.get("rollback", {}).get("ok"):
+            return ["Review the validation build errors; the library transaction has already been rolled back."]
+        return ["Review library candidates, Technology Package compatibility, execute=true, and transaction errors before retrying."]
     if tool == "plc_probe_target" and data.get("ok"):
         return ["Run plc_check_download before any download."]
     if tool == "plc_check_download" and data.get("ok"):
@@ -501,6 +532,158 @@ def plc_build_project(arguments: dict[str, Any]) -> dict[str, Any]:
         timeout_seconds=int(arguments.get("timeout_seconds") or 300),
     )
     return wrap_result("plc_build_project", "Build", data, target)
+
+
+def run_library_manager(
+    command: str,
+    options: dict[str, str],
+    *,
+    symbol: str | None = None,
+    library: str | None = None,
+    version: str | None = None,
+    transaction_id: str | None = None,
+    execute: bool = False,
+    timeout_seconds: int = 60,
+) -> dict[str, Any]:
+    args = [
+        "python",
+        str(AS_LIBRARY_MANAGER),
+        command,
+        "--repo-root",
+        str(REPO_ROOT),
+        "--project-path",
+        options["project_path"],
+        "--targets-file",
+        options["targets_path"],
+    ]
+    if symbol:
+        args.extend(["--symbol", symbol])
+    if library:
+        args.extend(["--library", library])
+    if version:
+        args.extend(["--version", version])
+    if transaction_id:
+        args.extend(["--transaction-id", transaction_id])
+    if execute:
+        args.append("--execute")
+
+    completed = subprocess.run(
+        args,
+        cwd=REPO_ROOT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        timeout=timeout_seconds,
+        check=False,
+    )
+    stdout = (completed.stdout or "").strip()
+    stderr = (completed.stderr or "").strip()
+    if not stdout:
+        raise ToolchainError(
+            "Automation Studio library manager returned no JSON output.",
+            stdout=stdout,
+            stderr=stderr,
+            exit_code=completed.returncode,
+        )
+    try:
+        data = json.loads(stdout)
+    except json.JSONDecodeError as exc:
+        raise ToolchainError(
+            f"Automation Studio library manager returned invalid JSON: {exc}",
+            stdout=stdout,
+            stderr=stderr,
+            exit_code=completed.returncode,
+        ) from exc
+    if stderr:
+        data.setdefault("stderr", stderr)
+    data.setdefault("process_exit_code", completed.returncode)
+    return data
+
+
+def plc_find_library_for_symbol(arguments: dict[str, Any]) -> dict[str, Any]:
+    options = resolve_call_options(arguments, default_target="arsim")
+    symbol = str(arguments.get("symbol") or "").strip()
+    if not symbol:
+        raise ValueError("symbol is required.")
+    data = run_library_manager(
+        "find",
+        options,
+        symbol=symbol,
+        timeout_seconds=int(arguments.get("timeout_seconds") or 60),
+    )
+    return wrap_result("plc_find_library_for_symbol", "FindLibraryForSymbol", data, options["target"])
+
+
+def plc_plan_project_library(arguments: dict[str, Any]) -> dict[str, Any]:
+    options = resolve_call_options(arguments, default_target="arsim")
+    library = str(arguments.get("library") or "").strip()
+    if not library:
+        raise ValueError("library is required.")
+    version = arguments.get("version")
+    data = run_library_manager(
+        "plan",
+        options,
+        library=library,
+        version=str(version) if version else None,
+        timeout_seconds=int(arguments.get("timeout_seconds") or 60),
+    )
+    return wrap_result("plc_plan_project_library", "PlanLibraryAdd", data, options["target"])
+
+
+def plc_add_project_library(arguments: dict[str, Any]) -> dict[str, Any]:
+    options = resolve_call_options(arguments, default_target="arsim")
+    library = str(arguments.get("library") or "").strip()
+    if not library:
+        raise ValueError("library is required.")
+    version = arguments.get("version")
+    execute = arguments.get("execute") is True
+    timeout_seconds = int(arguments.get("timeout_seconds") or 300)
+    data = run_library_manager(
+        "add",
+        options,
+        library=library,
+        version=str(version) if version else None,
+        execute=execute,
+        timeout_seconds=min(timeout_seconds, 120),
+    )
+
+    additions = data.get("added_libraries") or []
+    rebuild = arguments.get("rebuild") is not False
+    if data.get("ok") and data.get("executed") and additions and rebuild:
+        try:
+            build = run_plc_toolchain(
+                "Build",
+                target=options["target"],
+                project_path=options["project_path"],
+                config=options["config"],
+                targets_path=options["targets_path"],
+                timeout_seconds=timeout_seconds,
+            )
+        except Exception as exc:
+            build = {"ok": False, "error": f"validation build could not complete: {exc}"}
+        data["build"] = build
+        data["validated_by_build"] = bool(build.get("ok"))
+        if not build.get("ok"):
+            transaction_id = data.get("transaction_id")
+            try:
+                rollback = run_library_manager(
+                    "rollback",
+                    options,
+                    transaction_id=str(transaction_id) if transaction_id else None,
+                    timeout_seconds=60,
+                )
+            except Exception as exc:
+                rollback = {"ok": False, "error": f"rollback could not complete: {exc}"}
+            data["rollback"] = rollback
+            data["ok"] = False
+            data.setdefault("errors", []).append("Automation Studio validation build failed.")
+            if not rollback.get("ok"):
+                data["errors"].append("Automatic rollback also failed; inspect the transaction before editing the project.")
+    elif data.get("ok") and data.get("executed") and additions:
+        data["validated_by_build"] = False
+
+    return wrap_result("plc_add_project_library", "AddProjectLibrary", data, options["target"])
 
 
 def plc_start_arsim(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -747,12 +930,14 @@ def run_symbol_index(arguments: dict[str, Any], *, search: bool) -> dict[str, An
         args,
         cwd=REPO_ROOT,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         capture_output=True,
         timeout=int(arguments.get("timeout_seconds") or 30),
         check=False,
     )
-    stdout = completed.stdout.strip()
-    stderr = completed.stderr.strip()
+    stdout = (completed.stdout or "").strip()
+    stderr = (completed.stderr or "").strip()
     if not stdout:
         raise ToolchainError(
             "PLC symbol index returned no JSON output.",
@@ -789,6 +974,9 @@ def plc_search_variables(arguments: dict[str, Any]) -> dict[str, Any]:
 
 TOOLS = {
     "plc_build_project": plc_build_project,
+    "plc_find_library_for_symbol": plc_find_library_for_symbol,
+    "plc_plan_project_library": plc_plan_project_library,
+    "plc_add_project_library": plc_add_project_library,
     "plc_start_arsim": plc_start_arsim,
     "plc_probe_target": plc_probe_target,
     "plc_describe_ruc_package": plc_describe_ruc_package,

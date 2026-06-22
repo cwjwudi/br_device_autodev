@@ -46,6 +46,12 @@ def object_schema(properties: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def required_schema(schema: dict[str, Any], *required: str) -> dict[str, Any]:
+    result = dict(schema)
+    result["required"] = list(required)
+    return result
+
+
 def build_schema(
     properties: dict[str, Any],
     *,
@@ -88,6 +94,70 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 },
             },
             require_timeout=True,
+        ),
+    },
+    {
+        "name": "plc_find_library_for_symbol",
+        "description": "Find the trusted, locally installed Automation Studio libraries that declare a missing function, function block, type, constant, or C symbol.",
+        "inputSchema": required_schema(
+            object_schema(
+                {
+                    "symbol": {
+                        "type": "string",
+                        "description": "Exact unresolved symbol from Automation Studio build output, for example TcpOpen or AsTcpMcsType.",
+                        "minLength": 1,
+                    },
+                }
+            ),
+            "symbol",
+        ),
+    },
+    {
+        "name": "plc_plan_project_library",
+        "description": "Plan adding an installed Automation Studio library and its dependencies without modifying the project. Rejects ambiguous versions, incompatible Technology Packages, and Safety-related libraries.",
+        "inputSchema": required_schema(
+            object_schema(
+                {
+                    "library": {
+                        "type": "string",
+                        "description": "Exact Automation Studio library name, for example AsTCP.",
+                        "minLength": 1,
+                    },
+                    "version": {
+                        "type": "string",
+                        "description": "Optional exact library or Technology Package version when more than one compatible candidate exists.",
+                    },
+                }
+            ),
+            "library",
+        ),
+    },
+    {
+        "name": "plc_add_project_library",
+        "description": "Transactionally copy a trusted installed Automation Studio library and dependencies into Logical/Libraries, update Package.pkg, and rebuild by default. Requires execute=true and rolls back automatically when the validation build fails.",
+        "inputSchema": required_schema(
+            build_schema(
+                {
+                    "library": {
+                        "type": "string",
+                        "description": "Exact Automation Studio library name, for example AsTCP.",
+                        "minLength": 1,
+                    },
+                    "version": {
+                        "type": "string",
+                        "description": "Optional exact library or Technology Package version.",
+                    },
+                    "rebuild": {
+                        "type": "boolean",
+                        "description": "Rebuild the project after adding the library and roll back on failure. Defaults to true.",
+                        "default": True,
+                    },
+                },
+                require_execute=True,
+                require_timeout=True,
+            ),
+            "library",
+            "execute",
         ),
     },
     {

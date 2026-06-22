@@ -16,10 +16,11 @@ python server.py
 
 ## 架构
 
-此服务器是一个轻量 stdio JSON-RPC MCP 封装，不自行实现 PLC 逻辑；所有实际工作委托给：
+此服务器是一个轻量 stdio JSON-RPC MCP 封装，不自行实现 PLC 逻辑；实际工作委托给：
 
 ```powershell
 tools\plc_toolchain.ps1
+tools\as_library_manager.py
 ```
 
 服务器默认以仓库根目录为工作目录运行所有命令。
@@ -31,6 +32,9 @@ tools\plc_toolchain.ps1
 | MCP 工具 | CLI 命令 | 安全门 |
 |---|---|---|
 | `plc_build_project` | `Build` | 无 |
+| `plc_find_library_for_symbol` | `as_library_manager.py find` | 只读，仅搜索本机可信 AS 库 |
+| `plc_plan_project_library` | `as_library_manager.py plan` | 只读，检查版本、依赖和 Technology Package |
+| `plc_add_project_library` | `as_library_manager.py add` + `Build` | **必须 `execute=true`**，构建失败自动回滚 |
 | `plc_start_arsim` | `StartArsim` | 仅限 arsim 角色目标 |
 | `plc_probe_target` | `Probe` | 只读 |
 | `plc_describe_ruc_package` | `DescribePackage` | 只读 |
@@ -109,6 +113,13 @@ echo "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}" | python tools\m
 
 # 构建
 echo "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"plc_build_project\",\"arguments\":{}}}" | python tools\mcp_server\server.py
+
+# 根据缺失符号查找库，然后生成添加计划
+echo "{\"jsonrpc\":\"2.0\",\"id\":20,\"method\":\"tools/call\",\"params\":{\"name\":\"plc_find_library_for_symbol\",\"arguments\":{\"symbol\":\"TcpOpen\",\"environment\":\"cwj_as6_x3687x\"}}}" | python tools\mcp_server\server.py
+echo "{\"jsonrpc\":\"2.0\",\"id\":21,\"method\":\"tools/call\",\"params\":{\"name\":\"plc_plan_project_library\",\"arguments\":{\"library\":\"AsTCP\",\"environment\":\"cwj_as6_x3687x\"}}}" | python tools\mcp_server\server.py
+
+# 审查计划后添加并重新构建；构建失败会自动回滚
+echo "{\"jsonrpc\":\"2.0\",\"id\":22,\"method\":\"tools/call\",\"params\":{\"name\":\"plc_add_project_library\",\"arguments\":{\"library\":\"AsTCP\",\"environment\":\"cwj_as6_x3687x\",\"execute\":true}}}" | python tools\mcp_server\server.py
 
 # 探针
 echo "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"plc_probe_target\",\"arguments\":{}}}" | python tools\mcp_server\server.py

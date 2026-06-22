@@ -49,6 +49,7 @@ docs/
   PLC_MCP_SKILL_PROMPT_ROADMAP.md
 
 tools/
+  as_library_manager.py
   plc_toolchain.ps1
   invoke_pvitransfer_silent.ps1
   opcua_read.py
@@ -74,6 +75,10 @@ PrintDemo/
   - `D:\BRAutomation\AS65\PVI6\PVI\Tools\PVITransfer\PVITransfer.exe`
 - 实现本地 CLI：
   - `tools/plc_toolchain.ps1`
+- 实现 AS Library 自动解析与事务式添加：
+  - `tools/as_library_manager.py`
+  - 按符号查找本机可信库，递归解析依赖与 Technology Package 版本。
+  - 添加操作要求 `execute=true`，默认重新构建，构建失败自动回滚。
 - 实现 PVITransfer 静默包装：
   - `tools/invoke_pvitransfer_silent.ps1`
 - 实现 ARsim 启动、探针、安全检查、下载闭环。
@@ -108,6 +113,10 @@ PrintDemo/
   - `plc_run_verification_suite`
   - `plc_get_target_config`
   - `plc_list_targets`
+- 完成 AS Library 管理 MCP 工具：
+  - `plc_find_library_for_symbol`
+  - `plc_plan_project_library`
+  - `plc_add_project_library`
 
 已验证结果：
 

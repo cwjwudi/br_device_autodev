@@ -14,6 +14,7 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 - 下载 RUC 包到 ARsim 或测试 PLC
 - 通过 OPC UA 或 PVI 读取 PLC 反馈变量
 - 验证代码修改是否在 PLC 上生效
+- AI 生成的代码引用了当前工程尚未包含的 Automation Studio Library
 
 ## 前置必读
 
@@ -30,6 +31,9 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 | 工具 | 用途 | 关键约束 |
 |---|---|---|
 | `plc_build_project` | 构建工程，可选生成 RUC 包 | `build_ruc_package=true` 用于构建后下载 |
+| `plc_find_library_for_symbol` | 按缺失符号搜索本机可信 AS 库 | 只读；知识库结果仅作辅助，本机安装库为准 |
+| `plc_plan_project_library` | 解析待添加库、递归依赖与版本 | 只读；候选冲突或 Technology Package 不兼容时停止 |
+| `plc_add_project_library` | 事务式添加库并默认重新构建 | 必须 `execute=true`；构建失败自动回滚；禁止 Safety 库 |
 | `plc_start_arsim` | 启动或复用 ARsim | 仅限 `target=arsim` |
 | `plc_probe_target` | 只读探针：CPU/AR/状态 | 下载前必须先调用 |
 | `plc_describe_ruc_package` | 读取 RUC 包元信息 | 下载前必须先调用 |
@@ -49,6 +53,17 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 | `plc_list_targets` | 列出目标和安全角色 | 只读 |
 
 ## 标准操作顺序
+
+### 缺失 Library 处理流程
+
+```
+1. plc_build_project                         → 获取 Automation Studio 缺失符号错误
+2. plc_find_library_for_symbol(symbol=...)  → 从本机可信 AS 库中查找唯一候选
+3. plc_plan_project_library(library=...)    → 审查版本、递归依赖和 Technology Package
+4. plc_add_project_library(execute=true)    → 事务式复制、更新 Package.pkg、重新构建
+```
+
+不得从互联网任意下载 Library。候选不唯一、版本不兼容、依赖缺失或涉及 Safety 时必须停止并报告。
 
 ### ARsim config 和仿真文件规则
 

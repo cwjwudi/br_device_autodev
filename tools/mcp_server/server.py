@@ -9,7 +9,7 @@ from schemas import TOOL_DEFINITIONS
 from toolchain import TOOLS, ToolchainError
 
 
-SERVER_INFO = {"name": "br-plc-toolchain", "version": "0.1.0"}
+SERVER_INFO = {"name": "br-plc-toolchain", "version": "0.2.0"}
 PROTOCOL_VERSION = "2024-11-05"
 
 
