@@ -30,7 +30,7 @@ tools\as_library_manager.py
 <!-- BEGIN GENERATED MCP TOOL CATALOG -->
 当前 stdio MCP 暴露以下工具：
 
-MCP server version: `0.4.0`. Full catalog: [../../skills/br-plc-toolchain/references/mcp-tools.md](../../skills/br-plc-toolchain/references/mcp-tools.md)
+MCP server version: `0.5.0`. Full catalog: [../../skills/br-plc-toolchain/references/mcp-tools.md](../../skills/br-plc-toolchain/references/mcp-tools.md)
 
 | MCP Tool | Risk | Backend | Confirmation | Description |
 | --- | --- | --- | --- | --- |
@@ -76,14 +76,20 @@ tools\plc_environments.json
 
 当前已配置：
 
-- `default`：使用 `tools\plc_targets.local.json`。
+- `default_safe`：保守默认，使用 `tools\plc_targets.local.json`，仅允许白名单访问。
+- `default`：`default_safe` 的兼容别名。
+- `dev_agent_directed`：显式开发环境，使用 `tools\plc_targets.dev.example.json`，仅面向本机 ARsim。
+- `test_whitelist`：专用测试 PLC 模板，使用 `tools\plc_targets.test.example.json`，默认禁止自动下载。
+- `readonly_diagnostics`：只读诊断模板，使用 `tools\plc_targets.readonly.example.json`。
 - `cwj_as6_x3687x`：今天验证通过的本机 AS6 + `x3687x` ARsim 环境，目标配置文件为 `tools\plc_targets.cwj_as6_x3687x.json`。
 - `cwj_test_plc_x1685`：同一套本机 AS6 配置，用于 `192.168.50.222` 物理测试 PLC 和 `x1685` config。
+
+三个 `*.example.json` 文件必须先按本机路径、目标地址和变量白名单完成配置。开放的 `agent_directed` 模式不会由默认环境隐式启用。
 
 示例：
 
 ```json
-{"environment":"cwj_as6_x3687x"}
+{"environment":"default_safe"}
 ```
 
 显式传入的 `target`、`project_path`、`config`、`targets_path` 会覆盖环境默认值。

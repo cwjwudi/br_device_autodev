@@ -1,0 +1,71 @@
+{
+  "profile": {
+    "name": "test_whitelist",
+    "risk_level": "dedicated_test",
+    "description": "Dedicated test PLC profile. Replace documentation addresses and populate explicit variable whitelists before use."
+  },
+  "automation_studio": {
+    "version": "AS6.5",
+    "bin_dir": "C:\\Path\\To\\BRAutomation\\AS6\\bin-en",
+    "build_exe": "C:\\Path\\To\\BRAutomation\\AS6\\bin-en\\BR.AS.Build.exe",
+    "pvi_transfer_exe": "C:\\Path\\To\\BRAutomation\\PVI\\Tools\\PVITransfer\\PVITransfer.exe"
+  },
+  "access_policy": {
+    "mode": "whitelist",
+    "allow_dynamic_pvi_read": false,
+    "allow_dynamic_pvi_write": false,
+    "allow_dynamic_opcua_read": false,
+    "allow_dynamic_opcua_write": false,
+    "allowed_target_roles": [
+      "dedicated_test_plc"
+    ],
+    "blocked_name_patterns": [
+      "*safety*",
+      "*safeio*",
+      "*physicalio*",
+      "*iomap*",
+      "*system*",
+      "sys:*"
+    ],
+    "catalog_path": "tools/.generated/plc_symbol_catalog.json"
+  },
+  "opcua": {
+    "auto_expose_all": false,
+    "exposure_mode": "whitelist",
+    "verify_after_download": false,
+    "endpoint_port": 4840,
+    "validation_node_ids": []
+  },
+  "pvi": {
+    "enabled": true,
+    "verify_after_download": false,
+    "pvi_dll_dir": null,
+    "read_whitelist": [],
+    "write_whitelist": [],
+    "restore_writes": [],
+    "validation_variables": []
+  },
+  "logger": {
+    "enabled": true,
+    "default_format": ".html",
+    "allowed_modules": [
+      {
+        "type": "System",
+        "name": "$arlogsys"
+      }
+    ],
+    "blocked_modules": [
+      {
+        "type": "Safety",
+        "name": "$safety"
+      }
+    ]
+  },
+  "targets": {
+    "test_plc": {
+      "ip": "192.0.2.10",
+      "role": "dedicated_test_plc",
+      "allow_auto_download": false
+    }
+  }
+}

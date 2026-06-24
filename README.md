@@ -187,7 +187,7 @@ python tools\mcp_server\server.py
 <!-- BEGIN GENERATED MCP TOOL CATALOG -->
 当前 MCP 工具清单：
 
-MCP server version: `0.4.0`. Full catalog: [skills/br-plc-toolchain/references/mcp-tools.md](skills/br-plc-toolchain/references/mcp-tools.md)
+MCP server version: `0.5.0`. Full catalog: [skills/br-plc-toolchain/references/mcp-tools.md](skills/br-plc-toolchain/references/mcp-tools.md)
 
 | MCP Tool | Risk | Backend | Confirmation | Description |
 | --- | --- | --- | --- | --- |

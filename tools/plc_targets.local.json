@@ -6,11 +6,11 @@
     "pvi_transfer_exe": "D:\\BRAutomation\\AS65\\PVI6\\PVI\\Tools\\PVITransfer\\PVITransfer.exe"
   },
   "access_policy": {
-    "mode": "agent_directed",
-    "allow_dynamic_pvi_read": true,
-    "allow_dynamic_pvi_write": true,
-    "allow_dynamic_opcua_read": true,
-    "allow_dynamic_opcua_write": true,
+    "mode": "whitelist",
+    "allow_dynamic_pvi_read": false,
+    "allow_dynamic_pvi_write": false,
+    "allow_dynamic_opcua_read": false,
+    "allow_dynamic_opcua_write": false,
     "allowed_target_roles": [
       "arsim",
       "dedicated_test_plc"
@@ -256,12 +256,12 @@
     "test_plc": {
       "ip": "192.168.50.222",
       "role": "dedicated_test_plc",
-      "allow_auto_download": true
+      "allow_auto_download": false
     },
     "test_plc_233": {
       "ip": "192.168.50.233",
       "role": "dedicated_test_plc",
-      "allow_auto_download": true
+      "allow_auto_download": false
     }
   }
 }

@@ -223,9 +223,15 @@ Logger 读取只返回摘要和报告路径，不把大段 HTML/CSV 内容直接
 
 | 环境 | 说明 |
 |---|---|
-| `default` | 使用 `tools/plc_targets.local.json`，默认 config 为 `x1685` |
+| `default_safe` | 使用保守的 `tools/plc_targets.local.json`，默认 config 为 `x1685`、target 为 `arsim` |
+| `default` | `default_safe` 的兼容别名 |
+| `dev_agent_directed` | 显式选择的本机 ARsim 开发模板，动态访问只在该模板中启用 |
+| `test_whitelist` | 专用测试 PLC 白名单模板，自动下载默认关闭 |
+| `readonly_diagnostics` | 只读诊断模板，不开放动态访问和变量写入 |
 | `cwj_as6_x3687x` | 使用 `x3687x` ARsim 环境和 `tools/plc_targets.cwj_as6_x3687x.json` |
 | `cwj_test_plc_x1685` | 面向 `192.168.50.222` 物理测试 PLC，config 为 `x1685` |
+
+模板文件分别是 `tools/plc_targets.dev.example.json`、`tools/plc_targets.test.example.json` 和 `tools/plc_targets.readonly.example.json`。使用前必须替换本机工具路径、目标地址并填写明确的变量白名单。
 
 `tools/plc_targets*.json` 还包含 `access_policy`。工具链的保守默认值为：
 
@@ -238,7 +244,7 @@ Logger 读取只返回摘要和报告路径，不把大段 HTML/CSV 内容直接
 }
 ```
 
-实际运行时必须读取当前 `tools/plc_targets.local.json` 或传入的 `targets_path` 判断模式；本地 default 配置可以被用户切换为 `agent_directed`。如果用户手动改为 `agent_directed` 并打开对应 `allow_dynamic_*` 开关，Agent 可以先搜索变量，再把白名单外变量传给读写工具尝试访问。该模式不会关闭 production、Safety/I/O/system、`execute=true` 等硬安全门。
+实际运行时必须读取当前 `tools/plc_targets.local.json` 或传入的 `targets_path` 判断模式。默认配置保持 `whitelist`；需要动态访问时应显式选择并配置 `dev_agent_directed`，而不是修改团队默认文件。该模式不会关闭 production、Safety/I/O/system、`execute=true` 等硬安全门。
 
 PVI 动态变量失败要区分两类：
 
