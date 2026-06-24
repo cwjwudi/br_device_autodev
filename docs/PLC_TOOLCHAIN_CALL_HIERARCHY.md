@@ -48,6 +48,8 @@ flowchart TD
 | 官方/协议工具 | `BR.AS.Build.exe`、`PVITransfer.exe`、OPC UA/PVI 脚本 | 执行真实构建、下载、读取、写入测试变量、Logger 抓取 | 不理解 Agent 任务语义 |
 | 配置和报告 | `tools/plc_targets*.json`、`tools/plc_environments.json`、`tools/.generated/*` | 目标配置、白名单、环境切换、日志和报告归档 | 不发起动作 |
 
+变量访问策略由 `tools/plc_access_policy.py` 唯一实现。`tools/plc_access_policy_cli.py` 提供稳定 JSON 契约，PowerShell 的 PVI/OPC UA 读取门控也调用该 CLI，不再单独维护白名单、目标角色或黑名单判断。
+
 ## AGENTS.md、Prompt、Skill、MCP 的关系
 
 `AGENTS.md`、Prompt、Skill、MCP 是四种不同层次的约束和工具：

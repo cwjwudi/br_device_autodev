@@ -247,3 +247,64 @@ def validate_opcua_read(
         else:
             errors.append(f"OPC UA node '{node}' is not in opcua.validation_node_ids.")
     return errors
+
+
+def evaluate_access_request(
+    *,
+    operation: str,
+    config: dict[str, Any],
+    target_name: str,
+    target_config: dict[str, Any],
+    targets_file: str,
+    requested_items: list[Any],
+    explicit: bool = False,
+    execute: bool = False,
+) -> dict[str, Any]:
+    policy = access_policy(config)
+    if operation == "pvi_read":
+        normalized_items = [canonical_variable(item) for item in requested_items]
+        errors = validate_pvi_read(
+            config=config,
+            target_config=target_config,
+            targets_file=targets_file,
+            variables=requested_items,
+            explicit=explicit,
+        )
+    elif operation == "pvi_write":
+        normalized_items = [canonical_variable(item) for item in requested_items]
+        errors = validate_pvi_write(
+            config=config,
+            target_config=target_config,
+            targets_file=targets_file,
+            variables=requested_items,
+            execute=execute,
+        )
+    elif operation == "opcua_read":
+        if not all(isinstance(item, str) for item in requested_items):
+            raise ValueError("OPC UA requested items must be strings.")
+        normalized_items = [str(item) for item in requested_items]
+        errors = validate_opcua_read(
+            config=config,
+            target_config=target_config,
+            node_ids=requested_items,
+            explicit=explicit,
+        )
+    elif operation == "describe":
+        normalized_items = []
+        errors = []
+    else:
+        raise ValueError(f"Unsupported access policy operation: {operation}")
+
+    return {
+        "ok": not errors,
+        "operation": operation,
+        "errors": errors,
+        "blocked_reason": errors[0] if errors else None,
+        "policy_mode": policy["mode"],
+        "policy": policy,
+        "target": target_name,
+        "target_role": str(target_config.get("role") or ""),
+        "requested_items": normalized_items,
+        "explicit": bool(explicit),
+        "execute": bool(execute),
+    }

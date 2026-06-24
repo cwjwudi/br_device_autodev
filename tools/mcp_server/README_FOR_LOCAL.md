@@ -30,7 +30,7 @@ tools\as_library_manager.py
 <!-- BEGIN GENERATED MCP TOOL CATALOG -->
 当前 stdio MCP 暴露以下工具：
 
-MCP server version: `0.6.0`. Full catalog: [../../skills/br-plc-toolchain/references/mcp-tools.md](../../skills/br-plc-toolchain/references/mcp-tools.md)
+MCP server version: `0.7.0`. Full catalog: [../../skills/br-plc-toolchain/references/mcp-tools.md](../../skills/br-plc-toolchain/references/mcp-tools.md)
 
 | MCP Tool | Risk | Backend | Confirmation | Description |
 | --- | --- | --- | --- | --- |
@@ -93,6 +93,10 @@ tools\plc_environments.json
 ```
 
 显式传入的 `target`、`project_path`、`config`、`targets_path` 会覆盖环境默认值。
+
+## 访问策略
+
+`tools\plc_access_policy.py` 是 PVI/OPC UA 变量访问判断的唯一权威实现。Python 工具直接调用该模块，PowerShell 通过 `tools\plc_access_policy_cli.py` 获取同一份结构化结论；策略响应包含 `ok`、`errors`、`policy_mode`、`target_role`、`requested_items` 和 `blocked_reason`。
 
 ## 通用参数
 

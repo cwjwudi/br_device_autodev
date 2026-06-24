@@ -81,231 +81,85 @@ function Get-TargetConfig {
     return $targetConfig
 }
 
-function Get-AccessPolicy {
-    param([Parameter(Mandatory = $true)]$ConfigData)
-
-    $raw = $ConfigData.access_policy
-    $mode = "whitelist"
-    if ($raw -and $raw.mode) {
-        $mode = [string]$raw.mode
-    }
-    if (@("whitelist", "catalog_policy", "agent_directed") -notcontains $mode) {
-        $mode = "whitelist"
-    }
-
-    $allowedRoles = @("arsim", "dedicated_test_plc")
-    if ($raw -and $raw.allowed_target_roles) {
-        $allowedRoles = @($raw.allowed_target_roles | ForEach-Object { [string]$_ })
-    }
-
-    $blockedPatterns = @("*safety*", "*safeio*", "*physicalio*", "*iomap*", "*system*", "sys:*")
-    if ($raw -and $raw.blocked_name_patterns) {
-        $blockedPatterns = @($raw.blocked_name_patterns | ForEach-Object { [string]$_ })
-    }
-
-    return [pscustomobject]@{
-        mode = $mode
-        allow_dynamic_pvi_read = [bool]($raw -and $raw.allow_dynamic_pvi_read)
-        allow_dynamic_opcua_read = [bool]($raw -and $raw.allow_dynamic_opcua_read)
-        allowed_target_roles = $allowedRoles
-        blocked_name_patterns = $blockedPatterns
-    }
-}
-
-function ConvertTo-PviCanonical {
-    param([Parameter(Mandatory = $true)]$Spec)
-
-    if ($Spec -is [string]) {
-        $text = $Spec.Trim()
-        if ($text -match "^ns=.*;s=(.+)$") {
-            $text = $Matches[1]
-        }
-        if ($text.StartsWith("::")) {
-            $withoutPrefix = $text.Substring(2)
-            $parts = $withoutPrefix.Split(":", 2)
-            if ($parts.Count -eq 2) {
-                if ($parts[0] -eq "AsGlobalPV") {
-                    return $parts[1]
-                }
-                return "$($parts[0]):$($parts[1])"
-            }
-        }
-        if ($text.ToLower().StartsWith("task:")) {
-            $parts = $text.Split(":", 3)
-            if ($parts.Count -eq 3) {
-                return "$($parts[1]):$($parts[2])"
-            }
-        }
-        return $text
-    }
-
-    $name = $Spec.name
-    if (-not $name) {
-        $name = $Spec.variable
-    }
-    if (-not $name) {
-        $name = $Spec.node_id
-    }
-    if ($Spec.scope -eq "task" -or $Spec.task) {
-        return "$($Spec.task):$name"
-    }
-    return [string]$name
-}
-
-function Test-NameBlockedByPolicy {
+function Invoke-AuthoritativeAccessPolicy {
     param(
-        [Parameter(Mandatory = $true)][string]$Name,
-        [Parameter(Mandatory = $true)]$Policy
+        [Parameter(Mandatory = $true)][ValidateSet("describe", "pvi_read", "pvi_write", "opcua_read")][string]$Operation,
+        [Parameter(Mandatory = $true)]$Items,
+        [bool]$Explicit = $false,
+        [bool]$ExecuteRequest = $false
     )
 
-    $lower = $Name.ToLower()
-    foreach ($pattern in @($Policy.blocked_name_patterns)) {
-        if ($lower -like ([string]$pattern).ToLower()) {
-            return $true
-        }
-    }
-    return $false
-}
-
-function Test-TargetAllowedByPolicy {
-    param(
-        [Parameter(Mandatory = $true)]$TargetConfig,
-        [Parameter(Mandatory = $true)]$Policy
+    $script = Resolve-RepoPath "tools\plc_access_policy_cli.py"
+    New-Item -ItemType Directory -Path $GeneratedDir -Force | Out-Null
+    $itemsPath = Join-Path $GeneratedDir "access_policy_items_$([guid]::NewGuid().ToString('N')).json"
+    ConvertTo-Json -InputObject @($Items) -Depth 16 | Set-Content -LiteralPath $itemsPath -Encoding UTF8
+    $args = @(
+        $script,
+        "--operation", $Operation,
+        "--targets-file", (Resolve-RepoPath $TargetsPath),
+        "--target", $Target,
+        "--items-file", $itemsPath
     )
-
-    $role = ([string]$TargetConfig.role).ToLower()
-    if ($role -eq "production") {
-        return $false
+    if ($Explicit) {
+        $args += "--explicit"
     }
-    $allowed = @($Policy.allowed_target_roles | ForEach-Object { ([string]$_).ToLower() })
-    return $allowed -contains $role
+    if ($ExecuteRequest) {
+        $args += "--execute"
+    }
+
+    $oldErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $output = & python @args 2>&1
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $oldErrorActionPreference
+        Remove-Item -LiteralPath $itemsPath -Force -ErrorAction SilentlyContinue
+    }
+
+    $text = (@($output | ForEach-Object { [string]$_ }) -join "`n").Trim()
+    if (-not $text) {
+        throw "PLC access policy CLI returned no JSON output (exit_code=$exitCode)."
+    }
+    try {
+        return $text | ConvertFrom-Json
+    }
+    catch {
+        throw "PLC access policy CLI returned invalid JSON: $text"
+    }
 }
 
-function Get-SymbolCatalog {
-    param([Parameter(Mandatory = $true)]$ConfigData)
-
-    $catalogPath = "tools\.generated\plc_symbol_catalog.json"
-    if ($ConfigData.access_policy -and $ConfigData.access_policy.catalog_path) {
-        $catalogPath = [string]$ConfigData.access_policy.catalog_path
+function Get-AuthoritativeAccessPolicy {
+    $result = Invoke-AuthoritativeAccessPolicy -Operation "describe" -Items @()
+    if (-not $result.policy) {
+        $message = [string]$result.blocked_reason
+        if (-not $message) {
+            $message = "PLC access policy could not be loaded."
+        }
+        throw $message
     }
-    $resolved = Resolve-RepoPath $catalogPath
-    if (-not (Test-Path -LiteralPath $resolved)) {
-        return $null
-    }
-    return Get-Content -LiteralPath $resolved -Encoding UTF8 | ConvertFrom-Json
+    return $result.policy
 }
 
-function Test-CatalogAccess {
+function Test-AuthoritativePviReadAccess {
     param(
-        [Parameter(Mandatory = $true)]$ConfigData,
-        [Parameter(Mandatory = $true)][string]$Key,
-        [Parameter(Mandatory = $true)][string]$Protocol,
-        [Parameter(Mandatory = $true)][string]$Access
-    )
-
-    $catalog = Get-SymbolCatalog $ConfigData
-    if (-not $catalog) {
-        return $false
-    }
-    foreach ($item in @($catalog.variables)) {
-        $candidate = $null
-        if ($Protocol -eq "pvi") {
-            $candidate = [string]$item.pvi
-        }
-        elseif ($Protocol -eq "opcua") {
-            $candidate = [string]$item.opcua
-        }
-        if ($candidate -ne $Key) {
-            continue
-        }
-        return (@($item.access) -contains $Access)
-    }
-    return $false
-}
-
-function Test-PviReadAccess {
-    param(
-        [Parameter(Mandatory = $true)]$ConfigData,
-        [Parameter(Mandatory = $true)]$TargetConfig,
         [Parameter(Mandatory = $true)]$Variables,
         [bool]$Explicit = $false
     )
 
-    $policy = Get-AccessPolicy $ConfigData
-    $errors = @()
-    if (-not (Test-TargetAllowedByPolicy -TargetConfig $TargetConfig -Policy $policy)) {
-        $errors += "Target role '$($TargetConfig.role)' is not allowed by access_policy.allowed_target_roles for PVI reads."
-    }
-
-    $allowed = @{}
-    $entries = @()
-    if ($ConfigData.pvi.read_whitelist) {
-        $entries = @($ConfigData.pvi.read_whitelist)
-    }
-    elseif ($ConfigData.pvi.validation_variables) {
-        $entries = @($ConfigData.pvi.validation_variables)
-    }
-    foreach ($entry in $entries) {
-        $allowed[(ConvertTo-PviCanonical $entry)] = $true
-    }
-
-    foreach ($item in @($Variables)) {
-        $key = ConvertTo-PviCanonical $item
-        if (Test-NameBlockedByPolicy -Name $key -Policy $policy) {
-            $errors += "Variable '$key' matches access_policy.blocked_name_patterns."
-            continue
-        }
-        if ($allowed.ContainsKey($key)) {
-            continue
-        }
-        if ($policy.mode -eq "catalog_policy" -and $Explicit -and (Test-CatalogAccess -ConfigData $ConfigData -Key $key -Protocol "pvi" -Access "read")) {
-            continue
-        }
-        if ($policy.mode -eq "agent_directed" -and $Explicit -and $policy.allow_dynamic_pvi_read) {
-            continue
-        }
-        $errors += "Variable '$key' is not allowed for PVI read in access_policy.mode='$($policy.mode)'."
-    }
-    return $errors
+    $result = Invoke-AuthoritativeAccessPolicy -Operation "pvi_read" -Items $Variables -Explicit:$Explicit
+    return @($result.errors)
 }
 
-function Test-OpcUaReadAccess {
+function Test-AuthoritativeOpcUaReadAccess {
     param(
-        [Parameter(Mandatory = $true)]$ConfigData,
-        [Parameter(Mandatory = $true)]$TargetConfig,
         [Parameter(Mandatory = $true)]$NodeIds,
         [bool]$Explicit = $false
     )
 
-    $policy = Get-AccessPolicy $ConfigData
-    $errors = @()
-    if (-not (Test-TargetAllowedByPolicy -TargetConfig $TargetConfig -Policy $policy)) {
-        $errors += "Target role '$($TargetConfig.role)' is not allowed by access_policy.allowed_target_roles for OPC UA reads."
-    }
-
-    $allowed = @{}
-    foreach ($node in @($ConfigData.opcua.validation_node_ids)) {
-        $allowed[[string]$node] = $true
-    }
-
-    foreach ($node in @($NodeIds)) {
-        $key = [string]$node
-        if (Test-NameBlockedByPolicy -Name $key -Policy $policy) {
-            $errors += "OPC UA node '$key' matches access_policy.blocked_name_patterns."
-            continue
-        }
-        if ($allowed.ContainsKey($key)) {
-            continue
-        }
-        if ($policy.mode -eq "catalog_policy" -and $Explicit -and (Test-CatalogAccess -ConfigData $ConfigData -Key $key -Protocol "opcua" -Access "read")) {
-            continue
-        }
-        if ($policy.mode -eq "agent_directed" -and $Explicit -and $policy.allow_dynamic_opcua_read) {
-            continue
-        }
-        $errors += "OPC UA node '$key' is not allowed for read in access_policy.mode='$($policy.mode)'."
-    }
-    return $errors
+    $result = Invoke-AuthoritativeAccessPolicy -Operation "opcua_read" -Items $NodeIds -Explicit:$Explicit
+    return @($result.errors)
 }
 
 function Write-ObjectJson {
@@ -1015,15 +869,15 @@ function Invoke-VerifyOpcUa {
         throw "No OPC UA validation nodes configured. Set opcua.validation_node_ids or pass -OpcUaNodeId."
     }
 
-    $accessErrors = Test-OpcUaReadAccess -ConfigData $cfg -TargetConfig $targetConfig -NodeIds $nodes -Explicit:$explicitNodes
+    $accessErrors = Test-AuthoritativeOpcUaReadAccess -NodeIds $nodes -Explicit:$explicitNodes
     if ($accessErrors.Count -gt 0) {
         $report = [ordered]@{
             command = "VerifyOpcUa"
             ok = $false
             target = $Target
             executed = $false
-            access_policy = (Get-AccessPolicy $cfg)
-            errors = $accessErrors
+            access_policy = (Get-AuthoritativeAccessPolicy)
+            errors = @($accessErrors)
             requested_nodes = @($nodes)
         }
         if ($Quiet) {
@@ -1053,7 +907,7 @@ function Invoke-VerifyOpcUa {
     $report | Add-Member -NotePropertyName target -NotePropertyValue $Target -Force
     $report | Add-Member -NotePropertyName nodes_file -NotePropertyValue $nodesFile -Force
     $report | Add-Member -NotePropertyName warnings -NotePropertyValue @($warnings) -Force
-    $report | Add-Member -NotePropertyName access_policy -NotePropertyValue (Get-AccessPolicy $cfg) -Force
+    $report | Add-Member -NotePropertyName access_policy -NotePropertyValue (Get-AuthoritativeAccessPolicy) -Force
     $report | Add-Member -NotePropertyName dynamic_request -NotePropertyValue $explicitNodes -Force
 
     if ($Quiet) {
@@ -1097,15 +951,15 @@ function Invoke-ReadPvi {
         throw "No PVI variables configured. Set pvi.validation_variables or pass -PviVariable."
     }
 
-    $accessErrors = Test-PviReadAccess -ConfigData $cfg -TargetConfig $targetConfig -Variables $variables -Explicit:$explicitVariables
+    $accessErrors = Test-AuthoritativePviReadAccess -Variables $variables -Explicit:$explicitVariables
     if ($accessErrors.Count -gt 0) {
         $report = [ordered]@{
             command = "ReadPvi"
             ok = $false
             target = $Target
             executed = $false
-            access_policy = (Get-AccessPolicy $cfg)
-            errors = $accessErrors
+            access_policy = (Get-AuthoritativeAccessPolicy)
+            errors = @($accessErrors)
             requested_variables = @($variables)
         }
         if ($Quiet) {
@@ -1143,7 +997,7 @@ function Invoke-ReadPvi {
     $report = Convert-JsonProcessOutput -CommandName "ReadPvi" -Lines $lines -ExitCode $exitCode
     $report | Add-Member -NotePropertyName target -NotePropertyValue $Target -Force
     $report | Add-Member -NotePropertyName variables_file -NotePropertyValue $variablesFile -Force
-    $report | Add-Member -NotePropertyName access_policy -NotePropertyValue (Get-AccessPolicy $cfg) -Force
+    $report | Add-Member -NotePropertyName access_policy -NotePropertyValue (Get-AuthoritativeAccessPolicy) -Force
     $report | Add-Member -NotePropertyName dynamic_request -NotePropertyValue $explicitVariables -Force
 
     if ($Quiet) {

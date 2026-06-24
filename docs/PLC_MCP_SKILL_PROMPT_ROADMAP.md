@@ -98,7 +98,7 @@ tools/mcp_server/
 <!-- BEGIN GENERATED MCP TOOL CATALOG -->
 当前已实现工具：
 
-MCP server version: `0.6.0`. Full catalog: [../skills/br-plc-toolchain/references/mcp-tools.md](../skills/br-plc-toolchain/references/mcp-tools.md)
+MCP server version: `0.7.0`. Full catalog: [../skills/br-plc-toolchain/references/mcp-tools.md](../skills/br-plc-toolchain/references/mcp-tools.md)
 
 | MCP Tool | Risk | Backend | Confirmation | Description |
 | --- | --- | --- | --- | --- |

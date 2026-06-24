@@ -99,6 +99,8 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 
 `tools/plc_targets.local.json` 中的 `access_policy.mode` 控制 Agent 是否可以使用白名单外变量：
 
+所有 PVI/OPC UA 访问结论以 `tools/plc_access_policy.py` 为准；PowerShell、Python 和 MCP 路径共享该策略引擎，不应在调用层自行放宽或重写策略。
+
 - `whitelist`：默认模式，只允许读取/写入配置文件中列出的 OPC UA/PVI 白名单。
 - `catalog_policy`：允许 Agent 从变量目录中选择变量，但变量必须在 catalog 中声明对应 `read`/`write` 能力。
 - `agent_directed`：允许 Agent 自行搜索变量并传入读写请求；底层仍会拒绝 production 目标、Safety/物理 I/O/system 名称，写入仍必须 `execute=true`。
