@@ -7,9 +7,10 @@ from typing import Any
 
 from schemas import TOOL_DEFINITIONS
 from toolchain import TOOLS, ToolchainError
+from version import __version__
 
 
-SERVER_INFO = {"name": "br-plc-toolchain", "version": "0.2.0"}
+SERVER_INFO = {"name": "br-plc-toolchain", "version": __version__}
 PROTOCOL_VERSION = "2024-11-05"
 
 

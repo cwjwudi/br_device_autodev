@@ -245,6 +245,8 @@ def summarize(command: str, data: dict[str, Any]) -> str:
             return f"{errors} error(s), {warnings} warning(s)"
         return str(data.get("summary") or "build completed")
     if command == "StartArsim":
+        if data.get("executed") is False:
+            return "start blocked: execute=true is required"
         if data.get("started_new_process"):
             return f"started new ARsim (pid={data.get('process_id')})"
         return f"reused existing ARsim (pid={data.get('process_id')})"
@@ -689,6 +691,14 @@ def plc_add_project_library(arguments: dict[str, Any]) -> dict[str, Any]:
 def plc_start_arsim(arguments: dict[str, Any]) -> dict[str, Any]:
     options = resolve_call_options(arguments, default_target="arsim")
     target = options["target"]
+    if arguments.get("execute") is not True:
+        data = {
+            "command": "StartArsim",
+            "ok": False,
+            "executed": False,
+            "errors": ["Starting ARsim requires explicit execute=true."],
+        }
+        return wrap_result("plc_start_arsim", "StartArsim", data, target)
     data = run_plc_toolchain(
         "StartArsim",
         target=target,
@@ -698,6 +708,7 @@ def plc_start_arsim(arguments: dict[str, Any]) -> dict[str, Any]:
         start_wait_seconds=int(arguments.get("start_wait_seconds") or 3),
         timeout_seconds=int(arguments.get("timeout_seconds") or 30),
     )
+    data["executed"] = True
     return wrap_result("plc_start_arsim", "StartArsim", data, target)
 
 

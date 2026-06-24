@@ -48,7 +48,7 @@ def object_schema(properties: dict[str, Any]) -> dict[str, Any]:
 
 def required_schema(schema: dict[str, Any], *required: str) -> dict[str, Any]:
     result = dict(schema)
-    result["required"] = list(required)
+    result["required"] = list(dict.fromkeys([*(schema.get("required") or []), *required]))
     return result
 
 
@@ -74,11 +74,14 @@ def build_schema(
                 "minimum": 1,
             },
         )
-    return {
+    schema = {
         "type": "object",
         "properties": merged,
         "additionalProperties": False,
     }
+    if require_execute:
+        schema["required"] = ["execute"]
+    return schema
 
 
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
@@ -172,6 +175,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                     "minimum": 0,
                 },
             },
+            require_execute=True,
         ),
     },
     {
@@ -292,25 +296,28 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "name": "plc_write_pvi",
         "description": "Write PVI variables under access_policy. Default whitelist mode requires pvi.write_whitelist; Agent-directed mode allows explicit variables after policy checks. Requires execute=true and refuses production targets.",
-        "inputSchema": build_schema(
-            {
-                "writes": {
-                    "type": "array",
-                    "description": "Write objects such as {\"variable\":\"LQR:bLqrEnable\",\"value\":true}. Every variable must pass the current access_policy.",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "variable": {"type": "string"},
-                            "value": {},
+        "inputSchema": required_schema(
+            build_schema(
+                {
+                    "writes": {
+                        "type": "array",
+                        "description": "Write objects such as {\"variable\":\"LQR:bLqrEnable\",\"value\":true}. Every variable must pass the current access_policy.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "variable": {"type": "string"},
+                                "value": {},
+                            },
+                            "required": ["variable", "value"],
+                            "additionalProperties": False,
                         },
-                        "required": ["variable", "value"],
-                        "additionalProperties": False,
+                        "minItems": 1,
                     },
-                    "minItems": 1,
                 },
-            },
-            require_execute=True,
-            require_timeout=True,
+                require_execute=True,
+                require_timeout=True,
+            ),
+            "writes",
         ),
     },
     {
@@ -330,26 +337,29 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "name": "plc_run_io_test_case",
         "description": "Run one PLC IO test case from a suite: reset, access-policy-gated PVI writes, settle, readback, checks, and restore.",
-        "inputSchema": build_schema(
-            {
-                "suite_path": {
-                    "type": "string",
-                    "description": "Path to a PLC IO test suite JSON file.",
-                    "default": "tests\\plc\\lqr_io_tests.json",
+        "inputSchema": required_schema(
+            build_schema(
+                {
+                    "suite_path": {
+                        "type": "string",
+                        "description": "Path to a PLC IO test suite JSON file.",
+                        "default": "tests\\plc\\lqr_io_tests.json",
+                    },
+                    "case_name": {
+                        "type": "string",
+                        "description": "Name of the test case to run.",
+                    },
+                    "settle_ms": {
+                        "type": "integer",
+                        "description": "Default milliseconds to wait after writes when the case does not override settle_ms.",
+                        "minimum": 0,
+                        "default": 100,
+                    },
                 },
-                "case_name": {
-                    "type": "string",
-                    "description": "Name of the test case to run.",
-                },
-                "settle_ms": {
-                    "type": "integer",
-                    "description": "Default milliseconds to wait after writes when the case does not override settle_ms.",
-                    "minimum": 0,
-                    "default": 100,
-                },
-            },
-            require_execute=True,
-            require_timeout=True,
+                require_execute=True,
+                require_timeout=True,
+            ),
+            "case_name",
         ),
     },
     {
@@ -430,3 +440,45 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         ),
     },
 ]
+
+
+TOOL_RISK_LEVELS: dict[str, str] = {
+    "plc_add_project_library": "project_write",
+    "plc_build_project": "local_write",
+    "plc_check_download": "local_write",
+    "plc_describe_ruc_package": "readonly",
+    "plc_download_ruc": "target_change",
+    "plc_find_library_for_symbol": "readonly",
+    "plc_get_target_config": "readonly",
+    "plc_list_environments": "readonly",
+    "plc_list_targets": "readonly",
+    "plc_list_variables": "local_write",
+    "plc_plan_project_library": "readonly",
+    "plc_probe_target": "local_write",
+    "plc_read_logger": "local_write",
+    "plc_read_pvi": "local_write",
+    "plc_reset_test_harness": "target_change",
+    "plc_run_arsim_closed_loop": "target_change",
+    "plc_run_io_test_case": "target_change",
+    "plc_run_test_suite": "target_change",
+    "plc_run_verification_suite": "local_write",
+    "plc_search_variables": "local_write",
+    "plc_start_arsim": "target_change",
+    "plc_verify_opcua": "local_write",
+    "plc_write_pvi": "target_change",
+}
+
+CONFIRMATION_REQUIRED_RISK_LEVELS = {"project_write", "target_change"}
+
+
+for definition in TOOL_DEFINITIONS:
+    risk_level = TOOL_RISK_LEVELS.get(definition["name"])
+    if risk_level is None:
+        continue
+    definition["annotations"] = {
+        "readOnlyHint": risk_level == "readonly",
+        "destructiveHint": risk_level in CONFIRMATION_REQUIRED_RISK_LEVELS,
+        "idempotentHint": risk_level == "readonly",
+        "openWorldHint": False,
+    }
+    definition["_meta"] = {"br-automation/riskLevel": risk_level}
