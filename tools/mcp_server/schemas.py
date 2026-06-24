@@ -415,12 +415,12 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "plc_list_variables",
-        "description": "Build and list the PLC variable catalog from project source files and target access policy. Use before Agent-directed reads/writes.",
+        "description": "Build and list the PLC variable catalog, preferring fresh Automation Studio build artifacts and falling back to source scanning. Returns source, confidence, provenance, and warnings.",
         "inputSchema": object_schema({}),
     },
     {
         "name": "plc_search_variables",
-        "description": "Search PLC variables by text, module/task, and read/write access under the current access_policy.",
+        "description": "Search PLC variables by text, module/task, and read/write access while preserving catalog source, confidence, provenance, and warnings.",
         "inputSchema": object_schema(
             {
                 "query": {

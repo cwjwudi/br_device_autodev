@@ -30,7 +30,7 @@ tools\as_library_manager.py
 <!-- BEGIN GENERATED MCP TOOL CATALOG -->
 当前 stdio MCP 暴露以下工具：
 
-MCP server version: `0.9.0`. Full catalog: [../../skills/br-plc-toolchain/references/mcp-tools.md](../../skills/br-plc-toolchain/references/mcp-tools.md)
+MCP server version: `0.10.0`. Full catalog: [../../skills/br-plc-toolchain/references/mcp-tools.md](../../skills/br-plc-toolchain/references/mcp-tools.md)
 
 | MCP Tool | Risk | Backend | Confirmation | Description |
 | --- | --- | --- | --- | --- |
@@ -55,8 +55,8 @@ MCP server version: `0.9.0`. Full catalog: [../../skills/br-plc-toolchain/refere
 | `plc_get_target_config` | `readonly` | `GetTargetConfig` | - | Read the configured target entry, OPC UA whitelist, and PVI whitelist for a target. |
 | `plc_list_targets` | `readonly` | `ListTargets` | - | List configured PLC/ARsim targets with IP, role, and automatic-download permission. |
 | `plc_list_environments` | `readonly` | `MCP native` | - | List named PLC toolchain environments from tools/plc_environments.json for one-step switching. |
-| `plc_list_variables` | `local_write` | `plc_symbol_index.py` | - | Build and list the PLC variable catalog from project source files and target access policy. Use before Agent-directed reads/writes. |
-| `plc_search_variables` | `local_write` | `plc_symbol_index.py` | - | Search PLC variables by text, module/task, and read/write access under the current access_policy. |
+| `plc_list_variables` | `local_write` | `plc_symbol_index.py` | - | Build and list the PLC variable catalog, preferring fresh Automation Studio build artifacts and falling back to source scanning. Returns source, confidence, provenance, and warnings. |
+| `plc_search_variables` | `local_write` | `plc_symbol_index.py` | - | Search PLC variables by text, module/task, and read/write access while preserving catalog source, confidence, provenance, and warnings. |
 <!-- END GENERATED MCP TOOL CATALOG -->
 
 ## 默认配置
@@ -105,6 +105,10 @@ tools\plc_environments.json
 ## 测试夹具报告
 
 IO 测试套件可声明 `fixture` 元数据和 reset 策略。报告使用固定的 `failure_stage` / `failure_stages` 分类：`validation`、`write`、`read`、`assert`、`restore`，并在 `reset_records` 中保存套件与 case 的前后恢复记录。任何 restore 失败都会把整体测试判为失败；前置 reset 失败时不会继续写测试输入。
+
+## 变量目录可信度
+
+变量目录优先读取 Automation Studio 生成的 `Temp\Includes\**\*var.h`，并结合 `Temp\Objects\Symbols.map` 判断为高可信构建产物。若产物缺失、无法解析或比 `.var` 源文件旧，则自动退回源码扫描。目录顶层和单个变量都返回 `catalog_source`、`confidence`、`generated_from`、`warnings`，Agent 必须在动态读写前检查这些字段。
 
 ## 通用参数
 

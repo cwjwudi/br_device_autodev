@@ -54,6 +54,8 @@ MCP Server 对构建、工程修改、目标状态变更和完整测试流程执
 
 IO 测试报告声明套件 `fixture`，并使用 `validation`、`write`、`read`、`assert`、`restore` 五类失败阶段。`reset_records` 记录套件和 case 前后的恢复动作；前置 reset 失败会跳过后续 case，任何最终 restore 失败都会覆盖测试成功状态并要求人工检查。
 
+变量 catalog 优先解析 Automation Studio 生成头文件，并用 `Symbols.map` 作为构建证据；生成文件缺失、不可解析或旧于 `.var` 源文件时降级到源码扫描。`catalog_source`、`confidence`、`generated_from` 和 `warnings` 会保留在列表与搜索结果中，低可信结果不得被视为运行时变量绝对事实。
+
 ## AGENTS.md、Prompt、Skill、MCP 的关系
 
 `AGENTS.md`、Prompt、Skill、MCP 是四种不同层次的约束和工具：

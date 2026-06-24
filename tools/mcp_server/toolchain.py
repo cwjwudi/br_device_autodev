@@ -220,7 +220,9 @@ def summarize(command: str, data: dict[str, Any]) -> str:
     if command in ("ListVariables", "SearchVariables"):
         variables = data.get("variables") or []
         mode = ((data.get("access_policy") or {}).get("mode") or "unknown")
-        return f"{len(variables)} variable(s), access_policy={mode}"
+        source = data.get("catalog_source") or "unknown"
+        confidence = data.get("confidence") or "unknown"
+        return f"{len(variables)} variable(s), source={source}, confidence={confidence}, access_policy={mode}"
     if command == "Probe":
         return " / ".join(
             str(v)
@@ -950,11 +952,16 @@ def run_symbol_index(arguments: dict[str, Any], *, search: bool) -> dict[str, An
     options = resolve_call_options(arguments, default_target="arsim")
     script = REPO_ROOT / "tools" / "plc_symbol_index.py"
     catalog_path = REPO_ROOT / "tools" / ".generated" / "plc_symbol_catalog.json"
+    project_file = Path(options["project_path"])
+    if not project_file.is_absolute():
+        project_file = REPO_ROOT / project_file
     args = [
         "python",
         str(script),
         "--targets-file",
         options["targets_path"],
+        "--project-root",
+        str(project_file.parent),
         "--output-file",
         str(catalog_path),
     ]

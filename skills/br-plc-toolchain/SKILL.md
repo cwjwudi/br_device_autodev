@@ -107,6 +107,8 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 
 在 `catalog_policy` 或 `agent_directed` 模式下，Agent 不应凭空猜测变量名。标准顺序是先调用 `plc_search_variables` 或 `plc_list_variables`，再把选出的变量名传给 `plc_read_pvi`、`plc_verify_opcua`、`plc_write_pvi` 或 IO 测试工具。
 
+使用 catalog 前必须检查 `catalog_source`、`confidence`、`generated_from` 和 `warnings`。优先使用新鲜 Automation Studio 构建产物产生的高可信目录；`source_scan/low` 只作为候选发现依据，实际访问仍需策略校验和读回确认。
+
 动态 PVI 写入的默认验证方式是：
 
 ```
