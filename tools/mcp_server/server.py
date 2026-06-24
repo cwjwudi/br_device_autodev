@@ -3,8 +3,17 @@ from __future__ import annotations
 import json
 import sys
 import traceback
+import uuid
 from typing import Any
 
+from audit import AUDIT_DIR as DEFAULT_AUDIT_DIR, write_audit_event
+from locks import (
+    CRITICAL_TOOLS,
+    LOCK_DIR as DEFAULT_LOCK_DIR,
+    LockConflict,
+    acquire_locks,
+    lock_keys_for_tool,
+)
 from schemas import EXPLICIT_TARGET_RISK_LEVELS, TOOL_DEFINITIONS, TOOL_RISK_LEVELS
 from toolchain import TOOLS, ToolchainError
 from validation import validate_json_schema
@@ -14,6 +23,8 @@ from version import __version__
 SERVER_INFO = {"name": "br-plc-toolchain", "version": __version__}
 PROTOCOL_VERSION = "2024-11-05"
 TOOL_DEFINITIONS_BY_NAME = {definition["name"]: definition for definition in TOOL_DEFINITIONS}
+AUDIT_DIR = DEFAULT_AUDIT_DIR
+LOCK_DIR = DEFAULT_LOCK_DIR
 
 
 def make_response(request_id: Any, result: Any) -> dict[str, Any]:
@@ -82,43 +93,118 @@ def handle_tools_call(params: dict[str, Any]) -> dict[str, Any]:
                 ),
             }
         )
+    operation_id = uuid.uuid4().hex
     if validation_errors:
-        return text_result(
-            {
-                "ok": False,
-                "tool": name,
-                "error": "Tool argument validation failed.",
-                "validation_errors": validation_errors,
-            },
-            is_error=True,
-        )
+        payload = {
+            "ok": False,
+            "tool": name,
+            "error": "Tool argument validation failed.",
+            "validation_errors": validation_errors,
+        }
+        if str(name) in CRITICAL_TOOLS:
+            audit_arguments = arguments if isinstance(arguments, dict) else {}
+            try:
+                audit_path = write_audit_event(
+                    tool=str(name),
+                    status="rejected",
+                    arguments=audit_arguments,
+                    operation_id=operation_id,
+                    lock_keys=[],
+                    error=payload["error"],
+                    directory=AUDIT_DIR,
+                )
+                payload["audit"] = [audit_path]
+            except Exception as exc:
+                payload["audit_error"] = str(exc)
+        return text_result(payload, is_error=True)
 
+    assert isinstance(arguments, dict)
+    tool_name = str(name)
+    lock_keys = lock_keys_for_tool(tool_name, arguments)
+    audit_paths: list[str] = []
+    if tool_name in CRITICAL_TOOLS:
+        try:
+            audit_paths.append(
+                write_audit_event(
+                    tool=tool_name,
+                    status="started",
+                    arguments=arguments,
+                    operation_id=operation_id,
+                    lock_keys=lock_keys,
+                    directory=AUDIT_DIR,
+                )
+            )
+        except Exception as exc:
+            return text_result(
+                {
+                    "ok": False,
+                    "tool": name,
+                    "error": f"Audit initialization failed; action was not executed: {exc}",
+                },
+                is_error=True,
+            )
+
+    result: dict[str, Any] | None = None
+    error_payload: dict[str, Any] | None = None
+    final_status = "failed"
     try:
-        assert isinstance(arguments, dict)
-        result = tool(arguments)
-        return text_result(result, is_error=False)
+        with acquire_locks(
+            lock_keys,
+            directory=LOCK_DIR,
+            metadata={"tool": tool_name, "operation_id": operation_id},
+        ):
+            result = tool(arguments)
+        final_status = "succeeded" if result.get("ok") else "failed"
+    except LockConflict as exc:
+        final_status = "blocked"
+        error_payload = {
+            "ok": False,
+            "tool": name,
+            "error": str(exc),
+            "lock_conflict": {
+                "key": exc.key,
+                "path": str(exc.path),
+                "holder": exc.holder,
+            },
+        }
     except ToolchainError as exc:
-        return text_result(
-            {
-                "ok": False,
-                "tool": name,
-                "error": str(exc),
-                "exit_code": exc.exit_code,
-                "stdout": exc.stdout,
-                "stderr": exc.stderr,
-            },
-            is_error=True,
-        )
+        error_payload = {
+            "ok": False,
+            "tool": name,
+            "error": str(exc),
+            "exit_code": exc.exit_code,
+            "stdout": exc.stdout,
+            "stderr": exc.stderr,
+        }
     except Exception as exc:
-        return text_result(
-            {
-                "ok": False,
-                "tool": name,
-                "error": str(exc),
-                "traceback": traceback.format_exc(),
-            },
-            is_error=True,
-        )
+        error_payload = {
+            "ok": False,
+            "tool": name,
+            "error": str(exc),
+            "traceback": traceback.format_exc(),
+        }
+
+    payload = result if result is not None else error_payload
+    assert payload is not None
+    if tool_name in CRITICAL_TOOLS:
+        try:
+            audit_paths.append(
+                write_audit_event(
+                    tool=tool_name,
+                    status=final_status,
+                    arguments=arguments,
+                    operation_id=operation_id,
+                    lock_keys=lock_keys,
+                    result=result,
+                    error=error_payload.get("error") if error_payload else None,
+                    directory=AUDIT_DIR,
+                )
+            )
+        except Exception as exc:
+            payload["audit_error"] = str(exc)
+    if audit_paths:
+        payload["audit"] = audit_paths
+    return text_result(payload, is_error=error_payload is not None)
 
 
 def handle_request(message: dict[str, Any]) -> dict[str, Any] | None:

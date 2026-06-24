@@ -130,6 +130,7 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 8. **禁止写 Safety、物理 I/O、系统变量**。输出变量默认只读，不写。
 9. **禁止把 ARsim 强制下载授权扩展到物理 PLC**。`force_arsim_download=true` 只允许用户明确授权后的 `role=arsim` 目标。
 10. **禁止目标变更工具使用隐式目标**。启动、下载、写变量和测试套件必须显式传入 `target` 或 `environment`；只读和本地工具未选择目标时仅回退到本机 `arsim`。
+11. **禁止绕过锁和审计执行关键动作**。构建、工程修改、启动、下载、写变量和测试套件应通过 MCP 调用；锁冲突必须等待或停止，审计路径应保留在结果中。
 
 详细安全规则见：`references/safety.md`
 

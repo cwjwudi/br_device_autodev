@@ -30,7 +30,7 @@ tools\as_library_manager.py
 <!-- BEGIN GENERATED MCP TOOL CATALOG -->
 当前 stdio MCP 暴露以下工具：
 
-MCP server version: `0.7.0`. Full catalog: [../../skills/br-plc-toolchain/references/mcp-tools.md](../../skills/br-plc-toolchain/references/mcp-tools.md)
+MCP server version: `0.8.0`. Full catalog: [../../skills/br-plc-toolchain/references/mcp-tools.md](../../skills/br-plc-toolchain/references/mcp-tools.md)
 
 | MCP Tool | Risk | Backend | Confirmation | Description |
 | --- | --- | --- | --- | --- |
@@ -97,6 +97,10 @@ tools\plc_environments.json
 ## 访问策略
 
 `tools\plc_access_policy.py` 是 PVI/OPC UA 变量访问判断的唯一权威实现。Python 工具直接调用该模块，PowerShell 通过 `tools\plc_access_policy_cli.py` 获取同一份结构化结论；策略响应包含 `ok`、`errors`、`policy_mode`、`target_role`、`requested_items` 和 `blocked_reason`。
+
+## 锁与审计
+
+构建、工程修改和所有目标变更工具由 MCP Server 自动加锁。工程锁按 `project_path + config` 隔离，目标锁按 `targets_path + target` 隔离；锁文件位于 `tools\.generated\locks\`。关键调用在开始及成功、失败、拒绝或锁冲突时写入 `tools\.generated\audit\`，审计只记录 PVI 写入变量名和数量，不记录写入值。
 
 ## 通用参数
 

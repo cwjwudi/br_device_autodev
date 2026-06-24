@@ -50,6 +50,8 @@ flowchart TD
 
 变量访问策略由 `tools/plc_access_policy.py` 唯一实现。`tools/plc_access_policy_cli.py` 提供稳定 JSON 契约，PowerShell 的 PVI/OPC UA 读取门控也调用该 CLI，不再单独维护白名单、目标角色或黑名单判断。
 
+MCP Server 对构建、工程修改、目标状态变更和完整测试流程执行文件锁与审计。锁位于 `tools/.generated/locks/`，同一工程/config 或同一目标不能并发执行关键动作；审计位于 `tools/.generated/audit/`，记录开始和最终状态、目标角色、环境、请求摘要、报告/日志路径，并对写入值和敏感字段脱敏。
+
 ## AGENTS.md、Prompt、Skill、MCP 的关系
 
 `AGENTS.md`、Prompt、Skill、MCP 是四种不同层次的约束和工具：
