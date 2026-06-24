@@ -95,42 +95,37 @@ tools/mcp_server/
 
 ### MCP 工具清单
 
-第一批必须实现：
+<!-- BEGIN GENERATED MCP TOOL CATALOG -->
+当前已实现工具：
 
-| MCP Tool | 对应 CLI | 用途 |
-| --- | --- | --- |
-| `plc_build_project` | `Build` | 构建 AS 工程，可选生成 RUC |
-| `plc_start_arsim` | `StartArsim` | 启动或复用 ARsim |
-| `plc_probe_target` | `Probe` | 只读读取 CPU/AR/状态 |
-| `plc_describe_ruc_package` | `DescribePackage` | 读取 RUC 包元信息 |
-| `plc_check_download` | `CheckDownload` | 下载前安全检查 |
-| `plc_download_ruc` | `Download` | 安全检查通过后下载 |
-| `plc_verify_opcua` | `VerifyOpcUa` | 读取 OPC UA 白名单节点 |
-| `plc_read_pvi` | `ReadPvi` | 读取 PVI 白名单变量 |
+MCP server version: `0.3.1`. Full catalog: [../skills/br-plc-toolchain/references/mcp-tools.md](../skills/br-plc-toolchain/references/mcp-tools.md)
 
-第二批已实现：
-
-| MCP Tool | 用途 |
-| --- | --- |
-| `plc_run_arsim_closed_loop` | 启动 ARsim -> 构建 -> 检查 -> 下载 -> 验证 |
-| `plc_run_verification_suite` | 统一运行 OPC UA / PVI 验证并输出判定 |
-| `plc_get_target_config` | 读取指定目标配置 |
-| `plc_list_targets` | 列出可用目标和安全角色 |
-
-第三批建议实现：输入输出测试能力（M6）：
-
-| MCP Tool | 用途 | 安全门 |
-| --- | --- | --- |
-| `plc_write_pvi` | 只对白名单测试变量执行 PVI 写入 | 必须 `execute=true`，禁止生产目标 |
-| `plc_run_io_test_case` | 执行单个输入 -> 等待 -> 输出读取 -> 断言测试 | 写入变量必须在白名单 |
-| `plc_run_test_suite` | 批量执行 JSON 测试套件并生成汇总报告 | 每条 case 独立记录 pass/fail |
-| `plc_reset_test_harness` | 将测试 harness 变量恢复到安全状态 | 只写 reset 白名单变量 |
-
-第四批已实现：Logger 只读诊断能力（M7）：
-
-| MCP Tool | 用途 | 安全门 |
-| --- | --- | --- |
-| `plc_read_logger` | 通过 PVITransfer `Logger` 命令读取 PLC/AR logger 模块，输出 html/csvx/arl/logpkg | 只读；模块必须在 `logger.allowed_modules` 白名单；默认禁用 Safety |
+| MCP Tool | Risk | Backend | Confirmation | Description |
+| --- | --- | --- | --- | --- |
+| `plc_build_project` | `local_write` | `Build` | - | Build the B&R Automation Studio project. Optionally generate a RUC package for download. |
+| `plc_find_library_for_symbol` | `readonly` | `as_library_manager.py find` | - | Find the trusted, locally installed Automation Studio libraries that declare a missing function, function block, type, constant, or C symbol. |
+| `plc_plan_project_library` | `readonly` | `as_library_manager.py plan` | - | Plan adding an installed Automation Studio library and its dependencies without modifying the project. Rejects ambiguous versions, incompatible Technology Packages, and Safety-related libraries. |
+| `plc_add_project_library` | `project_write` | `as_library_manager.py add + Build` | `execute=true` | Transactionally copy a trusted installed Automation Studio library and dependencies into Logical/Libraries, update Package.pkg, and rebuild by default. Requires execute=true and rolls back automatically when the validation build fails. |
+| `plc_start_arsim` | `target_change` | `StartArsim` | `execute=true` | Start or reuse an existing ARsim simulation instance for the specified target. |
+| `plc_probe_target` | `local_write` | `Probe` | - | Read-only probe of a configured B&R PLC/ARsim target via PVITransfer. Returns CPU type, AR version, PLC status, and log paths. |
+| `plc_describe_ruc_package` | `readonly` | `DescribePackage` | - | Read the metadata of a RUC package zip file: CPU type, AR version, config version, runtime type, etc. |
+| `plc_check_download` | `local_write` | `CheckDownload` | - | Run the download safety check without downloading. Compares the RUC package metadata with the target probe result. |
+| `plc_download_ruc` | `target_change` | `Download` | `execute=true` | Download the RUC package to the target. Safety gate: requires execute=true, and plc_check_download must pass on the server side before actual transfer. |
+| `plc_verify_opcua` | `local_write` | `VerifyOpcUa` | - | Read OPC UA validation nodes from the target. Returns values, types, and timestamps for each configured node. |
+| `plc_read_pvi` | `local_write` | `ReadPvi` | - | Read PLC variables via PVI using hilch/Pvi.py. Default whitelist mode requires configured variables; Agent-directed mode allows explicit variables after policy checks. |
+| `plc_read_logger` | `local_write` | `ReadLogger` | - | Read a whitelisted PLC/AR logger module through PVITransfer Logger. Returns report/log paths and a compact summary, never raw HTML/CSV content. |
+| `plc_write_pvi` | `target_change` | `WritePvi` | `execute=true` | Write PVI variables under access_policy. Default whitelist mode requires pvi.write_whitelist; Agent-directed mode allows explicit variables after policy checks. Requires execute=true and refuses production targets. |
+| `plc_run_arsim_closed_loop` | `target_change` | `RunArsimClosedLoop` | `execute=true` | Run the standard ARsim closed loop: build RUC package, start ARsim, probe, describe package, safety check, optional explicit download, and verification report. |
+| `plc_run_verification_suite` | `local_write` | `RunVerificationSuite` | - | Run feedback verification and write a unified report. OPC UA is attempted first; PVI is used as a fallback. |
+| `plc_run_io_test_case` | `target_change` | `RunIoTestCase` | `execute=true` | Run one PLC IO test case from a suite: reset, access-policy-gated PVI writes, settle, readback, checks, and restore. |
+| `plc_run_test_suite` | `target_change` | `RunTestSuite` | `execute=true` | Run a full PLC IO test suite and write a report with per-case writes, readback, checks, and restore results. |
+| `plc_reset_test_harness` | `target_change` | `ResetTestHarness` | `execute=true` | Restore/reset the PLC test harness using pvi.restore_writes. Requires execute=true and refuses production targets. |
+| `plc_get_target_config` | `readonly` | `GetTargetConfig` | - | Read the configured target entry, OPC UA whitelist, and PVI whitelist for a target. |
+| `plc_list_targets` | `readonly` | `ListTargets` | - | List configured PLC/ARsim targets with IP, role, and automatic-download permission. |
+| `plc_list_environments` | `readonly` | `MCP native` | - | List named PLC toolchain environments from tools/plc_environments.json for one-step switching. |
+| `plc_list_variables` | `local_write` | `plc_symbol_index.py` | - | Build and list the PLC variable catalog from project source files and target access policy. Use before Agent-directed reads/writes. |
+| `plc_search_variables` | `local_write` | `plc_symbol_index.py` | - | Search PLC variables by text, module/task, and read/write access under the current access_policy. |
+<!-- END GENERATED MCP TOOL CATALOG -->
 
 ### 参数约定
 
@@ -419,7 +414,7 @@ prompts/plc_toolchain/
 验收（全部已通过 2026-05-22 测试）：
 
 - `plc_build_project(target="arsim")` 构建成功，返回 0 error(s), 2 warning(s)。（已通过）
-- `plc_start_arsim(target="arsim")` 复用或启动 ARsim 实例。（已通过）
+- `plc_start_arsim(target="arsim", execute=true)` 复用或启动 ARsim 实例。（已通过）
 - `plc_probe_target(target="arsim")` 返回 CPU/AR/状态。（已通过）
 - `plc_describe_ruc_package(target="arsim")` 返回包元信息 AR000 / 6.5.1。（已通过）
 - `plc_check_download(target="arsim")` 返回 `ok=true`。（已通过）
@@ -437,14 +432,15 @@ prompts/plc_toolchain/
 
 已完成内容：
 
-- `skills/br-plc-toolchain/SKILL.md` — 触发条件、MCP 工具速查表、标准操作顺序、安全禁止项、失败处理
+- `skills/br-plc-toolchain/SKILL.md` — 触发条件、标准操作顺序、安全禁止项、失败处理
+- `skills/br-plc-toolchain/references/mcp-tools.md` — 从 schema 自动生成的完整 MCP 工具目录
 - `skills/br-plc-toolchain/references/safety.md` — 目标分类权限表、下载五步检查清单、生产/Safety/OPC UA/PVI 安全规则、构建结果判断、日志审计
 - `skills/br-plc-toolchain/references/command-flow.md` — 5 种标准流程：ARsim 闭环验证、仅安全检查、功能修改反馈、下载失败诊断、测试 PLC 只读验证
 - `skills/br-plc-toolchain/references/verification.md` — OPC UA 6 个白名单节点详情、PVI 4 个白名单变量详情、验证策略、报告格式
 
 验收：
 
-- Skill 文件包含完整 MCP 工具速查表和参数说明。（已满足）
+- Skill 引用自动生成的完整 MCP 工具目录，不再手工复制工具表。（已满足）
 - SKILL.md 明确列出 6 条安全禁止项。（已满足）
 - references/safety.md 详细定义下载前五步检查清单。（已满足）
 - command-flow.md 覆盖 5 种标准操作流程及失败处置。（已满足）

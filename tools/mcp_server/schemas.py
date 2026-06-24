@@ -468,6 +468,32 @@ TOOL_RISK_LEVELS: dict[str, str] = {
     "plc_write_pvi": "target_change",
 }
 
+TOOL_BACKENDS: dict[str, str] = {
+    "plc_add_project_library": "as_library_manager.py add + Build",
+    "plc_build_project": "Build",
+    "plc_check_download": "CheckDownload",
+    "plc_describe_ruc_package": "DescribePackage",
+    "plc_download_ruc": "Download",
+    "plc_find_library_for_symbol": "as_library_manager.py find",
+    "plc_get_target_config": "GetTargetConfig",
+    "plc_list_environments": "MCP native",
+    "plc_list_targets": "ListTargets",
+    "plc_list_variables": "plc_symbol_index.py",
+    "plc_plan_project_library": "as_library_manager.py plan",
+    "plc_probe_target": "Probe",
+    "plc_read_logger": "ReadLogger",
+    "plc_read_pvi": "ReadPvi",
+    "plc_reset_test_harness": "ResetTestHarness",
+    "plc_run_arsim_closed_loop": "RunArsimClosedLoop",
+    "plc_run_io_test_case": "RunIoTestCase",
+    "plc_run_test_suite": "RunTestSuite",
+    "plc_run_verification_suite": "RunVerificationSuite",
+    "plc_search_variables": "plc_symbol_index.py",
+    "plc_start_arsim": "StartArsim",
+    "plc_verify_opcua": "VerifyOpcUa",
+    "plc_write_pvi": "WritePvi",
+}
+
 CONFIRMATION_REQUIRED_RISK_LEVELS = {"project_write", "target_change"}
 
 
@@ -481,4 +507,7 @@ for definition in TOOL_DEFINITIONS:
         "idempotentHint": risk_level == "readonly",
         "openWorldHint": False,
     }
-    definition["_meta"] = {"br-automation/riskLevel": risk_level}
+    definition["_meta"] = {
+        "br-automation/riskLevel": risk_level,
+        "br-automation/backend": TOOL_BACKENDS.get(definition["name"]),
+    }

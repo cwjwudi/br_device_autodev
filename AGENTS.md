@@ -27,23 +27,13 @@
 
 本项目包含一个完整的 MCP Server (`tools/mcp_server/server.py`)，基础闭环工具包括：
 
-| 工具 | 说明 |
-|---|---|
-| `plc_build_project` | 构建 AS 工程，可选生成 RUC 包 |
-| `plc_find_library_for_symbol` | 按缺失符号搜索本机可信 AS Library |
-| `plc_plan_project_library` | 检查库版本、递归依赖和 Technology Package 兼容性 |
-| `plc_add_project_library` | 事务式添加库并默认重新构建，失败自动回滚（需 execute=true） |
-| `plc_start_arsim` | 启动或复用 ARsim 实例 |
-| `plc_probe_target` | 只读探针：CPU/AR/PLC 状态 |
-| `plc_describe_ruc_package` | 读取 RUC 包元信息 |
-| `plc_check_download` | 下载前安全检查 |
-| `plc_download_ruc` | 安全门控下载（需 execute=true） |
-| `plc_verify_opcua` | 读取 OPC UA 白名单节点 |
-| `plc_read_pvi` | 读取 PVI 白名单变量 |
-| `plc_search_variables` / `plc_list_variables` | 搜索或列出 PLC 变量目录，供 Agent 动态选择变量 |
-| `plc_write_pvi` | 在 `access_policy` 和 `execute=true` 门控下写入 PVI 变量 |
+完整工具、风险等级、后端和确认参数见：
 
-标准闭环顺序：确认实际 config 和 Simulation 设置 -> build -> start_arsim -> probe -> describe_package -> check_download -> download(execute=true) -> verify_opcua / read_pvi
+- `skills/br-plc-toolchain/references/mcp-tools.md`
+
+该目录由 `tools/generate_mcp_docs.py` 从 MCP schema 自动生成，不手工维护工具表。
+
+标准闭环顺序：确认实际 config 和 Simulation 设置 -> build -> start_arsim(execute=true) -> probe -> describe_package -> check_download -> download(execute=true) -> verify_opcua / read_pvi
 
 缺失 Library 顺序：build 获取缺失符号 -> find_library_for_symbol -> plan_project_library -> add_project_library(execute=true)。只允许使用本机可信 AS 安装库，禁止自动添加 Safety 库。
 

@@ -52,6 +52,7 @@ class McpContractTests(unittest.TestCase):
     def test_risk_classification_covers_every_tool(self) -> None:
         self.assertEqual(set(self.definitions_by_name), set(schemas.TOOL_RISK_LEVELS))
         self.assertTrue(set(schemas.TOOL_RISK_LEVELS.values()).issubset(VALID_RISK_LEVELS))
+        self.assertEqual(set(self.definitions_by_name), set(schemas.TOOL_BACKENDS))
 
     def test_annotations_match_risk_classification(self) -> None:
         for name, definition in self.definitions_by_name.items():
@@ -67,6 +68,7 @@ class McpContractTests(unittest.TestCase):
                 self.assertEqual(risk == "readonly", annotations.get("idempotentHint"))
                 self.assertIs(annotations.get("openWorldHint"), False)
                 self.assertEqual(risk, meta.get("br-automation/riskLevel"))
+                self.assertEqual(schemas.TOOL_BACKENDS[name], meta.get("br-automation/backend"))
 
     def test_state_changing_tools_require_execute(self) -> None:
         for name, risk in schemas.TOOL_RISK_LEVELS.items():

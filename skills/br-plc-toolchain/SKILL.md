@@ -26,31 +26,11 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 
 ## MCP 工具集
 
-全部操作通过 MCP Server 完成，不直接调用 PowerShell 脚本。可用工具：
+全部操作通过 MCP Server 完成，不直接调用 PowerShell 脚本。完整工具、风险等级、后端和确认参数见：
 
-| 工具 | 用途 | 关键约束 |
-|---|---|---|
-| `plc_build_project` | 构建工程，可选生成 RUC 包 | `build_ruc_package=true` 用于构建后下载 |
-| `plc_find_library_for_symbol` | 按缺失符号搜索本机可信 AS 库 | 只读；知识库结果仅作辅助，本机安装库为准 |
-| `plc_plan_project_library` | 解析待添加库、递归依赖与版本 | 只读；候选冲突或 Technology Package 不兼容时停止 |
-| `plc_add_project_library` | 事务式添加库并默认重新构建 | 必须 `execute=true`；构建失败自动回滚；禁止 Safety 库 |
-| `plc_start_arsim` | 启动或复用 ARsim | 仅限 `target=arsim` |
-| `plc_probe_target` | 只读探针：CPU/AR/状态 | 下载前必须先调用 |
-| `plc_describe_ruc_package` | 读取 RUC 包元信息 | 下载前必须先调用 |
-| `plc_check_download` | 包-目标兼容性安全检查 | 通过后才能下载；ARsim 强制模式需用户授权并传 `force_arsim_download=true` |
-| `plc_download_ruc` | 执行下载 | `execute=true` 才实际下载；ARsim 强制模式只允许 `role=arsim` |
-| `plc_verify_opcua` | 读取 OPC UA 白名单节点 | 首选反馈验证 |
-| `plc_read_pvi` | 读取 PVI 白名单变量 | OPC UA 不可用时的备用方案 |
-| `plc_list_variables` | 列出 PLC 变量目录 | Agent 动态读写前先调用 |
-| `plc_search_variables` | 按模块/名称/读写权限搜索变量 | Agent 动态读写前先调用 |
-| `plc_write_pvi` | 写入 PVI 测试变量或策略允许的动态变量 | 必须 `execute=true`，禁止生产目标 |
-| `plc_run_arsim_closed_loop` | ARsim 闭环：构建、检查、下载、验证、报告 | 下载仍需 `execute=true` |
-| `plc_run_verification_suite` | OPC UA 优先、PVI 备用的统一验证 | 只读，写报告 |
-| `plc_run_io_test_case` | 单个输入输出测试 | 写入和读回均受 `access_policy` 约束 |
-| `plc_run_test_suite` | 批量运行测试套件 | 输出 pass/fail 报告 |
-| `plc_reset_test_harness` | 恢复测试变量安全状态 | 必须 `execute=true` |
-| `plc_get_target_config` | 读取指定目标配置 | 只读 |
-| `plc_list_targets` | 列出目标和安全角色 | 只读 |
+- `skills/br-plc-toolchain/references/mcp-tools.md`
+
+该目录由 `tools/generate_mcp_docs.py` 从 MCP schema 自动生成，不手工维护工具表。
 
 ## 标准操作顺序
 
@@ -84,7 +64,7 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 ```
 1. 确认实际 config、Simulation=1 和 arsim_loader_exe 路径
 2. plc_build_project(config=<config>, build_ruc_package=true) → 构建 + 生成 RUC 包/仿真文件
-3. plc_start_arsim(config=<config>)                          → 确保 ARsim 在运行
+3. plc_start_arsim(config=<config>, execute=true)            → 确保 ARsim 在运行
 4. plc_probe_target(config=<config>)                         → 确认目标状态
 5. plc_describe_ruc_package(config=<config>)                 → 读取包信息
 6. plc_check_download(config=<config>)                       → 安全检查
