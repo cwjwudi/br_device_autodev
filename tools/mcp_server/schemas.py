@@ -10,8 +10,8 @@ COMMON_PROPERTIES: dict[str, Any] = {
     },
     "target": {
         "type": "string",
-        "description": "Target name from tools/plc_targets.local.json. Defaults to arsim.",
-        "default": "arsim",
+        "description": "Target name from the selected targets file. Target-changing tools require an explicit target or environment; read-only and local tools fall back to arsim.",
+        "minLength": 1,
     },
     "project_path": {
         "type": "string",
@@ -495,6 +495,7 @@ TOOL_BACKENDS: dict[str, str] = {
 }
 
 CONFIRMATION_REQUIRED_RISK_LEVELS = {"project_write", "target_change"}
+EXPLICIT_TARGET_RISK_LEVELS = {"target_change"}
 
 
 for definition in TOOL_DEFINITIONS:

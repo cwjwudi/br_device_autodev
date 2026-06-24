@@ -5,7 +5,7 @@ import sys
 import traceback
 from typing import Any
 
-from schemas import TOOL_DEFINITIONS
+from schemas import EXPLICIT_TARGET_RISK_LEVELS, TOOL_DEFINITIONS, TOOL_RISK_LEVELS
 from toolchain import TOOLS, ToolchainError
 from validation import validate_json_schema
 from version import __version__
@@ -67,6 +67,21 @@ def handle_tools_call(params: dict[str, Any]) -> dict[str, Any]:
     if arguments is None:
         arguments = {}
     validation_errors = validate_json_schema(arguments, definition["inputSchema"])
+    risk_level = TOOL_RISK_LEVELS[str(name)]
+    has_explicit_target = isinstance(arguments, dict) and any(
+        isinstance(arguments.get(key), str) and bool(arguments[key].strip())
+        for key in ("target", "environment")
+    )
+    if risk_level in EXPLICIT_TARGET_RISK_LEVELS and not has_explicit_target:
+        validation_errors.append(
+            {
+                "path": "$.target",
+                "keyword": "explicitTarget",
+                "message": (
+                    "Target-changing tools require an explicit non-empty target or environment."
+                ),
+            }
+        )
     if validation_errors:
         return text_result(
             {

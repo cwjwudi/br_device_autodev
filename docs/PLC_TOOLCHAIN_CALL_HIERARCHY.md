@@ -244,6 +244,8 @@ Logger 读取只返回摘要和报告路径，不把大段 HTML/CSV 内容直接
 }
 ```
 
+MCP 目标变更工具不会采用隐式目标：启动 ARsim、下载、PVI 写入、测试执行和测试复位必须显式传入 `target` 或 `environment`。只读和本地操作未选择目标时统一回退到 `arsim`；PowerShell 入口同样以 `arsim` 为安全默认，并要求变更命令显式提供 `-Target`。
+
 实际运行时必须读取当前 `tools/plc_targets.local.json` 或传入的 `targets_path` 判断模式。默认配置保持 `whitelist`；需要动态访问时应显式选择并配置 `dev_agent_directed`，而不是修改团队默认文件。该模式不会关闭 production、Safety/I/O/system、`execute=true` 等硬安全门。
 
 PVI 动态变量失败要区分两类：

@@ -4,7 +4,7 @@ param(
 
     [string]$ProjectPath = "PrintDemo\Huitong_FrontEval.apj",
     [string]$Config = "x1685",
-    [string]$Target = "test_plc",
+    [string]$Target = "arsim",
     [string]$TargetsPath = "tools\plc_targets.local.json",
     [string]$PackagePath = "",
     [string]$TransferPilPath = "",
@@ -1323,6 +1323,18 @@ function Invoke-IoTestRunner {
 }
 
 try {
+$targetChangingCommands = @(
+    "StartArsim",
+    "Download",
+    "WritePvi",
+    "RunIoTestCase",
+    "RunTestSuite",
+    "ResetTestHarness",
+    "RunArsimClosedLoop"
+)
+if (($Command -in $targetChangingCommands) -and (-not $PSBoundParameters.ContainsKey("Target"))) {
+    throw "Command '$Command' requires an explicit -Target. No real device is selected implicitly."
+}
 switch ($Command) {
     "Help" {
         @"

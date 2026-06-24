@@ -50,11 +50,24 @@ def load_environment(name: str | None) -> dict[str, Any]:
     return env
 
 
-def resolve_call_options(arguments: dict[str, Any], *, default_target: str) -> dict[str, str]:
+def resolve_call_options(
+    arguments: dict[str, Any],
+    *,
+    default_target: str = "arsim",
+    require_explicit_target: bool = False,
+) -> dict[str, str]:
     env_name = arguments.get("environment")
     if env_name is not None and not isinstance(env_name, str):
         raise ValueError("environment must be a string.")
     env = load_environment(env_name)
+
+    explicit_target = arguments.get("target")
+    has_target = isinstance(explicit_target, str) and bool(explicit_target.strip())
+    has_environment = isinstance(env_name, str) and bool(env_name.strip())
+    if require_explicit_target and not (has_target or has_environment):
+        raise ValueError(
+            "Target-changing tools require an explicit non-empty target or environment."
+        )
 
     def pick(name: str, default: str) -> str:
         value = arguments.get(name)
@@ -459,7 +472,7 @@ def plc_read_pvi(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def plc_read_logger(arguments: dict[str, Any]) -> dict[str, Any]:
-    options = resolve_call_options(arguments, default_target="test_plc")
+    options = resolve_call_options(arguments, default_target="arsim")
     target = options["target"]
     logger_type = str(arguments.get("logger_type") or "System")
     logger_name = str(arguments.get("logger_name") or "$arlogsys")
@@ -483,7 +496,9 @@ def plc_read_logger(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def plc_write_pvi(arguments: dict[str, Any]) -> dict[str, Any]:
-    options = resolve_call_options(arguments, default_target="arsim")
+    options = resolve_call_options(
+        arguments, default_target="arsim", require_explicit_target=True
+    )
     target = options["target"]
     writes = arguments.get("writes")
     if not isinstance(writes, list) or not writes:
@@ -689,7 +704,9 @@ def plc_add_project_library(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def plc_start_arsim(arguments: dict[str, Any]) -> dict[str, Any]:
-    options = resolve_call_options(arguments, default_target="arsim")
+    options = resolve_call_options(
+        arguments, default_target="arsim", require_explicit_target=True
+    )
     target = options["target"]
     if arguments.get("execute") is not True:
         data = {
@@ -728,7 +745,9 @@ def plc_describe_ruc_package(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def plc_download_ruc(arguments: dict[str, Any]) -> dict[str, Any]:
-    options = resolve_call_options(arguments, default_target="arsim")
+    options = resolve_call_options(
+        arguments, default_target="arsim", require_explicit_target=True
+    )
     target = options["target"]
     execute = arguments.get("execute") is True
     data = run_plc_toolchain(
@@ -765,7 +784,9 @@ def plc_verify_opcua(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def plc_run_arsim_closed_loop(arguments: dict[str, Any]) -> dict[str, Any]:
-    options = resolve_call_options(arguments, default_target="arsim")
+    options = resolve_call_options(
+        arguments, default_target="arsim", require_explicit_target=True
+    )
     target = options["target"]
     execute = arguments.get("execute") is True
     data = run_plc_toolchain(
@@ -795,7 +816,9 @@ def plc_run_verification_suite(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def plc_run_io_test_case(arguments: dict[str, Any]) -> dict[str, Any]:
-    options = resolve_call_options(arguments, default_target="test_plc")
+    options = resolve_call_options(
+        arguments, default_target="arsim", require_explicit_target=True
+    )
     target = options["target"]
     case_name = arguments.get("case_name")
     if not case_name:
@@ -817,7 +840,9 @@ def plc_run_io_test_case(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def plc_run_test_suite(arguments: dict[str, Any]) -> dict[str, Any]:
-    options = resolve_call_options(arguments, default_target="test_plc")
+    options = resolve_call_options(
+        arguments, default_target="arsim", require_explicit_target=True
+    )
     target = options["target"]
     execute = arguments.get("execute") is True
     data = run_plc_toolchain(
@@ -835,7 +860,9 @@ def plc_run_test_suite(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def plc_reset_test_harness(arguments: dict[str, Any]) -> dict[str, Any]:
-    options = resolve_call_options(arguments, default_target="test_plc")
+    options = resolve_call_options(
+        arguments, default_target="arsim", require_explicit_target=True
+    )
     target = options["target"]
     execute = arguments.get("execute") is True
     data = run_plc_toolchain(

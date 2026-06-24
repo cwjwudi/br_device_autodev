@@ -64,11 +64,11 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 ```
 1. 确认实际 config、Simulation=1 和 arsim_loader_exe 路径
 2. plc_build_project(config=<config>, build_ruc_package=true) → 构建 + 生成 RUC 包/仿真文件
-3. plc_start_arsim(config=<config>, execute=true)            → 确保 ARsim 在运行
+3. plc_start_arsim(target=arsim, config=<config>, execute=true) → 确保 ARsim 在运行
 4. plc_probe_target(config=<config>)                         → 确认目标状态
 5. plc_describe_ruc_package(config=<config>)                 → 读取包信息
 6. plc_check_download(config=<config>)                       → 安全检查
-7. plc_download_ruc(config=<config>, execute=true)           → 下载到 ARsim
+7. plc_download_ruc(target=arsim, config=<config>, execute=true) → 下载到 ARsim
 8. plc_verify_opcua(config=<config>)                         → OPC UA 验证（首选）
 9. plc_read_pvi(config=<config>)                             → PVI 验证（备用）
 ```
@@ -88,11 +88,11 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 ```
 1. plc_build_project(build_ruc_package=true)       → 构建 + 生成包
 2. plc_probe_target + plc_check_download           → 下载前安全检查
-3. plc_download_ruc(execute=true)                  → 下载到 ARsim 或测试 PLC
+3. plc_download_ruc(target=<明确目标>, execute=true) → 下载到 ARsim 或测试 PLC
 4. plc_search_variables / plc_list_variables       → Agent 查询变量目录并选择输入/输出变量
-5. plc_reset_test_harness(execute=true)            → 测试前复位
-6. plc_run_test_suite(execute=true)                → 写输入、读输出、断言
-7. plc_reset_test_harness(execute=true)            → 测试后恢复
+5. plc_reset_test_harness(target=<明确目标>, execute=true) → 测试前复位
+6. plc_run_test_suite(target=<明确目标>, execute=true)     → 写输入、读输出、断言
+7. plc_reset_test_harness(target=<明确目标>, execute=true) → 测试后恢复
 ```
 
 ### 变量访问模式
@@ -127,6 +127,7 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 7. **禁止无策略写 PLC 变量**。默认只能写 `pvi.write_whitelist`；`agent_directed` 模式下也必须先搜索变量，并通过 production、Safety/I/O/system、`execute=true` 等安全门。
 8. **禁止写 Safety、物理 I/O、系统变量**。输出变量默认只读，不写。
 9. **禁止把 ARsim 强制下载授权扩展到物理 PLC**。`force_arsim_download=true` 只允许用户明确授权后的 `role=arsim` 目标。
+10. **禁止目标变更工具使用隐式目标**。启动、下载、写变量和测试套件必须显式传入 `target` 或 `environment`；只读和本地工具未选择目标时仅回退到本机 `arsim`。
 
 详细安全规则见：`references/safety.md`
 

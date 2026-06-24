@@ -30,7 +30,7 @@ tools\as_library_manager.py
 <!-- BEGIN GENERATED MCP TOOL CATALOG -->
 当前 stdio MCP 暴露以下工具：
 
-MCP server version: `0.5.0`. Full catalog: [../../skills/br-plc-toolchain/references/mcp-tools.md](../../skills/br-plc-toolchain/references/mcp-tools.md)
+MCP server version: `0.6.0`. Full catalog: [../../skills/br-plc-toolchain/references/mcp-tools.md](../../skills/br-plc-toolchain/references/mcp-tools.md)
 
 | MCP Tool | Risk | Backend | Confirmation | Description |
 | --- | --- | --- | --- | --- |
@@ -98,7 +98,7 @@ tools\plc_environments.json
 
 所有工具均接收：
 
-- `target`：目标名称，默认 `arsim`
+- `target`：目标名称；目标变更工具必须显式传入 `target` 或 `environment`，只读和本地工具未选择时回退到 `arsim`
 - `environment`：环境名，来自 `tools\plc_environments.json`
 - `project_path`：AS 工程路径
 - `config`：配置名称，默认 `x1685`

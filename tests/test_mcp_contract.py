@@ -96,7 +96,7 @@ class McpContractTests(unittest.TestCase):
 
     @patch.object(toolchain, "run_plc_toolchain")
     def test_start_arsim_confirmation_gate_blocks_execution(self, run_toolchain) -> None:
-        result = toolchain.plc_start_arsim({"execute": False})
+        result = toolchain.plc_start_arsim({"target": "arsim", "execute": False})
 
         self.assertFalse(result["ok"])
         self.assertFalse(result["data"]["executed"])
@@ -111,7 +111,7 @@ class McpContractTests(unittest.TestCase):
             "process_id": 123,
         }
 
-        result = toolchain.plc_start_arsim({"execute": True})
+        result = toolchain.plc_start_arsim({"target": "arsim", "execute": True})
 
         self.assertTrue(result["ok"])
         self.assertTrue(result["data"]["executed"])
