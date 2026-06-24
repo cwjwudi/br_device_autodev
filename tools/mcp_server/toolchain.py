@@ -287,9 +287,13 @@ def summarize(command: str, data: dict[str, Any]) -> str:
     if command == "RunIoTestCase":
         cases = data.get("cases") or []
         name = cases[0].get("name") if cases else data.get("case_name")
-        return f"IO test case {name or ''} {'OK' if data.get('ok') else 'FAILED'}".strip()
+        stage = data.get("failure_stage")
+        suffix = f" at {stage}" if stage else ""
+        return f"IO test case {name or ''} {'OK' if data.get('ok') else 'FAILED'}{suffix}".strip()
     if command == "RunTestSuite":
-        return f"IO suite {'OK' if data.get('ok') else 'FAILED'}: {data.get('cases_passed', 0)}/{data.get('cases_total', 0)} passed"
+        stage = data.get("failure_stage")
+        suffix = f" at {stage}" if stage else ""
+        return f"IO suite {'OK' if data.get('ok') else 'FAILED'}{suffix}: {data.get('cases_passed', 0)}/{data.get('cases_total', 0)} passed"
     if command == "ResetTestHarness":
         reset = data.get("reset") or data
         return f"test harness reset {'OK' if reset.get('ok') else 'FAILED'}"

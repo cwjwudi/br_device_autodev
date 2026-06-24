@@ -52,6 +52,8 @@ flowchart TD
 
 MCP Server 对构建、工程修改、目标状态变更和完整测试流程执行文件锁与审计。锁位于 `tools/.generated/locks/`，同一工程/config 或同一目标不能并发执行关键动作；审计位于 `tools/.generated/audit/`，记录开始和最终状态、目标角色、环境、请求摘要、报告/日志路径，并对写入值和敏感字段脱敏。
 
+IO 测试报告声明套件 `fixture`，并使用 `validation`、`write`、`read`、`assert`、`restore` 五类失败阶段。`reset_records` 记录套件和 case 前后的恢复动作；前置 reset 失败会跳过后续 case，任何最终 restore 失败都会覆盖测试成功状态并要求人工检查。
+
 ## AGENTS.md、Prompt、Skill、MCP 的关系
 
 `AGENTS.md`、Prompt、Skill、MCP 是四种不同层次的约束和工具：

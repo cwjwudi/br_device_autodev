@@ -1,6 +1,26 @@
 {
+  "schema_version": 1,
   "name": "lqr_io_tests",
   "target": "test_plc",
+  "fixture": {
+    "name": "LQR controlled task fixture",
+    "mode": "controlled_task_variables",
+    "dedicated": false,
+    "reset_strategy": "pvi.restore_writes",
+    "inputs": [
+      "LQR:bLqrEnable",
+      "LQR:bLqrReset",
+      "LQR:rLqrMaxAbsU",
+      "LQR:arLqrX",
+      "LQR:arLqrXRef",
+      "LQR:arLqrK"
+    ],
+    "outputs": [
+      "LQR:arLqrU",
+      "LQR:arLqrError",
+      "LQR:stLqrStatus"
+    ]
+  },
   "cases": [
     {
       "name": "zero_state_zero_output",

@@ -20,6 +20,7 @@ from pvi_write import load_target_config, validate_writes, write_variables
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_REPORT_DIR = REPO_ROOT / "tools" / ".generated" / "reports"
+FAILURE_STAGES = ("validation", "write", "read", "assert", "restore")
 
 
 def utc_stamp() -> str:
@@ -36,6 +37,44 @@ def as_list(value: Any) -> list[Any]:
     if isinstance(value, list):
         return value
     return [value]
+
+
+def add_failure(
+    report: dict[str, Any],
+    stage: str,
+    message: str,
+    *,
+    details: Any | None = None,
+) -> None:
+    if stage not in FAILURE_STAGES:
+        raise ValueError(f"Unsupported failure stage: {stage}")
+    failure: dict[str, Any] = {"stage": stage, "message": message}
+    if details is not None:
+        failure["details"] = details
+    report.setdefault("failures", []).append(failure)
+    stages = report.setdefault("failure_stages", [])
+    if stage not in stages:
+        stages.append(stage)
+    if report.get("failure_stage") is None or stage == "restore":
+        report["failure_stage"] = stage
+
+
+def reset_record(
+    args: argparse.Namespace,
+    config: dict[str, Any],
+    *,
+    phase: str,
+    scope: str,
+) -> dict[str, Any]:
+    result = reset_harness(args, config)
+    return {
+        "stage": "restore",
+        "phase": phase,
+        "scope": scope,
+        "ok": bool(result.get("ok")),
+        "timestamp": iso_now(),
+        "result": result,
+    }
 
 
 def pvi_args(args: argparse.Namespace) -> SimpleNamespace:
@@ -83,6 +122,61 @@ def load_suite(path: str) -> dict[str, Any]:
     if not isinstance(suite["cases"], list):
         raise TypeError("Test suite 'cases' must be an array.")
     return suite
+
+
+def validate_suite_structure(suite: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    cases = suite.get("cases")
+    if not isinstance(cases, list):
+        return ["Test suite 'cases' must be an array."]
+    if not cases:
+        errors.append("Test suite must contain at least one case.")
+
+    seen_names: set[str] = set()
+    for index, case in enumerate(cases):
+        label = f"cases[{index}]"
+        if not isinstance(case, dict):
+            errors.append(f"{label} must be an object.")
+            continue
+        name = case.get("name")
+        if not isinstance(name, str) or not name.strip():
+            errors.append(f"{label}.name must be a non-empty string.")
+        elif name in seen_names:
+            errors.append(f"Duplicate test case name: {name}")
+        else:
+            seen_names.add(name)
+
+        settle_ms = case.get("settle_ms")
+        if settle_ms is not None and (
+            not isinstance(settle_ms, int) or isinstance(settle_ms, bool) or settle_ms < 0
+        ):
+            errors.append(f"{label}.settle_ms must be a non-negative integer.")
+
+        writes = case.get("writes", [])
+        if not isinstance(writes, list):
+            errors.append(f"{label}.writes must be an array.")
+        else:
+            for write_index, item in enumerate(writes):
+                if not isinstance(item, dict):
+                    errors.append(f"{label}.writes[{write_index}] must be an object.")
+                    continue
+                if not item.get("variable") and not item.get("name"):
+                    errors.append(
+                        f"{label}.writes[{write_index}] must declare variable."
+                    )
+                if "value" not in item:
+                    errors.append(f"{label}.writes[{write_index}] must declare value.")
+
+        checks = case.get("checks", [])
+        if not isinstance(checks, list):
+            errors.append(f"{label}.checks must be an array.")
+        else:
+            for check_index, item in enumerate(checks):
+                if not isinstance(item, dict) or not item.get("variable"):
+                    errors.append(
+                        f"{label}.checks[{check_index}] must be an object with variable."
+                    )
+    return errors
 
 
 def read_whitelist(config: dict[str, Any]) -> set[str]:
@@ -252,7 +346,14 @@ def reset_harness(args: argparse.Namespace, config: dict[str, Any]) -> dict[str,
             "executed": False,
             "error": "No pvi.restore_writes entries are configured.",
         }
-    report = run_writes(args, restore_writes)
+    try:
+        report = run_writes(args, restore_writes)
+    except Exception as exc:
+        report = {
+            "ok": False,
+            "executed": bool(args.execute),
+            "error": f"Reset/restore raised an exception: {exc}",
+        }
     report["command"] = "ResetTestHarness"
     return report
 
@@ -264,24 +365,53 @@ def run_case(args: argparse.Namespace, config: dict[str, Any], target_config: di
         "ok": False,
         "started_at": iso_now(),
         "settle_ms": int(case.get("settle_ms", args.settle_ms)),
+        "failure_stage": None,
+        "failure_stages": [],
+        "failures": [],
+        "reset_records": [],
     }
 
     validation_errors = validate_case_access(config, target_config, case, args.execute)
     if validation_errors:
         case_report["validation_errors"] = validation_errors
-        case_report["restore"] = reset_harness(args, config)
+        add_failure(
+            case_report,
+            "validation",
+            "Test case validation failed.",
+            details=validation_errors,
+        )
+        restore = reset_record(
+            args, config, phase="after_validation_failure", scope=case_name
+        )
+        case_report["reset_records"].append(restore)
+        case_report["restore"] = restore["result"]
+        if not restore["ok"]:
+            add_failure(case_report, "restore", "Restore after validation failure failed.")
+        case_report["finished_at"] = iso_now()
         return case_report
 
     try:
-        case_report["pre_reset"] = reset_harness(args, config)
-        if not case_report["pre_reset"].get("ok"):
+        pre_reset = reset_record(args, config, phase="before_case", scope=case_name)
+        case_report["reset_records"].append(pre_reset)
+        case_report["pre_reset"] = pre_reset["result"]
+        if not pre_reset["ok"]:
             case_report["error"] = "Pre-test reset failed."
+            add_failure(case_report, "restore", case_report["error"])
             return case_report
 
         writes = as_list(case.get("writes"))
-        case_report["writes"] = run_writes(args, writes)
+        try:
+            case_report["writes"] = run_writes(args, writes)
+        except Exception as exc:
+            case_report["writes"] = {"ok": False, "error": str(exc)}
         if not case_report["writes"].get("ok"):
             case_report["error"] = "PVI write failed."
+            add_failure(
+                case_report,
+                "write",
+                case_report["error"],
+                details=case_report["writes"].get("error"),
+            )
             return case_report
 
         if case_report["settle_ms"] > 0:
@@ -290,16 +420,39 @@ def run_case(args: argparse.Namespace, config: dict[str, Any], target_config: di
         readback = as_list(case.get("readback"))
         if not readback:
             readback = list(read_whitelist(config))
-        case_report["readback"] = run_reads(args, readback)
+        try:
+            case_report["readback"] = run_reads(args, readback)
+        except Exception as exc:
+            case_report["readback"] = {"ok": False, "error": str(exc), "variables": []}
+        if not case_report["readback"].get("ok"):
+            add_failure(
+                case_report,
+                "read",
+                "PVI readback failed.",
+                details=case_report["readback"].get("error"),
+            )
         values = readback_map(case_report["readback"])
         case_report["checks"] = [compare_check(values, check) for check in as_list(case.get("checks"))]
-        case_report["ok"] = bool(case_report["readback"].get("ok")) and all(item.get("ok") for item in case_report["checks"])
+        failed_checks = [item for item in case_report["checks"] if not item.get("ok")]
+        if failed_checks:
+            add_failure(
+                case_report,
+                "assert",
+                f"{len(failed_checks)} assertion(s) failed.",
+                details=failed_checks,
+            )
+        case_report["ok"] = (
+            bool(case_report["readback"].get("ok")) and not failed_checks
+        )
     finally:
-        case_report["restore"] = reset_harness(args, config)
+        restore = reset_record(args, config, phase="after_case", scope=case_name)
+        case_report["reset_records"].append(restore)
+        case_report["restore"] = restore["result"]
         case_report["finished_at"] = iso_now()
-        if not case_report["restore"].get("ok"):
+        if not restore["ok"]:
             case_report["ok"] = False
             case_report["restore_error"] = "Post-test restore/reset failed."
+            add_failure(case_report, "restore", case_report["restore_error"])
 
     return case_report
 
@@ -329,31 +482,102 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "suite_path": str(Path(args.suite).resolve()) if args.suite else None,
         "generated_at": iso_now(),
         "execute": bool(args.execute),
+        "failure_stage": None,
+        "failure_stages": [],
+        "failures": [],
+        "reset_records": [],
     }
 
     if args.reset_only:
-        report["reset"] = reset_harness(args, config)
-        report["ok"] = bool(report["reset"].get("ok"))
+        reset = reset_record(
+            args, config, phase="manual_reset", scope="test_harness"
+        )
+        report["reset_records"].append(reset)
+        report["reset"] = reset["result"]
+        report["ok"] = reset["ok"]
+        if not reset["ok"]:
+            add_failure(report, "restore", "Manual test harness reset failed.")
         return save_report(args, report, f"reset_test_harness_{args.target}")
+
+    fixture = suite.get("fixture")
+    if not isinstance(fixture, dict):
+        fixture = {
+            "name": suite.get("name"),
+            "mode": "direct_variable_access",
+            "dedicated": False,
+            "reset_strategy": "pvi.restore_writes",
+        }
+        report.setdefault("warnings", []).append(
+            "Suite has no explicit fixture metadata; treating it as legacy direct variable access."
+        )
+    report["fixture"] = fixture
+    if fixture.get("dedicated") is not True:
+        report.setdefault("warnings", []).append(
+            "Suite fixture is not a dedicated TestHarness interface; migrate business variables behind a controlled harness when practical."
+        )
+
+    suite_validation_errors = validate_suite_structure(suite)
+    if suite_validation_errors:
+        report["validation_errors"] = suite_validation_errors
+        add_failure(
+            report,
+            "validation",
+            "Test suite structure validation failed.",
+            details=suite_validation_errors,
+        )
+        return save_report(args, report, f"io_test_{suite.get('name')}")
 
     cases = list(suite.get("cases") or [])
     if args.case_name:
         cases = [case for case in cases if case.get("name") == args.case_name]
         if not cases:
             report["error"] = f"Test case '{args.case_name}' was not found."
+            add_failure(report, "validation", report["error"])
             return save_report(args, report, f"io_test_{suite.get('name')}")
 
     if str(target_config.get("role", "")).lower() == "production":
         report["error"] = "Refusing to run IO tests on a production target."
+        add_failure(report, "validation", report["error"])
         return save_report(args, report, f"io_test_{suite.get('name')}")
 
-    report["suite_reset"] = reset_harness(args, config)
-    report["cases"] = [run_case(args, config, target_config, case) for case in cases]
-    report["final_reset"] = reset_harness(args, config)
-    report["cases_total"] = len(report["cases"])
+    suite_reset = reset_record(args, config, phase="before_suite", scope=str(suite.get("name")))
+    report["reset_records"].append(suite_reset)
+    report["suite_reset"] = suite_reset["result"]
+    if suite_reset["ok"]:
+        report["cases"] = [
+            run_case(args, config, target_config, case) for case in cases
+        ]
+    else:
+        report["cases"] = []
+        add_failure(report, "restore", "Pre-suite reset failed; cases were not executed.")
+
+    final_reset = reset_record(args, config, phase="after_suite", scope=str(suite.get("name")))
+    report["reset_records"].append(final_reset)
+    report["final_reset"] = final_reset["result"]
+    if not final_reset["ok"]:
+        add_failure(report, "restore", "Final suite restore/reset failed.")
+
+    for case_report in report["cases"]:
+        report["reset_records"].extend(case_report.get("reset_records") or [])
+        for failure in case_report.get("failures") or []:
+            stage = failure.get("stage")
+            if stage in FAILURE_STAGES and stage not in report["failure_stages"]:
+                report["failure_stages"].append(stage)
+        if case_report.get("failure_stage") == "restore":
+            report["failure_stage"] = "restore"
+        elif report["failure_stage"] is None and case_report.get("failure_stage"):
+            report["failure_stage"] = case_report["failure_stage"]
+
+    report["cases_total"] = len(cases)
+    report["cases_executed"] = len(report["cases"])
+    report["cases_skipped"] = report["cases_total"] - report["cases_executed"]
     report["cases_passed"] = sum(1 for case in report["cases"] if case.get("ok"))
     report["cases_failed"] = report["cases_total"] - report["cases_passed"]
-    report["ok"] = bool(report["suite_reset"].get("ok")) and bool(report["final_reset"].get("ok")) and report["cases_failed"] == 0
+    report["ok"] = (
+        suite_reset["ok"]
+        and final_reset["ok"]
+        and report["cases_failed"] == 0
+    )
     return save_report(args, report, f"io_test_{suite.get('name')}")
 
 
@@ -377,14 +601,34 @@ def main() -> int:
     parser.add_argument("--write-wait-ms", type=int, default=50, help="Wait after each write before readback.")
     args = parser.parse_args()
 
-    report = run(args)
+    try:
+        report = run(args)
+    except Exception as exc:
+        report = {
+            "command": "ResetTestHarness"
+            if args.reset_only
+            else ("RunIoTestCase" if args.case_name else "RunTestSuite"),
+            "ok": False,
+            "target": args.target,
+            "suite_path": str(Path(args.suite).resolve()) if args.suite else None,
+            "generated_at": iso_now(),
+            "execute": bool(args.execute),
+            "failure_stage": "validation",
+            "failure_stages": ["validation"],
+            "failures": [
+                {
+                    "stage": "validation",
+                    "message": "Test request could not be loaded or validated.",
+                    "details": repr(exc),
+                }
+            ],
+            "reset_records": [],
+            "error": repr(exc),
+        }
+        report = save_report(args, report, "io_test_validation_failure")
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0 if report["ok"] else 1
 
 
 if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except Exception as exc:
-        print(json.dumps({"command": "RunTestSuite", "ok": False, "error": repr(exc)}, ensure_ascii=False, indent=2))
-        raise SystemExit(1)
+    raise SystemExit(main())

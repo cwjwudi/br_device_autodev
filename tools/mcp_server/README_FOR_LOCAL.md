@@ -30,7 +30,7 @@ tools\as_library_manager.py
 <!-- BEGIN GENERATED MCP TOOL CATALOG -->
 当前 stdio MCP 暴露以下工具：
 
-MCP server version: `0.8.0`. Full catalog: [../../skills/br-plc-toolchain/references/mcp-tools.md](../../skills/br-plc-toolchain/references/mcp-tools.md)
+MCP server version: `0.9.0`. Full catalog: [../../skills/br-plc-toolchain/references/mcp-tools.md](../../skills/br-plc-toolchain/references/mcp-tools.md)
 
 | MCP Tool | Risk | Backend | Confirmation | Description |
 | --- | --- | --- | --- | --- |
@@ -101,6 +101,10 @@ tools\plc_environments.json
 ## 锁与审计
 
 构建、工程修改和所有目标变更工具由 MCP Server 自动加锁。工程锁按 `project_path + config` 隔离，目标锁按 `targets_path + target` 隔离；锁文件位于 `tools\.generated\locks\`。关键调用在开始及成功、失败、拒绝或锁冲突时写入 `tools\.generated\audit\`，审计只记录 PVI 写入变量名和数量，不记录写入值。
+
+## 测试夹具报告
+
+IO 测试套件可声明 `fixture` 元数据和 reset 策略。报告使用固定的 `failure_stage` / `failure_stages` 分类：`validation`、`write`、`read`、`assert`、`restore`，并在 `reset_records` 中保存套件与 case 的前后恢复记录。任何 restore 失败都会把整体测试判为失败；前置 reset 失败时不会继续写测试输入。
 
 ## 通用参数
 
