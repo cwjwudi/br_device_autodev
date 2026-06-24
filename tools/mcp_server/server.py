@@ -7,11 +7,13 @@ from typing import Any
 
 from schemas import TOOL_DEFINITIONS
 from toolchain import TOOLS, ToolchainError
+from validation import validate_json_schema
 from version import __version__
 
 
 SERVER_INFO = {"name": "br-plc-toolchain", "version": __version__}
 PROTOCOL_VERSION = "2024-11-05"
+TOOL_DEFINITIONS_BY_NAME = {definition["name"]: definition for definition in TOOL_DEFINITIONS}
 
 
 def make_response(request_id: Any, result: Any) -> dict[str, Any]:
@@ -49,19 +51,9 @@ def handle_initialize(params: dict[str, Any]) -> dict[str, Any]:
 
 def handle_tools_call(params: dict[str, Any]) -> dict[str, Any]:
     name = params.get("name")
-    arguments = params.get("arguments") or {}
-    if not isinstance(arguments, dict):
-        return text_result(
-            {
-                "ok": False,
-                "tool": name,
-                "error": "Tool arguments must be an object.",
-            },
-            is_error=True,
-        )
-
     tool = TOOLS.get(str(name))
-    if tool is None:
+    definition = TOOL_DEFINITIONS_BY_NAME.get(str(name))
+    if tool is None or definition is None:
         return text_result(
             {
                 "ok": False,
@@ -71,7 +63,23 @@ def handle_tools_call(params: dict[str, Any]) -> dict[str, Any]:
             is_error=True,
         )
 
+    arguments = params.get("arguments")
+    if arguments is None:
+        arguments = {}
+    validation_errors = validate_json_schema(arguments, definition["inputSchema"])
+    if validation_errors:
+        return text_result(
+            {
+                "ok": False,
+                "tool": name,
+                "error": "Tool argument validation failed.",
+                "validation_errors": validation_errors,
+            },
+            is_error=True,
+        )
+
     try:
+        assert isinstance(arguments, dict)
         result = tool(arguments)
         return text_result(result, is_error=False)
     except ToolchainError as exc:
