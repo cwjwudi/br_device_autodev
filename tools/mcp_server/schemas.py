@@ -86,6 +86,59 @@ def build_schema(
 
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
+        "name": "plc_doctor",
+        "description": "Check local Python, PowerShell, Automation Studio, PVITransfer, PVI Python dependency, target config, project/config, ARsim loader, and generated-output write access.",
+        "inputSchema": object_schema({}),
+    },
+    {
+        "name": "plc_validate_environment",
+        "description": "Validate the selected environment or explicit project/config/target/targets_path mapping without connecting to a PLC.",
+        "inputSchema": object_schema({}),
+    },
+    {
+        "name": "plc_list_reports",
+        "description": "List compact metadata for historical JSON reports under tools/.generated/reports without returning report bodies.",
+        "inputSchema": object_schema(
+            {
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of newest reports to return.",
+                    "minimum": 1,
+                    "maximum": 100,
+                    "default": 20,
+                },
+                "kind": {
+                    "type": "string",
+                    "description": "Optional report kind filter.",
+                    "enum": ["all", "io_test", "verification", "closed_loop", "reset", "build", "other"],
+                    "default": "all",
+                },
+                "status": {
+                    "type": "string",
+                    "description": "Optional pass/fail filter.",
+                    "enum": ["all", "passed", "failed"],
+                    "default": "all",
+                },
+            }
+        ),
+    },
+    {
+        "name": "plc_read_report_summary",
+        "description": "Read a compact summary of one JSON report confined to tools/.generated/reports. Does not return large logs or arbitrary report fields.",
+        "inputSchema": required_schema(
+            object_schema(
+                {
+                    "report_path": {
+                        "type": "string",
+                        "description": "Report filename or repository/report path returned by plc_list_reports.",
+                        "minLength": 1,
+                    },
+                }
+            ),
+            "report_path",
+        ),
+    },
+    {
         "name": "plc_build_project",
         "description": "Build the B&R Automation Studio project. Optionally generate a RUC package for download.",
         "inputSchema": build_schema(
@@ -443,6 +496,10 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
 
 
 TOOL_RISK_LEVELS: dict[str, str] = {
+    "plc_doctor": "readonly",
+    "plc_validate_environment": "readonly",
+    "plc_list_reports": "readonly",
+    "plc_read_report_summary": "readonly",
     "plc_add_project_library": "project_write",
     "plc_build_project": "local_write",
     "plc_check_download": "local_write",
@@ -469,6 +526,10 @@ TOOL_RISK_LEVELS: dict[str, str] = {
 }
 
 TOOL_BACKENDS: dict[str, str] = {
+    "plc_doctor": "MCP native diagnostics",
+    "plc_validate_environment": "MCP native diagnostics",
+    "plc_list_reports": "MCP native report index",
+    "plc_read_report_summary": "MCP native report summary",
     "plc_add_project_library": "as_library_manager.py add + Build",
     "plc_build_project": "Build",
     "plc_check_download": "CheckDownload",

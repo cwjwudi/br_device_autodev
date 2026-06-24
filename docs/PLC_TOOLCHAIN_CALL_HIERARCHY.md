@@ -56,6 +56,8 @@ IO 测试报告声明套件 `fixture`，并使用 `validation`、`write`、`read
 
 变量 catalog 优先解析 Automation Studio 生成头文件，并用 `Symbols.map` 作为构建证据；生成文件缺失、不可解析或旧于 `.var` 源文件时降级到源码扫描。`catalog_source`、`confidence`、`generated_from` 和 `warnings` 会保留在列表与搜索结果中，低可信结果不得被视为运行时变量绝对事实。
 
+Agent 在执行闭环前可调用 `plc_doctor` 和 `plc_validate_environment` 定位本机依赖或环境映射问题。`plc_list_reports` 与 `plc_read_report_summary` 只访问 `tools/.generated/reports/`，返回状态、计数、失败阶段、case 摘要和路径，不返回任意大字段或日志正文。
+
 ## AGENTS.md、Prompt、Skill、MCP 的关系
 
 `AGENTS.md`、Prompt、Skill、MCP 是四种不同层次的约束和工具：

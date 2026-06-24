@@ -6,6 +6,12 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from diagnostics import (
+    list_reports as diagnostic_list_reports,
+    read_report_summary as diagnostic_read_report_summary,
+    run_doctor,
+    validate_environment,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PLC_TOOLCHAIN = REPO_ROOT / "tools" / "plc_toolchain.ps1"
@@ -201,6 +207,19 @@ def run_plc_toolchain(
 
 
 def summarize(command: str, data: dict[str, Any]) -> str:
+    if command == "Doctor":
+        checks = data.get("checks") or []
+        passed = sum(1 for item in checks if item.get("ok"))
+        return f"doctor {'OK' if data.get('ok') else 'FAILED'}: {passed}/{len(checks)} checks passed"
+    if command == "ValidateEnvironment":
+        checks = data.get("checks") or []
+        passed = sum(1 for item in checks if item.get("ok"))
+        return f"environment {'OK' if data.get('ok') else 'FAILED'}: {passed}/{len(checks)} checks passed"
+    if command == "ListReports":
+        return f"listed {data.get('count', 0)} report(s)"
+    if command == "ReadReportSummary":
+        report = data.get("summary") or {}
+        return f"report {report.get('name')} is {'PASS' if report.get('ok') else 'FAIL'}"
     if command == "FindLibraryForSymbol":
         matches = data.get("matches") or []
         return f"found {len(matches)} library candidate(s) for {data.get('symbol')}"
@@ -373,6 +392,12 @@ def collect_warnings(data: dict[str, Any]) -> list[str]:
 
 
 def next_actions(tool: str, data: dict[str, Any]) -> list[str]:
+    if tool == "plc_doctor" and not data.get("ok"):
+        return ["Fix failed doctor checks before build, download, or runtime verification."]
+    if tool == "plc_validate_environment" and not data.get("ok"):
+        return ["Correct the selected project, config, target, or targets file before continuing."]
+    if tool == "plc_list_reports" and data.get("ok"):
+        return ["Use plc_read_report_summary with a returned report_path for compact details."]
     if tool == "plc_find_library_for_symbol" and data.get("ok"):
         return ["Use plc_plan_project_library with the selected exact library name before modifying the project."]
     if tool == "plc_plan_project_library" and data.get("ok"):
@@ -948,6 +973,43 @@ def plc_list_environments(arguments: dict[str, Any]) -> dict[str, Any]:
     return wrap_result("plc_list_environments", "ListEnvironments", data, "")
 
 
+def diagnostic_options(arguments: dict[str, Any]) -> dict[str, str]:
+    options = resolve_call_options(arguments, default_target="arsim")
+    options["environment"] = str(arguments.get("environment") or "")
+    return options
+
+
+def plc_doctor(arguments: dict[str, Any]) -> dict[str, Any]:
+    options = diagnostic_options(arguments)
+    data = run_doctor(options)
+    return wrap_result("plc_doctor", "Doctor", data, options["target"])
+
+
+def plc_validate_environment(arguments: dict[str, Any]) -> dict[str, Any]:
+    options = diagnostic_options(arguments)
+    data = validate_environment(options)
+    return wrap_result(
+        "plc_validate_environment", "ValidateEnvironment", data, options["target"]
+    )
+
+
+def plc_list_reports(arguments: dict[str, Any]) -> dict[str, Any]:
+    data = diagnostic_list_reports(
+        limit=int(arguments.get("limit") or 20),
+        kind=str(arguments.get("kind") or "all"),
+        status=str(arguments.get("status") or "all"),
+    )
+    return wrap_result("plc_list_reports", "ListReports", data, "")
+
+
+def plc_read_report_summary(arguments: dict[str, Any]) -> dict[str, Any]:
+    report_path = str(arguments.get("report_path") or "").strip()
+    if not report_path:
+        raise ValueError("report_path is required.")
+    data = diagnostic_read_report_summary(report_path)
+    return wrap_result("plc_read_report_summary", "ReadReportSummary", data, "")
+
+
 def run_symbol_index(arguments: dict[str, Any], *, search: bool) -> dict[str, Any]:
     options = resolve_call_options(arguments, default_target="arsim")
     script = REPO_ROOT / "tools" / "plc_symbol_index.py"
@@ -1022,6 +1084,10 @@ def plc_search_variables(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 TOOLS = {
+    "plc_doctor": plc_doctor,
+    "plc_validate_environment": plc_validate_environment,
+    "plc_list_reports": plc_list_reports,
+    "plc_read_report_summary": plc_read_report_summary,
     "plc_build_project": plc_build_project,
     "plc_find_library_for_symbol": plc_find_library_for_symbol,
     "plc_plan_project_library": plc_plan_project_library,

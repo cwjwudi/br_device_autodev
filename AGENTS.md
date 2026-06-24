@@ -33,7 +33,7 @@
 
 该目录由 `tools/generate_mcp_docs.py` 从 MCP schema 自动生成，不手工维护工具表。
 
-标准闭环顺序：确认实际 config 和 Simulation 设置 -> build -> start_arsim(target=arsim, execute=true) -> probe -> describe_package -> check_download -> download(target=arsim, execute=true) -> verify_opcua / read_pvi
+标准闭环顺序：doctor / validate_environment -> 确认实际 config 和 Simulation 设置 -> build -> start_arsim(target=arsim, execute=true) -> probe -> describe_package -> check_download -> download(target=arsim, execute=true) -> verify_opcua / read_pvi
 
 缺失 Library 顺序：build 获取缺失符号 -> find_library_for_symbol -> plan_project_library -> add_project_library(execute=true)。只允许使用本机可信 AS 安装库，禁止自动添加 Safety 库。
 

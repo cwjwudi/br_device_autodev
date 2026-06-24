@@ -62,16 +62,18 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 ### 闭环验证流程
 
 ```
-1. 确认实际 config、Simulation=1 和 arsim_loader_exe 路径
-2. plc_build_project(config=<config>, build_ruc_package=true) → 构建 + 生成 RUC 包/仿真文件
-3. plc_start_arsim(target=arsim, config=<config>, execute=true) → 确保 ARsim 在运行
-4. plc_probe_target(config=<config>)                         → 确认目标状态
-5. plc_describe_ruc_package(config=<config>)                 → 读取包信息
-6. plc_check_download(config=<config>)                       → 安全检查
-7. plc_download_ruc(target=arsim, config=<config>, execute=true) → 下载到 ARsim
-8. plc_verify_opcua(config=<config>)                         → OPC UA 验证（首选）
-9. plc_read_pvi(config=<config>)                             → PVI 验证（备用）
+1. plc_doctor / plc_validate_environment                    → 检查本机依赖和所选环境
+2. 确认实际 config、Simulation=1 和 arsim_loader_exe 路径
+3. plc_build_project(config=<config>, build_ruc_package=true) → 构建 + 生成 RUC 包/仿真文件
+4. plc_start_arsim(target=arsim, config=<config>, execute=true) → 确保 ARsim 在运行
+5. plc_probe_target(config=<config>)                         → 确认目标状态
+6. plc_describe_ruc_package(config=<config>)                 → 读取包信息
+7. plc_check_download(config=<config>)                       → 安全检查
+8. plc_download_ruc(target=arsim, config=<config>, execute=true) → 下载到 ARsim
+9. plc_verify_opcua(config=<config>) / plc_read_pvi(config=<config>) → 反馈验证
 ```
+
+历史结果先用 `plc_list_reports` 定位，再用 `plc_read_report_summary` 读取紧凑摘要；不要通过报告工具读取大型日志正文。
 
 如果用户明确授权“ARsim 强制下载”，只可对 `target=arsim` 添加 `force_arsim_download=true`。该模式仍必须先执行 `probe`、`describe_package` 和 `check_download`，仍要求 `execute=true`，且不得用于物理 PLC 或生产目标。
 

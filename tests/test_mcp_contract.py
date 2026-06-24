@@ -86,6 +86,7 @@ class McpContractTests(unittest.TestCase):
             "plc_add_project_library": {"library", "execute"},
             "plc_find_library_for_symbol": {"symbol"},
             "plc_plan_project_library": {"library"},
+            "plc_read_report_summary": {"report_path"},
             "plc_run_io_test_case": {"case_name", "execute"},
             "plc_write_pvi": {"writes", "execute"},
         }

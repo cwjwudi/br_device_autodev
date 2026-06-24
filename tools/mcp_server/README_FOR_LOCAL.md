@@ -30,10 +30,14 @@ tools\as_library_manager.py
 <!-- BEGIN GENERATED MCP TOOL CATALOG -->
 当前 stdio MCP 暴露以下工具：
 
-MCP server version: `0.10.0`. Full catalog: [../../skills/br-plc-toolchain/references/mcp-tools.md](../../skills/br-plc-toolchain/references/mcp-tools.md)
+MCP server version: `0.11.0`. Full catalog: [../../skills/br-plc-toolchain/references/mcp-tools.md](../../skills/br-plc-toolchain/references/mcp-tools.md)
 
 | MCP Tool | Risk | Backend | Confirmation | Description |
 | --- | --- | --- | --- | --- |
+| `plc_doctor` | `readonly` | `MCP native diagnostics` | - | Check local Python, PowerShell, Automation Studio, PVITransfer, PVI Python dependency, target config, project/config, ARsim loader, and generated-output write access. |
+| `plc_validate_environment` | `readonly` | `MCP native diagnostics` | - | Validate the selected environment or explicit project/config/target/targets_path mapping without connecting to a PLC. |
+| `plc_list_reports` | `readonly` | `MCP native report index` | - | List compact metadata for historical JSON reports under tools/.generated/reports without returning report bodies. |
+| `plc_read_report_summary` | `readonly` | `MCP native report summary` | - | Read a compact summary of one JSON report confined to tools/.generated/reports. Does not return large logs or arbitrary report fields. |
 | `plc_build_project` | `local_write` | `Build` | - | Build the B&R Automation Studio project. Optionally generate a RUC package for download. |
 | `plc_find_library_for_symbol` | `readonly` | `as_library_manager.py find` | - | Find the trusted, locally installed Automation Studio libraries that declare a missing function, function block, type, constant, or C symbol. |
 | `plc_plan_project_library` | `readonly` | `as_library_manager.py plan` | - | Plan adding an installed Automation Studio library and its dependencies without modifying the project. Rejects ambiguous versions, incompatible Technology Packages, and Safety-related libraries. |
@@ -109,6 +113,13 @@ IO 测试套件可声明 `fixture` 元数据和 reset 策略。报告使用固�
 ## 变量目录可信度
 
 变量目录优先读取 Automation Studio 生成的 `Temp\Includes\**\*var.h`，并结合 `Temp\Objects\Symbols.map` 判断为高可信构建产物。若产物缺失、无法解析或比 `.var` 源文件旧，则自动退回源码扫描。目录顶层和单个变量都返回 `catalog_source`、`confidence`、`generated_from`、`warnings`，Agent 必须在动态读写前检查这些字段。
+
+## 诊断与历史报告
+
+- `plc_doctor`：检查 Python、PowerShell、Automation Studio、PVITransfer、PVI Python、目标配置、工程/config、ARsim loader 和生成目录写权限。
+- `plc_validate_environment`：只校验所选 environment 或显式参数映射，不连接 PLC。
+- `plc_list_reports`：按类型和通过/失败状态列出紧凑报告元数据。
+- `plc_read_report_summary`：读取单个报告的状态、计数、失败阶段和 case 摘要，路径强制限制在 `tools\.generated\reports\`。
 
 ## 通用参数
 

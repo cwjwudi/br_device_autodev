@@ -98,10 +98,14 @@ tools/mcp_server/
 <!-- BEGIN GENERATED MCP TOOL CATALOG -->
 当前已实现工具：
 
-MCP server version: `0.10.0`. Full catalog: [../skills/br-plc-toolchain/references/mcp-tools.md](../skills/br-plc-toolchain/references/mcp-tools.md)
+MCP server version: `0.11.0`. Full catalog: [../skills/br-plc-toolchain/references/mcp-tools.md](../skills/br-plc-toolchain/references/mcp-tools.md)
 
 | MCP Tool | Risk | Backend | Confirmation | Description |
 | --- | --- | --- | --- | --- |
+| `plc_doctor` | `readonly` | `MCP native diagnostics` | - | Check local Python, PowerShell, Automation Studio, PVITransfer, PVI Python dependency, target config, project/config, ARsim loader, and generated-output write access. |
+| `plc_validate_environment` | `readonly` | `MCP native diagnostics` | - | Validate the selected environment or explicit project/config/target/targets_path mapping without connecting to a PLC. |
+| `plc_list_reports` | `readonly` | `MCP native report index` | - | List compact metadata for historical JSON reports under tools/.generated/reports without returning report bodies. |
+| `plc_read_report_summary` | `readonly` | `MCP native report summary` | - | Read a compact summary of one JSON report confined to tools/.generated/reports. Does not return large logs or arbitrary report fields. |
 | `plc_build_project` | `local_write` | `Build` | - | Build the B&R Automation Studio project. Optionally generate a RUC package for download. |
 | `plc_find_library_for_symbol` | `readonly` | `as_library_manager.py find` | - | Find the trusted, locally installed Automation Studio libraries that declare a missing function, function block, type, constant, or C symbol. |
 | `plc_plan_project_library` | `readonly` | `as_library_manager.py plan` | - | Plan adding an installed Automation Studio library and its dependencies without modifying the project. Rejects ambiguous versions, incompatible Technology Packages, and Safety-related libraries. |
