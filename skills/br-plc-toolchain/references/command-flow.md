@@ -10,7 +10,7 @@
 - 若该 config 需要以 ARsim 方式运行，检查 `PrintDemo/Physical/<config>/Hardware.hw`，确保 CPU 模块下存在 `<Parameter ID="Simulation" Value="1" />`。
 - 修改 Simulation 设置后必须重新构建该 config；构建成功后，仿真文件应生成到 `PrintDemo/Temp/Simulation/<config>/<CPU>/`。
 - `plc_start_arsim` 使用的 loader 必须是实际生成的 `PrintDemo/Temp/Simulation/<config>/<CPU>/ar000loader.exe`。示例：`PrintDemo/Temp/Simulation/x3687x/X20CP3687X/ar000loader.exe`。
-- 如果 `plc_start_arsim` 报 loader 不存在，先核对 config 名、CPU 目录、Simulation 设置和 `tools/plc_targets.local.json` 中的 `targets.arsim.arsim_loader_exe`。
+- 如果 `plc_start_arsim` 报 loader 不存在，先核对 config 名、CPU 目录、Simulation 设置和 `config/targets/default-safe.json` 中的 `targets.arsim.arsim_loader_exe`。
 
 快捷工具：
 
@@ -208,7 +208,7 @@ plc_run_arsim_closed_loop(arguments: { "config": "<actual_config>", "target": "a
 
 前置条件：
 
-- 先读取当前 `tools/plc_targets.local.json` 或 `targets_path`，确认本次实际模式和 `allow_dynamic_pvi_read/write`。
+- 先读取当前 `config/targets/default-safe.json` 或 `targets_path`，确认本次实际模式和 `allow_dynamic_pvi_read/write`。
 - 目标必须是 `role=arsim` 或 `role=dedicated_test_plc`，禁止 production。
 - 白名单外变量必须先通过 `plc_search_variables` 或 `plc_list_variables` 找到，不凭空猜测。
 

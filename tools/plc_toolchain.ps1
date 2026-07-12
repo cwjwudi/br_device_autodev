@@ -5,7 +5,7 @@ param(
     [string]$ProjectPath = "PrintDemo\Huitong_FrontEval.apj",
     [string]$Config = "x1685",
     [string]$Target = "arsim",
-    [string]$TargetsPath = "tools\plc_targets.local.json",
+    [string]$TargetsPath = "config\targets\default-safe.json",
     [string]$PackagePath = "",
     [string]$TransferPilPath = "",
     [string[]]$OpcUaNodeId,

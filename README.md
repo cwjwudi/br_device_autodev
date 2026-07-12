@@ -48,18 +48,23 @@ docs/
   PLC_TOOLCHAIN_IMPLEMENTATION_PLAN.md
   PLC_MCP_SKILL_PROMPT_ROADMAP.md
 
-tools/
-  as_library_manager.py
+config/
+  defaults/             # 内置运行默认值
+  profiles/             # production/office-test/ARsim/readonly 策略
+  targets/              # 团队默认目标
+  environments/         # 命名环境
+  examples/             # 机器与目标模板
+  local/                # 本机配置，Git 忽略
+
+src/br_plc_toolchain/
+  backends/pvi/         # 常驻多目标 PVI 引擎
+  config/               # 配置加载和自动目标引导
+  policy/               # 硬安全规则与临时测试会话
+  services/             # 运行时发现和读写服务
+
+tools/                  # 旧 CLI 兼容入口，逐步缩减
   plc_toolchain.ps1
-  invoke_pvitransfer_silent.ps1
-  opcua_read.py
-  pvi_read.py
-  plc_targets.local.json
   mcp_server/
-    server.py
-    toolchain.py
-    schemas.py
-    README_FOR_LOCAL.md
 
 PrintDemo/
   Huitong_FrontEval.apj
@@ -215,7 +220,7 @@ MCP server version: `0.12.0`. Full catalog: [skills/br-plc-toolchain/references/
 | `plc_reset_test_harness` | `target_change` | `ResetTestHarness` | `execute=true` | Restore/reset the PLC test harness using pvi.restore_writes. Requires execute=true and refuses production targets. |
 | `plc_get_target_config` | `readonly` | `GetTargetConfig` | - | Read the configured target entry, OPC UA whitelist, and PVI whitelist for a target. |
 | `plc_list_targets` | `readonly` | `ListTargets` | - | List configured PLC/ARsim targets with IP, role, and automatic-download permission. |
-| `plc_list_environments` | `readonly` | `MCP native` | - | List named PLC toolchain environments from tools/plc_environments.json for one-step switching. |
+| `plc_list_environments` | `readonly` | `MCP native` | - | List named PLC toolchain environments from config/environments/environments.json. |
 | `plc_list_variables` | `local_write` | `plc_symbol_index.py` | - | Build and list the PLC variable catalog, preferring fresh Automation Studio build artifacts and falling back to source scanning. Returns source, confidence, provenance, and warnings. |
 | `plc_search_variables` | `local_write` | `plc_symbol_index.py` | - | Search PLC variables by text, module/task, and read/write access while preserving catalog source, confidence, provenance, and warnings. |
 | `plc_discover_runtime_target` | `local_write` | `persistent PVI runtime` | - | Connect through persistent PVI without source code or a policy file. Unknown physical targets are read-only; test roles must be explicitly declared. |
@@ -299,15 +304,15 @@ plc_run_verification_suite(target="arsim")
 - **下载双重门**：MCP 层要求 `execute=true`，CLI 层再次检查；缺少任一则拒绝。
 - **生产拒绝**：角色为 `production` 的目标直接拒绝下载。
 - **包-目标匹配**：ARsim 包不能下载到物理 PLC，反之亦然。
-- **只读反馈**：OPC UA 和 PVI 工具均为只读，无写入能力。
-- **白名单控制**：OPC UA 和 PVI 使用 `plc_targets.local.json` 中配置的白名单变量。
+- **分级访问**：生产环境继续使用白名单；未知目标默认只读发现；办公室测试 PLC 和本机 ARsim 可使用临时测试会话。
+- **硬安全规则**：production、Safety、物理 I/O、system 写入不能被配置覆盖。
 
 ## 配置
 
 目标和工具路径配置在：
 
 ```text
-tools/plc_targets.local.json
+config/targets/default-safe.json
 ```
 
 当前包含：
@@ -342,7 +347,7 @@ tools/plc_targets.local.json
    - CLI：`WritePvi`
    - MCP：`plc_write_pvi`
    - 必须 `execute=true`
-2. 扩展 `tools/plc_targets.local.json`：
+2. 扩展 `config/targets/default-safe.json`：
    - `pvi.read_whitelist`
    - `pvi.write_whitelist`
    - `pvi.restore_writes`
@@ -377,7 +382,7 @@ M7：Logger 日志读取（已实现，2026-05-26 验证）。
 1. 新增 `tools/plc_logger_read.py`，负责白名单校验、生成 `.pil`、调用 PVITransfer 和返回稳定 JSON。
 2. `tools/plc_toolchain.ps1` 增加 `ReadLogger`。
 3. MCP 增加 `plc_read_logger`。
-4. `tools/plc_targets.local.json` 已扩展：
+4. `config/targets/default-safe.json` 已扩展：
    - `logger.enabled`
    - `logger.default_format`
    - `logger.allowed_modules`

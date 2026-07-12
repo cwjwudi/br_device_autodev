@@ -170,7 +170,7 @@ def write_variables(args: argparse.Namespace, writes: list[dict[str, Any]]) -> d
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Write whitelisted B&R PLC test variables via PVI.")
-    parser.add_argument("--target", required=True, help="Target name from tools/plc_targets.local.json.")
+    parser.add_argument("--target", required=True, help="Target name from the selected target configuration.")
     parser.add_argument("--targets-file", required=True, help="Toolchain target configuration JSON.")
     parser.add_argument("--writes-file", required=True, help="JSON file containing write objects.")
     parser.add_argument("--execute", action="store_true", help="Required to perform writes.")

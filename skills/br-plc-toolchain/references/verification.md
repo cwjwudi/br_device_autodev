@@ -9,7 +9,7 @@
 
 ### 默认白名单节点
 
-当前配置在 `tools/plc_targets.local.json` → `opcua.validation_node_ids`：
+当前配置在 `config/targets/default-safe.json` → `opcua.validation_node_ids`：
 
 | 节点 ID | 说明 | 典型值 |
 |---|---|---|
@@ -43,7 +43,7 @@ plc_verify_opcua(arguments: {
 
 ### 默认白名单变量
 
-当前配置在 `tools/plc_targets.local.json` → `pvi.validation_variables`：
+当前配置在 `config/targets/default-safe.json` → `pvi.validation_variables`：
 
 | 变量名 | 作用域 | Task | 数据类型 | 典型值 |
 |---|---|---|---|---|

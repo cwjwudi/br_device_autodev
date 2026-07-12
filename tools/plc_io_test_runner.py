@@ -583,7 +583,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run PLC IO test cases through PVI.")
-    parser.add_argument("--target", required=True, help="Target name from tools/plc_targets.local.json.")
+    parser.add_argument("--target", required=True, help="Target name from the selected target configuration.")
     parser.add_argument("--targets-file", required=True, help="Toolchain target configuration JSON.")
     parser.add_argument("--suite", default="tests/plc/lqr_io_tests.json", help="PLC test suite JSON file.")
     parser.add_argument("--case-name", help="Run only one case from the suite.")

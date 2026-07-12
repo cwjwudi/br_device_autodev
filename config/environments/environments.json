@@ -4,7 +4,7 @@
     "project_path": "PrintDemo\\Huitong_FrontEval.apj",
     "config": "x1685",
     "target": "arsim",
-    "targets_path": "tools\\plc_targets.local.json",
+    "targets_path": "config\\targets\\default-safe.json",
     "access_profile": "readonly-discovery"
   },
   "office_test_233": {
@@ -20,6 +20,21 @@
     "ip": "127.0.0.1",
     "declared_role": "arsim",
     "access_profile": "arsim-development"
+  },
+  "development_example": {
+    "description": "Agent-directed development example. Copy into config/local before adding machine paths.",
+    "project_path": "PrintDemo\\Huitong_FrontEval.apj",
+    "config": "x1685",
+    "target": "arsim",
+    "targets_path": "config\\examples\\targets\\development.example.json",
+    "access_profile": "arsim-development"
+  },
+  "office_test_example": {
+    "description": "Conservative physical test PLC example with downloads disabled.",
+    "project_path": "PrintDemo\\Huitong_FrontEval.apj",
+    "config": "x1685",
+    "target": "test_plc",
+    "targets_path": "config\\examples\\targets\\office-test.example.json",
+    "access_profile": "office-test"
   }
 }
-

@@ -27,7 +27,7 @@ flowchart TD
     CLI --> IoRunner["tools/plc_io_test_runner.py\nIO 测试闭环"]
     CLI --> Logger["tools/plc_logger_read.py\nLogger 只读诊断"]
     Wrapper --> SymbolIndex["tools/plc_symbol_index.py\n变量目录 / 动态变量搜索"]
-    CLI --> Config["tools/plc_targets*.json / tools/plc_environments.json\n目标、白名单、环境配置"]
+    CLI --> Config["tools/plc_targets*.json / config/environments/environments.json\n目标、白名单、环境配置"]
     CLI --> Reports["tools/.generated/\n日志、临时参数、验证报告"]
     CLI --> PLC["ARsim / 白名单测试 PLC"]
 ```
@@ -46,7 +46,7 @@ flowchart TD
 | MCP Wrapper | `tools/mcp_server/toolchain.py` | 解析环境参数，调用 PowerShell CLI，整理 JSON 返回、日志路径、警告、下一步建议 | 不绕过 CLI 直接调用 B&R 工具 |
 | 本地 CLI | `tools/plc_toolchain.ps1` | 项目内唯一执行底座：构建、启动 ARsim、探针、安全检查、下载、验证、报告 | 不承担 Agent 策略判断 |
 | 官方/协议工具 | `BR.AS.Build.exe`、`PVITransfer.exe`、OPC UA/PVI 脚本 | 执行真实构建、下载、读取、写入测试变量、Logger 抓取 | 不理解 Agent 任务语义 |
-| 配置和报告 | `tools/plc_targets*.json`、`tools/plc_environments.json`、`tools/.generated/*` | 目标配置、白名单、环境切换、日志和报告归档 | 不发起动作 |
+| 配置和报告 | `tools/plc_targets*.json`、`config/environments/environments.json`、`tools/.generated/*` | 目标配置、白名单、环境切换、日志和报告归档 | 不发起动作 |
 
 变量访问策略由 `tools/plc_access_policy.py` 唯一实现。`tools/plc_access_policy_cli.py` 提供稳定 JSON 契约，PowerShell 的 PVI/OPC UA 读取门控也调用该 CLI，不再单独维护白名单、目标角色或黑名单判断。
 
@@ -106,7 +106,7 @@ Agent 进入仓库并读取 AGENTS.md
 | `plc_reset_test_harness` | `ResetTestHarness` | 测试恢复 | 按 `pvi.restore_writes` 恢复测试 harness |
 | `plc_get_target_config` | `GetTargetConfig` | 只读配置 | 读取指定目标配置和白名单 |
 | `plc_list_targets` | `ListTargets` | 只读配置 | 列出目标、IP、安全角色和自动下载权限 |
-| `plc_list_environments` | MCP 层直接读取 `tools/plc_environments.json` | 只读配置 | 列出可用环境；该工具不经过 `plc_toolchain.ps1` |
+| `plc_list_environments` | MCP 层直接读取 `config/environments/environments.json` | 只读配置 | 列出可用环境；该工具不经过 `plc_toolchain.ps1` |
 
 ## 标准调用流程
 
@@ -176,7 +176,7 @@ plc_reset_test_harness(execute=true)
 -> 输出 IO 测试报告
 ```
 
-IO 测试只允许写入 `tools/plc_targets.local.json` 中 `pvi.write_whitelist` 定义的测试 harness 变量，不允许写 Safety、物理 I/O、系统变量或生产目标。
+IO 测试只允许写入 `config/targets/default-safe.json` 中 `pvi.write_whitelist` 定义的测试 harness 变量，不允许写 Safety、物理 I/O、系统变量或生产目标。
 
 在 `access_policy.mode=agent_directed` 时，Agent 可以先调用 `plc_search_variables` 搜索输入/输出变量，再动态生成测试用例或直接调用 `plc_write_pvi` / `plc_read_pvi`。即使在该模式下，生产目标、Safety/物理 I/O/system 名称、缺少 `execute=true` 的写入仍会被拒绝。
 
@@ -225,23 +225,23 @@ Logger 读取只返回摘要和报告路径，不把大段 HTML/CSV 内容直接
 
 ### 环境配置
 
-- `tools/plc_targets.local.json`：当前本地目标、工具路径、OPC UA/PVI/Logger 白名单。
-- `tools/plc_targets.cwj_as6_x3687x.json`：另一个本地 AS6 + `x3687x` 环境目标配置。
-- `tools/plc_environments.json`：MCP 环境映射，支持通过 `environment` 一键切换默认 `project_path`、`config`、`target`、`targets_path`。
+- `config/targets/default-safe.json`：当前本地目标、工具路径、OPC UA/PVI/Logger 白名单。
+- `config/examples/machines/cwj-as6-x3687x.example.json`：另一个本地 AS6 + `x3687x` 环境目标配置。
+- `config/environments/environments.json`：MCP 环境映射，支持通过 `environment` 一键切换默认 `project_path`、`config`、`target`、`targets_path`。
 
 当前环境包括：
 
 | 环境 | 说明 |
 |---|---|
-| `default_safe` | 使用保守的 `tools/plc_targets.local.json`，默认 config 为 `x1685`、target 为 `arsim` |
+| `default_safe` | 使用保守的 `config/targets/default-safe.json`，默认 config 为 `x1685`、target 为 `arsim` |
 | `default` | `default_safe` 的兼容别名 |
 | `dev_agent_directed` | 显式选择的本机 ARsim 开发模板，动态访问只在该模板中启用 |
 | `test_whitelist` | 专用测试 PLC 白名单模板，自动下载默认关闭 |
 | `readonly_diagnostics` | 只读诊断模板，不开放动态访问和变量写入 |
-| `cwj_as6_x3687x` | 使用 `x3687x` ARsim 环境和 `tools/plc_targets.cwj_as6_x3687x.json` |
+| `cwj_as6_x3687x` | 使用 `x3687x` ARsim 环境和 `config/examples/machines/cwj-as6-x3687x.example.json` |
 | `cwj_test_plc_x1685` | 面向 `192.168.50.222` 物理测试 PLC，config 为 `x1685` |
 
-模板文件分别是 `tools/plc_targets.dev.example.json`、`tools/plc_targets.test.example.json` 和 `tools/plc_targets.readonly.example.json`。使用前必须替换本机工具路径、目标地址并填写明确的变量白名单。
+模板文件分别是 `config/examples/targets/development.example.json`、`config/examples/targets/office-test.example.json` 和 `config/examples/targets/readonly.example.json`。使用前必须替换本机工具路径、目标地址并填写明确的变量白名单。
 
 `tools/plc_targets*.json` 还包含 `access_policy`。工具链的保守默认值为：
 
@@ -256,7 +256,7 @@ Logger 读取只返回摘要和报告路径，不把大段 HTML/CSV 内容直接
 
 MCP 目标变更工具不会采用隐式目标：启动 ARsim、下载、PVI 写入、测试执行和测试复位必须显式传入 `target` 或 `environment`。只读和本地操作未选择目标时统一回退到 `arsim`；PowerShell 入口同样以 `arsim` 为安全默认，并要求变更命令显式提供 `-Target`。
 
-实际运行时必须读取当前 `tools/plc_targets.local.json` 或传入的 `targets_path` 判断模式。默认配置保持 `whitelist`；需要动态访问时应显式选择并配置 `dev_agent_directed`，而不是修改团队默认文件。该模式不会关闭 production、Safety/I/O/system、`execute=true` 等硬安全门。
+实际运行时必须读取当前 `config/targets/default-safe.json` 或传入的 `targets_path` 判断模式。默认配置保持 `whitelist`；需要动态访问时应显式选择并配置 `dev_agent_directed`，而不是修改团队默认文件。该模式不会关闭 production、Safety/I/O/system、`execute=true` 等硬安全门。
 
 PVI 动态变量失败要区分两类：
 
@@ -304,7 +304,7 @@ Automation Studio config 必须按项目真实名称处理。本项目当前可�
 | 变量目录/搜索 | `tools/plc_symbol_index.py` | 扫描 PLC 变量，生成 `tools/.generated/plc_symbol_catalog.json`，供 Agent 动态选变量 |
 | MCP Server | `tools/mcp_server/*` | MCP JSON-RPC 工具接口 |
 | 目标配置 | `tools/plc_targets*.json` | 工具路径、目标、白名单、安全角色 |
-| 环境配置 | `tools/plc_environments.json` | 多环境默认参数映射 |
+| 环境配置 | `config/environments/environments.json` | 多环境默认参数映射 |
 | 测试套件 | `tests/plc/lqr_io_tests.json` | LQR IO 测试用例 |
 | 生成物目录 | `tools/.generated/*` | 日志、临时 JSON、报告、logger 输出 |
 

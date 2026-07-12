@@ -27,7 +27,7 @@
 - `tools/invoke_pvitransfer_silent.ps1`
 - `tools/opcua_read.py`
 - `tools/pvi_read.py`
-- `tools/plc_targets.local.json`
+- `config/targets/default-safe.json`
 
 已验证目标：
 
@@ -55,7 +55,7 @@ flowchart TD
     CLI --> PVITransfer["PVITransfer.exe hidden wrapper"]
     CLI --> OpcUa["tools/opcua_read.py"]
     CLI --> PviRead["tools/pvi_read.py"]
-    CLI --> Config["tools/plc_targets.local.json"]
+    CLI --> Config["config/targets/default-safe.json"]
 ```
 
 职责边界：
@@ -126,7 +126,7 @@ MCP server version: `0.12.0`. Full catalog: [../skills/br-plc-toolchain/referenc
 | `plc_reset_test_harness` | `target_change` | `ResetTestHarness` | `execute=true` | Restore/reset the PLC test harness using pvi.restore_writes. Requires execute=true and refuses production targets. |
 | `plc_get_target_config` | `readonly` | `GetTargetConfig` | - | Read the configured target entry, OPC UA whitelist, and PVI whitelist for a target. |
 | `plc_list_targets` | `readonly` | `ListTargets` | - | List configured PLC/ARsim targets with IP, role, and automatic-download permission. |
-| `plc_list_environments` | `readonly` | `MCP native` | - | List named PLC toolchain environments from tools/plc_environments.json for one-step switching. |
+| `plc_list_environments` | `readonly` | `MCP native` | - | List named PLC toolchain environments from config/environments/environments.json. |
 | `plc_list_variables` | `local_write` | `plc_symbol_index.py` | - | Build and list the PLC variable catalog, preferring fresh Automation Studio build artifacts and falling back to source scanning. Returns source, confidence, provenance, and warnings. |
 | `plc_search_variables` | `local_write` | `plc_symbol_index.py` | - | Search PLC variables by text, module/task, and read/write access while preserving catalog source, confidence, provenance, and warnings. |
 | `plc_discover_runtime_target` | `local_write` | `persistent PVI runtime` | - | Connect through persistent PVI without source code or a policy file. Unknown physical targets are read-only; test roles must be explicitly declared. |
@@ -147,7 +147,7 @@ MCP server version: `0.12.0`. Full catalog: [../skills/br-plc-toolchain/referenc
 - `target`：默认 `arsim`，生产目标必须被拒绝。
 - `project_path`：默认 `PrintDemo/Huitong_FrontEval.apj`。
 - `config`：默认 `Config1`。
-- `targets_path`：默认 `tools/plc_targets.local.json`。
+- `targets_path`：默认 `config/targets/default-safe.json`。
 - `timeout_seconds`：默认按命令类型设置。
 
 下载工具额外要求：
@@ -215,7 +215,7 @@ MCP 层必须再次检查这些规则，即使 CLI 已经检查：
 M6 写入测试守卫：
 
 1. `plc_write_pvi` 必须要求 `execute=true`。
-2. 只允许写 `tools/plc_targets.local.json` 中 `pvi.write_whitelist` 的变量。
+2. 只允许写 `config/targets/default-safe.json` 中 `pvi.write_whitelist` 的变量。
 3. 禁止写物理 I/O、Safety、系统变量、未列入测试 harness 的业务变量。
 4. `role=production` 直接拒绝写入测试。
 5. 每次写入前后必须记录 readback 和报告路径。
@@ -224,7 +224,7 @@ M6 写入测试守卫：
 M7 Logger 读取守卫：
 
 1. `plc_read_logger` 只读，不提供清空、删除、修改 Logger 的能力。
-2. 只允许读取 `tools/plc_targets.local.json` 中 `logger.allowed_modules` 的模块。
+2. 只允许读取 `config/targets/default-safe.json` 中 `logger.allowed_modules` 的模块。
 3. Safety logger 默认禁用；如未来需要，必须单独设计显式确认和审计流程。
 4. 生产目标默认不自动读取；如需现场诊断，应先明确目标角色和授权方式。
 5. 输出文件默认写入 `tools/.generated/logger/`，并在 JSON 返回值中记录路径。
@@ -516,7 +516,7 @@ tests/plc/
   lqr_io_tests.json
 ```
 
-建议 `tools/plc_targets.local.json` 扩展：
+建议 `config/targets/default-safe.json` 扩展：
 
 ```json
 {
@@ -574,7 +574,7 @@ tools/mcp_server/
   schemas.py         # logger 参数 schema
 ```
 
-`tools/plc_targets.local.json` 已扩展：
+`config/targets/default-safe.json` 已扩展：
 
 ```json
 {

@@ -22,7 +22,7 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 
 1. `docs/PLC_AUTOMATION_TOOLCHAIN_CONTEXT.md` — 工具链整体上下文
 2. `docs/PLC_TOOLCHAIN_IMPLEMENTATION_PLAN.md` — 已验证事实和约束
-3. `tools/plc_targets.local.json` — 当前可用的目标、白名单和路径
+3. `config/targets/default-safe.json` — 当前可用的目标、白名单和路径
 
 ## MCP 工具集
 
@@ -51,11 +51,11 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 - 开启某个 config 的仿真模式时，检查 `PrintDemo/Physical/<config>/Hardware.hw` 中 CPU 模块下的 `Simulation` 参数，按需设置为 `Value="1"`。
 - 修改仿真设置后必须重新构建该 config。构建成功后，Automation Studio 会在 `PrintDemo/Temp/Simulation/<config>/<CPU>/` 下生成仿真文件。
 - 启动 ARsim 时使用实际生成的 loader：`PrintDemo/Temp/Simulation/<config>/<CPU>/ar000loader.exe`。示例：`PrintDemo/Temp/Simulation/x3687x/X20CP3687X/ar000loader.exe`。
-- `tools/plc_targets.local.json` 中 `targets.arsim.arsim_loader_exe` 必须指向实际生成的 `ar000loader.exe`，config 名和 CPU 目录都要与当前构建目标一致。
+- `config/targets/default-safe.json` 中 `targets.arsim.arsim_loader_exe` 必须指向实际生成的 `ar000loader.exe`，config 名和 CPU 目录都要与当前构建目标一致。
 
 ### 当前配置确认
 
-- 在动态变量读写或下载前，先读取当前 `tools/plc_targets.local.json` 或传入的 `targets_path`，确认 `access_policy.mode`、`allow_dynamic_*`、目标 `role` 和 `arsim_loader_exe`。
+- 在动态变量读写或下载前，先读取当前 `config/targets/default-safe.json` 或传入的 `targets_path`，确认 `access_policy.mode`、`allow_dynamic_*`、目标 `role` 和 `arsim_loader_exe`。
 - 不要假设 default 配置一定是 `whitelist` 或 `agent_directed`；最终行为以本次实际加载的配置为准。
 - 如果为了测试临时派生配置，最终报告必须说明使用的是临时配置还是 default 配置；用户要求 default 时，应不传 `targets_path` 再跑一次关键验证。
 
@@ -99,7 +99,7 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 
 ### 变量访问模式
 
-`tools/plc_targets.local.json` 中的 `access_policy.mode` 控制 Agent 是否可以使用白名单外变量：
+`config/targets/default-safe.json` 中的 `access_policy.mode` 控制 Agent 是否可以使用白名单外变量：
 
 所有 PVI/OPC UA 访问结论以 `tools/plc_access_policy.py` 为准；PowerShell、Python 和 MCP 路径共享该策略引擎，不应在调用层自行放宽或重写策略。
 
@@ -127,7 +127,7 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 1. **禁止对生产 PLC 自动下载**。`role=production` 的目标直接拒绝。
 2. **禁止跳过安全检查**。下载前必须 `probe` + `describe_package` + `check_download`。
 3. **禁止修改 Safety 工程**。不修改安全任务、安全 I/O。
-4. **禁止默认开放全部 OPC UA/PVI**。默认 `whitelist` 模式只使用 `plc_targets.local.json` 中的白名单；只有用户手动切换 `access_policy.mode` 后才允许动态变量。
+4. **禁止默认开放动态写入**。生产环境使用白名单；缺少外部策略时只允许运行时发现和读取。测试 PLC 或 ARsim 必须经过明确角色识别及测试会话才能改变变量值。
 5. **禁止无 execute 下载**。`plc_download_ruc` 不带 `execute=true` 只做安全检查，不下载。
 6. **禁止跨类型下载**。ARsim 包不可下载到物理 PLC，反之亦然。
 7. **禁止无策略写 PLC 变量**。默认只能写 `pvi.write_whitelist`；`agent_directed` 模式下也必须先搜索变量，并通过 production、Safety/I/O/system、`execute=true` 等安全门。

@@ -53,7 +53,7 @@
 
 ## 安全边界
 
-1. 默认只允许 ARsim 或 `tools/plc_targets.local.json` 中白名单目标。
+1. 默认只允许 ARsim 或 `config/targets/default-safe.json` 中白名单目标。
 2. 即使目标配置 `allow_auto_download=true`，下载前也必须执行只读探针。
 3. 下载前必须比较：
    - RUC 包 `CPUType` / `OrderNumber` / `RuntimeType` / `ARVersion`
@@ -192,7 +192,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Com
 安全原则：
 
 - 不默认开放全部 PLC 变量。
-- `tools/plc_targets.local.json` 中 `opcua.auto_expose_all=false` 为默认策略。
+- `config/targets/default-safe.json` 中 `opcua.auto_expose_all=false` 为默认策略。
 - 推荐使用 `opcua.exposure_mode=whitelist`，只暴露验证所需变量。
 - 下载后自动验证由 `opcua.verify_after_download=true` 控制。
 
@@ -240,7 +240,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Com
 
 安全与配置：
 
-- `tools/plc_targets.local.json` 中 `pvi.enabled=true` 控制是否启用 PVI 读取。
+- `config/targets/default-safe.json` 中 `pvi.enabled=true` 控制是否启用 PVI 读取。
 - `pvi.verify_after_download=false` 默认不在下载后自动运行 PVI；当前下载后默认仍优先运行 OPC UA。
 - `pvi.validation_variables` 使用白名单变量，不做“读取全部变量”的默认行为。
 - 如需指定 PVI DLL 目录，可设置 `pvi.pvi_dll_dir`，脚本会传入 `PVIPY_PVIDLLPATH`。
@@ -316,7 +316,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Com
 
 ### 配置扩展
 
-建议把 `tools/plc_targets.local.json` 中 PVI 配置扩展为：
+建议把 `config/targets/default-safe.json` 中 PVI 配置扩展为：
 
 ```json
 {
@@ -481,7 +481,7 @@ Logger "Connectivity", "$arlogconn", ".csvx", "<output>", "en"
 
 ### 配置
 
-`tools/plc_targets.local.json` 已扩展：
+`config/targets/default-safe.json` 已扩展：
 
 ```json
 {

@@ -11,7 +11,7 @@
 流程：
 
 1. 阅读 `docs/PLC_AUTOMATION_TOOLCHAIN_CONTEXT.md` 和 `skills/br-plc-toolchain/SKILL.md`。
-2. 如果目标是 `arsim`，先确认 `PrintDemo/Physical/{config}/Hardware.hw` 中 `Simulation` 已开启，并确认 `tools/plc_targets.local.json` 的 `targets.arsim.arsim_loader_exe` 指向 `PrintDemo/Temp/Simulation/{config}/<CPU>/ar000loader.exe`。
+2. 如果目标是 `arsim`，先确认 `PrintDemo/Physical/{config}/Hardware.hw` 中 `Simulation` 已开启，并确认 `config/targets/default-safe.json` 的 `targets.arsim.arsim_loader_exe` 指向 `PrintDemo/Temp/Simulation/{config}/<CPU>/ar000loader.exe`。
 3. 执行 `plc_probe_target(config="{config}", target="{target}")`。
 4. 执行 `plc_describe_ruc_package(config="{config}", target="{target}")`。
 5. 执行 `plc_check_download(config="{config}", target="{target}")`。

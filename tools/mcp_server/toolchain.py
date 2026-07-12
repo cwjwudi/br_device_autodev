@@ -24,8 +24,8 @@ AS_LIBRARY_MANAGER = REPO_ROOT / "tools" / "as_library_manager.py"
 GENERATED_DIR = REPO_ROOT / "tools" / ".generated"
 DEFAULT_PROJECT_PATH = "PrintDemo\\Huitong_FrontEval.apj"
 DEFAULT_CONFIG = "x1685"
-DEFAULT_TARGETS_PATH = "tools\\plc_targets.local.json"
-DEFAULT_ENVIRONMENTS_PATH = "tools\\plc_environments.json"
+DEFAULT_TARGETS_PATH = "config\\targets\\default-safe.json"
+DEFAULT_ENVIRONMENTS_PATH = "config\\environments\\environments.json"
 
 _RUNTIME_SERVICE = None
 _RUNTIME_SERVICE_LOCK = threading.Lock()

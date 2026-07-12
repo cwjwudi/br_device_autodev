@@ -13,7 +13,7 @@
 任一检查未通过，流程立即停止：
 
 1. **目标鉴别**
-   - 检查 `tools/plc_targets.local.json` 中目标的 `role` 字段
+   - 检查 `config/targets/default-safe.json` 中目标的 `role` 字段
    - `role=production` → 拒绝，不继续
    - `allow_auto_download=false` → 拒绝，不继续
 
@@ -63,7 +63,7 @@ ARsim 强制下载是为本机仿真调试准备的例外流程，用于处理 A
 ## 生产 PLC 规则
 
 1. **绝对禁止**通过 MCP 或 Skill 自动下载到生产 PLC
-2. 生产目标不应出现在 `plc_targets.local.json` 中
+2. 生产目标不应出现在办公室测试或 ARsim profile 中
 3. 如果必须配置，设置 `role=production` 且 `allow_auto_download=false`
 4. MCP Server 和 CLI 两层均会拒绝生产目标下载
 5. 人工操作生产下载时，应使用 PowerShell CLI 手动执行，并逐项确认
@@ -98,7 +98,7 @@ PVI 写入能力默认只能用于输入输出测试 harness。若用户手动�
 强制规则：
 
 1. `plc_write_pvi` 必须显式传入 `execute=true`
-2. 默认 `whitelist` 模式只允许写 `tools/plc_targets.local.json` 中的 `pvi.write_whitelist`
+2. 默认 `whitelist` 模式只允许写 `config/targets/default-safe.json` 中的 `pvi.write_whitelist`
 3. `agent_directed` 模式下，Agent 必须先搜索变量，再传入写入请求
 4. 禁止写 `role=production` 的目标
 5. 禁止写 Safety、物理 I/O、系统变量，变量名匹配 `access_policy.blocked_name_patterns` 时直接拒绝

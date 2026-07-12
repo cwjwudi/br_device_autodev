@@ -305,7 +305,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Read a whitelisted B&R PLC/AR logger module through PVITransfer.")
-    parser.add_argument("--target", required=True, help="Target name from tools/plc_targets.local.json.")
+    parser.add_argument("--target", required=True, help="Target name from the selected target configuration.")
     parser.add_argument("--targets-file", required=True, help="Toolchain target configuration JSON.")
     parser.add_argument("--logger-type", default="System", help="Logger module type, for example System.")
     parser.add_argument("--logger-name", default="$arlogsys", help="Logger module name, for example $arlogsys.")

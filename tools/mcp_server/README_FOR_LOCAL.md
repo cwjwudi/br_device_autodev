@@ -58,7 +58,7 @@ MCP server version: `0.12.0`. Full catalog: [../../skills/br-plc-toolchain/refer
 | `plc_reset_test_harness` | `target_change` | `ResetTestHarness` | `execute=true` | Restore/reset the PLC test harness using pvi.restore_writes. Requires execute=true and refuses production targets. |
 | `plc_get_target_config` | `readonly` | `GetTargetConfig` | - | Read the configured target entry, OPC UA whitelist, and PVI whitelist for a target. |
 | `plc_list_targets` | `readonly` | `ListTargets` | - | List configured PLC/ARsim targets with IP, role, and automatic-download permission. |
-| `plc_list_environments` | `readonly` | `MCP native` | - | List named PLC toolchain environments from tools/plc_environments.json for one-step switching. |
+| `plc_list_environments` | `readonly` | `MCP native` | - | List named PLC toolchain environments from config/environments/environments.json. |
 | `plc_list_variables` | `local_write` | `plc_symbol_index.py` | - | Build and list the PLC variable catalog, preferring fresh Automation Studio build artifacts and falling back to source scanning. Returns source, confidence, provenance, and warnings. |
 | `plc_search_variables` | `local_write` | `plc_symbol_index.py` | - | Search PLC variables by text, module/task, and read/write access while preserving catalog source, confidence, provenance, and warnings. |
 | `plc_discover_runtime_target` | `local_write` | `persistent PVI runtime` | - | Connect through persistent PVI without source code or a policy file. Unknown physical targets are read-only; test roles must be explicitly declared. |
@@ -77,24 +77,24 @@ MCP server version: `0.12.0`. Full catalog: [../../skills/br-plc-toolchain/refer
 - 默认目标：`arsim`
 - 默认工程：`PrintDemo\Huitong_FrontEval.apj`
 - 默认配置：`x1685`
-- 配置文件：`tools\plc_targets.local.json`
+- 配置文件：`config\targets\default-safe.json`
 
 ## 环境切换
 
 MCP 支持通过 `environment` 参数一键切换环境。环境清单在：
 
 ```text
-tools\plc_environments.json
+config\environments\environments.json
 ```
 
 当前已配置：
 
-- `default_safe`：保守默认，使用 `tools\plc_targets.local.json`，仅允许白名单访问。
+- `default_safe`：保守默认，使用 `config\targets\default-safe.json`，仅允许白名单访问。
 - `default`：`default_safe` 的兼容别名。
-- `dev_agent_directed`：显式开发环境，使用 `tools\plc_targets.dev.example.json`，仅面向本机 ARsim。
-- `test_whitelist`：专用测试 PLC 模板，使用 `tools\plc_targets.test.example.json`，默认禁止自动下载。
-- `readonly_diagnostics`：只读诊断模板，使用 `tools\plc_targets.readonly.example.json`。
-- `cwj_as6_x3687x`：今天验证通过的本机 AS6 + `x3687x` ARsim 环境，目标配置文件为 `tools\plc_targets.cwj_as6_x3687x.json`。
+- `dev_agent_directed`：显式开发环境，使用 `config\examples\targets\development.example.json`，仅面向本机 ARsim。
+- `test_whitelist`：专用测试 PLC 模板，使用 `config\examples\targets\office-test.example.json`，默认禁止自动下载。
+- `readonly_diagnostics`：只读诊断模板，使用 `config\examples\targets\readonly.example.json`。
+- `cwj_as6_x3687x`：今天验证通过的本机 AS6 + `x3687x` ARsim 环境，目标配置文件为 `config\examples\machines\cwj-as6-x3687x.example.json`。
 - `cwj_test_plc_x1685`：同一套本机 AS6 配置，用于 `192.168.50.222` 物理测试 PLC 和 `x1685` config。
 
 三个 `*.example.json` 文件必须先按本机路径、目标地址和变量白名单完成配置。开放的 `agent_directed` 模式不会由默认环境隐式启用。
@@ -135,7 +135,7 @@ IO 测试套件可声明 `fixture` 元数据和 reset 策略。报告使用固�
 所有工具均接收：
 
 - `target`：目标名称；目标变更工具必须显式传入 `target` 或 `environment`，只读和本地工具未选择时回退到 `arsim`
-- `environment`：环境名，来自 `tools\plc_environments.json`
+- `environment`：环境名，来自 `config\environments\environments.json`
 - `project_path`：AS 工程路径
 - `config`：配置名称，默认 `x1685`
 - `targets_path`：目标配置 JSON 路径，可覆盖 `environment` 中的配置

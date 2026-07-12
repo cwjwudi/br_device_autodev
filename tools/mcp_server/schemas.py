@@ -6,7 +6,7 @@ from typing import Any
 COMMON_PROPERTIES: dict[str, Any] = {
     "environment": {
         "type": "string",
-        "description": "Named PLC toolchain environment from tools/plc_environments.json. Explicit target/project_path/config/targets_path arguments override the environment defaults.",
+        "description": "Named PLC toolchain environment from config/environments/environments.json. Explicit arguments override environment defaults.",
     },
     "target": {
         "type": "string",
@@ -26,7 +26,7 @@ COMMON_PROPERTIES: dict[str, Any] = {
     "targets_path": {
         "type": "string",
         "description": "Toolchain target configuration JSON path. Overrides environment.targets_path when supplied.",
-        "default": "tools\\plc_targets.local.json",
+        "default": "config\\targets\\default-safe.json",
     },
     "timeout_seconds": {
         "type": "integer",
@@ -331,7 +331,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             {
                 "opcua_node_ids": {
                     "type": "array",
-                    "description": "Optional OPC UA node IDs to read. Overrides the whitelist in plc_targets.local.json.",
+                    "description": "Optional OPC UA node IDs to read. Overrides the selected target configuration whitelist.",
                     "items": {"type": "string"},
                 },
             },
@@ -495,7 +495,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "plc_list_environments",
-        "description": "List named PLC toolchain environments from tools/plc_environments.json for one-step switching.",
+        "description": "List named PLC toolchain environments from config/environments/environments.json.",
         "inputSchema": object_schema({}),
     },
     {

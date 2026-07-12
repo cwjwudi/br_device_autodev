@@ -20,7 +20,7 @@
 - ARsim 强制下载只允许在用户明确授权后使用，并且只适用于 `role=arsim` 的本机仿真目标；不得把该授权扩展到物理 PLC 或 `role=production` 目标。
 - ARsim 仿真必须按实际 Automation Studio config 名称处理，不要写死 `Config1`、`x1685` 或 `x3687x`。例如 `x1685`、`x3687x` 都是 config 名。
 - 若要开启某个 config 的仿真模式，检查并按需修改 `PrintDemo/Physical/<config>/Hardware.hw` 中 CPU 模块下的 `Simulation` 参数为 `Value="1"`，然后重新构建该 config。
-- 重新构建开启仿真的 config 后，ARsim loader 通常生成在 `PrintDemo/Temp/Simulation/<config>/<CPU>/ar000loader.exe`，例如 `PrintDemo/Temp/Simulation/x3687x/X20CP3687X/ar000loader.exe`。`tools/plc_targets.local.json` 的 `targets.arsim.arsim_loader_exe` 应与实际生成路径一致。
+- 重新构建开启仿真的 config 后，ARsim loader 通常生成在 `PrintDemo/Temp/Simulation/<config>/<CPU>/ar000loader.exe`，例如 `PrintDemo/Temp/Simulation/x3687x/X20CP3687X/ar000loader.exe`。`config/targets/default-safe.json` 的 `targets.arsim.arsim_loader_exe` 应与实际生成路径一致。
 - 如果 PVI 动态变量返回 `Object not found`，不要先判定为策略拦截；应先确认当前 ARsim/PLC 运行映像是否已经包含对应任务和变量，必要时重新构建、下载并再验证。
 
 ## MCP Server
@@ -49,4 +49,4 @@
 
 ## 配置
 
-目标和工具路径：`tools/plc_targets.local.json`
+目标和工具路径：`config/targets/default-safe.json`
