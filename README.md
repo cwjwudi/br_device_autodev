@@ -234,6 +234,7 @@ MCP server version: `0.12.0`. Full catalog: [skills/br-plc-toolchain/references/
 | `plc_search_variables` | `local_write` | `plc_symbol_index.py` | - | Search PLC variables by text, module/task, and read/write access while preserving catalog source, confidence, provenance, and warnings. |
 | `plc_discover_runtime_target` | `local_write` | `persistent PVI runtime` | - | Connect through persistent PVI without source code or a policy file. Unknown physical targets are read-only; test roles must be explicitly declared. |
 | `plc_runtime_health` | `readonly` | `persistent PVI runtime` | - | Return persistent PVI Manager, CPU, runtime, license and cache status. |
+| `plc_save_runtime_target` | `project_write` | `structured config` | `execute=true` | Explicitly persist an already loaded ephemeral target under Git-ignored config/local. Never performed automatically. |
 | `plc_list_runtime_tasks` | `readonly` | `persistent PVI runtime` | - | List tasks from the running PLC image through PVI, independent of local source code. |
 | `plc_list_runtime_variables` | `readonly` | `persistent PVI runtime` | - | List online task or global variables from the running PLC image through PVI. |
 | `plc_get_runtime_variable_info` | `readonly` | `persistent PVI runtime` | - | Read online PVI type, access rights and metadata for a discovered variable. |
@@ -345,42 +346,14 @@ config/targets/default-safe.json
 
 ## 下一步
 
-计划继续推进 M6：输入输出测试闭环。
+M6 输入输出测试闭环已经实现，包括白名单写入、写后回读、测试套件、恢复动作和统一报告。当前升级新增了无源码运行时发现、持久 PVI 会话、办公室测试 profile 和目标绑定临时会话。
 
-目标是把当前“构建、下载、变量可读”升级为“写入测试输入、读取输出、自动判定 pass/fail”。
+后续工作重点：
 
-建议实施顺序：
-
-1. 新增 PVI 白名单写入能力：
-   - `tools/pvi_write.py`
-   - CLI：`WritePvi`
-   - MCP：`plc_write_pvi`
-   - 必须 `execute=true`
-2. 扩展 `config/targets/default-safe.json`：
-   - `pvi.read_whitelist`
-   - `pvi.write_whitelist`
-   - `pvi.restore_writes`
-3. 新增输入输出测试 runner：
-   - `tools/plc_io_test_runner.py`
-   - CLI：`RunIoTestCase`、`RunTestSuite`、`ResetTestHarness`
-   - MCP：`plc_run_io_test_case`、`plc_run_test_suite`、`plc_reset_test_harness`
-4. 新增测试套件：
-   - `tests/plc/lqr_io_tests.json`
-5. 首批 LQR 测试场景：
-   - 零输入零输出
-   - 常规跟踪误差：`u = -K * (x - x_ref)`
-   - 输出限幅
-   - 未使能输出清零
-   - reset 清零
-6. 输出统一 IO 测试报告：
-   - `var/reports/*_io_test_<suite>.json`
-
-M6 安全边界：
-
-- 只允许写 `pvi.write_whitelist` 中的测试 harness 变量。
-- 禁止写 Safety、物理 I/O、系统变量和生产 PLC。
-- 输出变量默认只读，不写。
-- 每次写入必须记录 write、readback、restore 和报告路径。
+1. 让既有 `plc_read_pvi` / `plc_write_pvi` 兼容入口逐步委托给新运行时服务，最终删除重复的 PVI 连接实现。
+2. 为批量运行时变量读取、订阅和连接自动恢复增加压力测试。
+3. 在更多 ARsim/PLC Runtime 版本上执行兼容性矩阵测试。
+4. 生产目标继续使用显式配置、白名单和审批流程，不自动迁移为测试 profile。
 
 M7：Logger 日志读取（已实现，2026-05-26 验证）。
 

@@ -151,12 +151,12 @@ MCP 只做结构化参数、调用 CLI、返回 JSON；核心逻辑仍放在本�
 - M5：统一验证报告已实现，输出到 `var/reports/*.json`。
 - 第二批 MCP 工具已实现：`plc_run_arsim_closed_loop`、`plc_run_verification_suite`、`plc_get_target_config`、`plc_list_targets`。
 
-下一步：
+当前状态：
 
-- M6：实现输入输出测试闭环，让工具链能证明 PLC 程序行为正确，而不仅是变量可读。
-- 对 LQR 等控制程序，使用 PVI 白名单写入测试输入，等待 PLC 周期执行，再读取输出并做容差断言。
-- 所有写入只允许测试 harness 白名单变量，不写 Safety、物理 I/O、系统变量或生产 PLC。
-- M7：实现 Logger 日志读取能力，基于 PVITransfer `Logger` 命令只读抓取白名单 logger 模块，用于下载失败、运行异常和现场诊断。
+- M6 已完成：白名单 PVI 写入、输入输出断言、恢复动作和统一报告均已实现。
+- M7 已完成：PVITransfer Logger 读取已实现并完成实机验证。
+- M8 已完成第一版：无源码 PVI 发现、持久多目标连接、运行时读取、测试 profile、临时会话写入和写后回读。
+- 下一阶段是把旧 PVI CLI 缩减为新运行时服务的兼容适配器，并扩展连接恢复与兼容性测试。
 
 ## ARsim 下载闭环
 
@@ -264,11 +264,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Com
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command ReadPvi -Target arsim -PviVariable 'gstHmi.stOutputs.diSImage,SVG:strTransform'
 ```
 
-## M6 输入输出测试计划
+## M6 输入输出测试（已实现）
 
 ### 目标
 
-当前 `ReadPvi` 和 `VerifyOpcUa` 只能证明变量存在、可读、下载后程序仍在运行。下一步需要新增自动输入输出测试能力：
+`ReadPvi` 和 `VerifyOpcUa` 只能证明变量存在、可读、下载后程序仍在运行；M6 已新增以下自动输入输出测试闭环：
 
 ```text
 写入测试输入
@@ -279,9 +279,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Com
 -> 恢复测试变量到安全状态
 ```
 
-### 新增本地脚本
+### 已实现本地脚本
 
-建议新增：
+已实现：
 
 - `tools/pvi_write.py`
   - 通过 PVI 写入变量。
@@ -292,9 +292,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Com
   - 执行写入、等待、读取、断言、恢复。
   - 输出统一 JSON 报告。
 
-### 新增 CLI 命令
+### 已实现 CLI 命令
 
-建议在 `tools/plc_toolchain.ps1` 中新增：
+`tools/plc_toolchain.ps1` 已提供：
 
 | 命令 | 用途 |
 |---|---|
@@ -303,9 +303,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Com
 | `RunTestSuite` | 执行 JSON 测试套件 |
 | `ResetTestHarness` | 恢复测试 harness 到安全状态 |
 
-### 新增 MCP 工具
+### 已实现 MCP 工具
 
-建议在 MCP Server 中新增：
+MCP Server 已提供：
 
 | 工具 | 用途 |
 |---|---|
@@ -314,9 +314,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Com
 | `plc_run_test_suite` | 批量测试套件 |
 | `plc_reset_test_harness` | 测试前后恢复 |
 
-### 配置扩展
+### 已实现配置扩展
 
-建议把 `config/targets/default-safe.json` 中 PVI 配置扩展为：
+`config/targets/default-safe.json` 中 PVI 配置已经扩展为：
 
 ```json
 {
@@ -344,16 +344,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Com
 - `LQR:arLqrError`
 - `LQR:stLqrStatus`
 
-### 测试套件目录
+### 测试套件目录（已实现）
 
-建议新增：
+已新增：
 
 ```text
 tests/plc/
   lqr_io_tests.json
 ```
 
-单个 case 建议格式：
+单个 case 格式：
 
 ```json
 {

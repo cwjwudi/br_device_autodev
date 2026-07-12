@@ -535,6 +535,21 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "inputSchema": runtime_schema({}, "target"),
     },
     {
+        "name": "plc_save_runtime_target",
+        "description": "Explicitly persist an already loaded ephemeral target under Git-ignored config/local. Never performed automatically.",
+        "inputSchema": runtime_schema(
+            {
+                "filename": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9][a-z0-9_.-]*\\.json$",
+                },
+                "overwrite": {"type": "boolean", "default": False},
+                "execute": {"type": "boolean"},
+            },
+            "target", "filename", "execute",
+        ),
+    },
+    {
         "name": "plc_list_runtime_tasks",
         "description": "List tasks from the running PLC image through PVI, independent of local source code.",
         "inputSchema": runtime_schema({}, "target"),
@@ -642,6 +657,7 @@ TOOL_RISK_LEVELS: dict[str, str] = {
     "plc_verify_opcua": "local_write",
     "plc_write_pvi": "target_change",
     "plc_discover_runtime_target": "local_write",
+    "plc_save_runtime_target": "project_write",
     "plc_runtime_health": "readonly",
     "plc_list_runtime_tasks": "readonly",
     "plc_list_runtime_variables": "readonly",
@@ -681,6 +697,7 @@ TOOL_BACKENDS: dict[str, str] = {
     "plc_verify_opcua": "VerifyOpcUa",
     "plc_write_pvi": "WritePvi",
     "plc_discover_runtime_target": "persistent PVI runtime",
+    "plc_save_runtime_target": "structured config",
     "plc_runtime_health": "persistent PVI runtime",
     "plc_list_runtime_tasks": "persistent PVI runtime",
     "plc_list_runtime_variables": "persistent PVI runtime",

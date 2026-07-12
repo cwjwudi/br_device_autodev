@@ -9,7 +9,11 @@ from pathlib import Path
 from typing import Any
 
 from br_plc_toolchain.backends.pvi import PviSessionManager, PviTarget, VariableRef
-from br_plc_toolchain.config.loader import REPO_ROOT, create_ephemeral_target_config
+from br_plc_toolchain.config.loader import (
+    REPO_ROOT,
+    create_ephemeral_target_config,
+    save_local_target,
+)
 from br_plc_toolchain.policy import RuntimePolicy, TestSessionManager
 
 
@@ -68,6 +72,25 @@ class RuntimePviService:
         }
         self._write_manifest(target.name, manifest)
         return {"ok": bool(health.get("ok")), **manifest}
+
+    def save_target(
+        self,
+        target_name: str,
+        *,
+        filename: str,
+        execute: bool,
+        overwrite: bool = False,
+    ) -> dict[str, Any]:
+        if not execute:
+            raise PermissionError("Saving a runtime target requires execute=true")
+        _, config = self._resolve(target_name)
+        path = save_local_target(config, filename=filename, overwrite=overwrite)
+        return {
+            "ok": True,
+            "target": target_name,
+            "config_path": str(path),
+            "loaded_in_current_session": True,
+        }
 
     def list_tasks(self, target_name: str) -> dict[str, Any]:
         target, _ = self._resolve(target_name)

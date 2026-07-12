@@ -6,6 +6,7 @@ import pytest
 
 from br_plc_toolchain.backends.pvi.models import VariableRef
 from br_plc_toolchain.services.runtime_pvi import RuntimePviService
+from br_plc_toolchain.config import loader
 
 
 class FakeManager:
@@ -95,3 +96,13 @@ def test_unknown_target_can_discover_and_read_but_not_write(tmp_path) -> None:
     with pytest.raises(PermissionError, match="same-value"):
         service.write("unknown", ref, False, execute=True)
 
+
+def test_save_target_is_explicit_and_uses_ignored_local_config(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(loader, "LOCAL_ROOT", tmp_path / "local")
+    service = build_service(tmp_path / "discovery")
+    service.register_ephemeral_target(ip="192.168.50.233", name="plc", declared_role="test")
+    with pytest.raises(PermissionError, match="execute=true"):
+        service.save_target("plc", filename="office-plc.json", execute=False)
+    result = service.save_target("plc", filename="office-plc.json", execute=True)
+    assert result["ok"] is True
+    assert (tmp_path / "local" / "office-plc.json").is_file()

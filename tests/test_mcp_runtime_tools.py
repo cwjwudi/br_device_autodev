@@ -26,6 +26,9 @@ class FakeRuntimeService:
     def health(self, target):
         return {"ok": True, "target": target}
 
+    def save_target(self, target, **kwargs):
+        return {"ok": True, "target": target, "config_path": "config/local/plc.json", **kwargs}
+
     def list_tasks(self, target):
         return {"ok": True, "target": target, "tasks": ["Main"]}
 
@@ -87,6 +90,23 @@ def test_runtime_write_requires_explicit_execute_at_schema_layer() -> None:
     assert result["structuredContent"]["error"] == "Tool argument validation failed."
 
 
+def test_save_runtime_target_requires_confirmation_and_is_audited(tmp_path) -> None:
+    rejected = call("plc_save_runtime_target", {"target": "plc", "filename": "plc.json"})
+    assert rejected["isError"] is True
+    fake = FakeRuntimeService()
+    with (
+        patch.object(toolchain, "_RUNTIME_SERVICE", fake),
+        patch.object(server, "AUDIT_DIR", tmp_path / "audit"),
+        patch.object(server, "LOCK_DIR", tmp_path / "locks"),
+    ):
+        saved = call(
+            "plc_save_runtime_target",
+            {"target": "plc", "filename": "plc.json", "execute": True},
+        )
+    assert saved["isError"] is False
+    assert saved["structuredContent"]["audit"]
+
+
 def test_runtime_write_and_test_session_are_audited_target_changes(tmp_path) -> None:
     fake = FakeRuntimeService()
     with (
@@ -111,4 +131,3 @@ def test_runtime_write_and_test_session_are_audited_target_changes(tmp_path) -> 
         )
     assert opened["isError"] is False and opened["structuredContent"]["audit"]
     assert written["isError"] is False and written["structuredContent"]["audit"]
-

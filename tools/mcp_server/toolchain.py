@@ -1145,6 +1145,16 @@ def plc_runtime_health(arguments: dict[str, Any]) -> dict[str, Any]:
     return service.health(target)
 
 
+def plc_save_runtime_target(arguments: dict[str, Any]) -> dict[str, Any]:
+    service, target = _ensure_runtime_target(arguments)
+    return service.save_target(
+        target,
+        filename=str(arguments.get("filename") or ""),
+        execute=arguments.get("execute") is True,
+        overwrite=arguments.get("overwrite") is True,
+    )
+
+
 def plc_list_runtime_tasks(arguments: dict[str, Any]) -> dict[str, Any]:
     service, target = _ensure_runtime_target(arguments)
     return service.list_tasks(target)
@@ -1224,6 +1234,7 @@ TOOLS = {
     "plc_list_variables": plc_list_variables,
     "plc_search_variables": plc_search_variables,
     "plc_discover_runtime_target": plc_discover_runtime_target,
+    "plc_save_runtime_target": plc_save_runtime_target,
     "plc_runtime_health": plc_runtime_health,
     "plc_list_runtime_tasks": plc_list_runtime_tasks,
     "plc_list_runtime_variables": plc_list_runtime_variables,
