@@ -10,7 +10,7 @@
 
 ## 结果
 
-- MCP Server 暴露 36 个工具。
+- MCP Server 第一轮写入验证时暴露 36 个工具；加入显式本机配置保存能力后，最终冒烟测试为 37 个工具。
 - PVI 连接成功，CPU 状态为 `RUN/WarmStart`，Automation Runtime 为 `J4.93`。
 - 自动发现 11 个任务。
 - `DataSQLBat` 任务自动发现 14 个变量。
@@ -20,6 +20,7 @@
 - 会话内将变量由 `false` 改为 `true`，写后回读成功。
 - 将变量恢复为 `false`，再次独立读取确认恢复成功。
 - 主动关闭测试会话。
+- 升级完成后的最终非破坏性 MCP 冒烟测试再次确认：11 个任务、`DataSQLBat` 14 个变量，`bSimEnable=false` 且类型为 `boolean`。
 
 ## 安全与清理确认
 
