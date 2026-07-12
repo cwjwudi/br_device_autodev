@@ -17,7 +17,7 @@ from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUTPUT_DIR = REPO_ROOT / "tools" / ".generated" / "logger"
+DEFAULT_OUTPUT_DIR = REPO_ROOT / "var" / "logger"
 DEFAULT_ALLOWED_MODULES = [
     {"type": "System", "name": "$arlogsys"},
     {"type": "User", "name": "$arlogusr"},

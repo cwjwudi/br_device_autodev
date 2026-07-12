@@ -36,8 +36,8 @@ MCP server version: `0.12.0`. Full catalog: [../../skills/br-plc-toolchain/refer
 | --- | --- | --- | --- | --- |
 | `plc_doctor` | `readonly` | `MCP native diagnostics` | - | Check local Python, PowerShell, Automation Studio, PVITransfer, PVI Python dependency, target config, project/config, ARsim loader, and generated-output write access. |
 | `plc_validate_environment` | `readonly` | `MCP native diagnostics` | - | Validate the selected environment or explicit project/config/target/targets_path mapping without connecting to a PLC. |
-| `plc_list_reports` | `readonly` | `MCP native report index` | - | List compact metadata for historical JSON reports under tools/.generated/reports without returning report bodies. |
-| `plc_read_report_summary` | `readonly` | `MCP native report summary` | - | Read a compact summary of one JSON report confined to tools/.generated/reports. Does not return large logs or arbitrary report fields. |
+| `plc_list_reports` | `readonly` | `MCP native report index` | - | List compact metadata for historical JSON reports under var/reports without returning report bodies. |
+| `plc_read_report_summary` | `readonly` | `MCP native report summary` | - | Read a compact summary of one JSON report confined to var/reports. Does not return large logs or arbitrary report fields. |
 | `plc_build_project` | `local_write` | `Build` | - | Build the B&R Automation Studio project. Optionally generate a RUC package for download. |
 | `plc_find_library_for_symbol` | `readonly` | `as_library_manager.py find` | - | Find the trusted, locally installed Automation Studio libraries that declare a missing function, function block, type, constant, or C symbol. |
 | `plc_plan_project_library` | `readonly` | `as_library_manager.py plan` | - | Plan adding an installed Automation Studio library and its dependencies without modifying the project. Rejects ambiguous versions, incompatible Technology Packages, and Safety-related libraries. |
@@ -113,7 +113,7 @@ config\environments\environments.json
 
 ## 锁与审计
 
-构建、工程修改和所有目标变更工具由 MCP Server 自动加锁。工程锁按 `project_path + config` 隔离，目标锁按 `targets_path + target` 隔离；锁文件位于 `tools\.generated\locks\`。关键调用在开始及成功、失败、拒绝或锁冲突时写入 `tools\.generated\audit\`，审计只记录 PVI 写入变量名和数量，不记录写入值。
+构建、工程修改和所有目标变更工具由 MCP Server 自动加锁。工程锁按 `project_path + config` 隔离，目标锁按 `targets_path + target` 隔离；锁文件位于 `var\locks\`。关键调用在开始及成功、失败、拒绝或锁冲突时写入 `var\audit\`，审计只记录 PVI 写入变量名和数量，不记录写入值。
 
 ## 测试夹具报告
 
@@ -128,7 +128,7 @@ IO 测试套件可声明 `fixture` 元数据和 reset 策略。报告使用固�
 - `plc_doctor`：检查 Python、PowerShell、Automation Studio、PVITransfer、PVI Python、目标配置、工程/config、ARsim loader 和生成目录写权限。
 - `plc_validate_environment`：只校验所选 environment 或显式参数映射，不连接 PLC。
 - `plc_list_reports`：按类型和通过/失败状态列出紧凑报告元数据。
-- `plc_read_report_summary`：读取单个报告的状态、计数、失败阶段和 case 摘要，路径强制限制在 `tools\.generated\reports\`。
+- `plc_read_report_summary`：读取单个报告的状态、计数、失败阶段和 case 摘要，路径强制限制在 `var\reports\`。
 
 ## 通用参数
 

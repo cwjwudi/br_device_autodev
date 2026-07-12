@@ -761,7 +761,7 @@ def add_project_library(
     result["command"] = "AddProjectLibrary"
     result["executed"] = False
 
-    transaction_dir = repo_root / "tools" / ".generated" / "library_transactions" / transaction_id
+    transaction_dir = repo_root / "var" / "library_transactions" / transaction_id
     stage_dir = transaction_dir / "stage"
     backup_path = transaction_dir / "Package.pkg.before"
 
@@ -843,7 +843,7 @@ def add_project_library(
 def rollback_transaction(repo_root: Path, transaction_id: str) -> dict[str, Any]:
     if not re.fullmatch(r"[0-9a-f]{32}", transaction_id):
         return {"command": "RollbackLibraryAdd", "ok": False, "errors": ["invalid transaction id"]}
-    transaction_dir = (repo_root / "tools" / ".generated" / "library_transactions" / transaction_id).resolve()
+    transaction_dir = (repo_root / "var" / "library_transactions" / transaction_id).resolve()
     if not path_within(transaction_dir, repo_root):
         return {"command": "RollbackLibraryAdd", "ok": False, "errors": ["transaction path escaped repository root"]}
     manifest_path = transaction_dir / "transaction.json"

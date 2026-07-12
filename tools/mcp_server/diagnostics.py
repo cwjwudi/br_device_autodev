@@ -12,8 +12,8 @@ from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-REPORTS_DIR = REPO_ROOT / "tools" / ".generated" / "reports"
-GENERATED_DIR = REPO_ROOT / "tools" / ".generated"
+REPORTS_DIR = REPO_ROOT / "var" / "reports"
+GENERATED_DIR = REPO_ROOT / "var"
 MAX_REPORT_BYTES = 10 * 1024 * 1024
 
 
@@ -329,14 +329,14 @@ def resolve_report_path(raw_path: str, reports_dir: Path = REPORTS_DIR) -> Path:
     supplied = Path(raw_path)
     if supplied.is_absolute():
         candidate = supplied.resolve()
-    elif supplied.parts[:3] == ("tools", ".generated", "reports"):
+    elif supplied.parts[:2] == ("var", "reports"):
         candidate = (REPO_ROOT / supplied).resolve()
     else:
         candidate = (root / supplied).resolve()
     try:
         candidate.relative_to(root)
     except ValueError as exc:
-        raise ValueError("Report path must stay inside tools/.generated/reports.") from exc
+        raise ValueError("Report path must stay inside var/reports.") from exc
     if candidate.suffix.lower() != ".json":
         raise ValueError("Report path must reference a JSON file.")
     if not candidate.is_file():

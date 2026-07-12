@@ -88,7 +88,7 @@ class McpLibraryToolTests(unittest.TestCase):
         self.assertTrue(result["data"]["rollback"]["ok"])
 
     def test_stdio_server_executes_isolated_library_add(self) -> None:
-        generated = REPO_ROOT / "tools" / ".generated"
+        generated = REPO_ROOT / "var"
         generated.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=generated, prefix="mcp_library_test_") as temp_name:
             temp_root = Path(temp_name)

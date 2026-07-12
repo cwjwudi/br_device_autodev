@@ -88,7 +88,7 @@ def opcua_read_set(config: dict[str, Any]) -> set[str]:
 
 
 def catalog_path(config: dict[str, Any], targets_file: str) -> Path:
-    raw = (config.get("access_policy") or {}).get("catalog_path") or "tools/.generated/plc_symbol_catalog.json"
+    raw = (config.get("access_policy") or {}).get("catalog_path") or "var/catalogs/plc_symbol_catalog.json"
     path = Path(str(raw))
     if path.is_absolute():
         return path

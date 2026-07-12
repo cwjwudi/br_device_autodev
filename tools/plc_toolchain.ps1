@@ -26,7 +26,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $RepoRoot = (Resolve-Path -LiteralPath ".").Path
-$GeneratedDir = Join-Path $RepoRoot "tools\.generated"
+$GeneratedDir = Join-Path $RepoRoot "var"
 
 function Resolve-RepoPath {
     param([Parameter(Mandatory = $true)][string]$Path)
@@ -1203,7 +1203,7 @@ Usage:
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command ReadPvi -Target arsim
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command ReadPvi -Target arsim -PviVariable 'gstHmi.stOutputs.diSImage,SVG:strTransform'
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command ReadLogger -Target test_plc -LoggerType System -LoggerName '`$arlogsys' -Format .html
-  powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command WritePvi -Target test_plc -WritesPath tools\.generated\pvi_writes.json -Execute
+  powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command WritePvi -Target test_plc -WritesPath var\pvi_writes.json -Execute
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command ResetTestHarness -Target test_plc -Execute
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command RunIoTestCase -Target test_plc -SuitePath tests\plc\lqr_io_tests.json -CaseName zero_state_zero_output -Execute
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command RunTestSuite -Target test_plc -SuitePath tests\plc\lqr_io_tests.json -Execute

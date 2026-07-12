@@ -18,7 +18,7 @@
 plc_run_arsim_closed_loop(arguments: { "config": "<actual_config>", "target": "arsim", "execute": true })
 ```
 
-该工具会执行下方同等步骤，并写入 `tools/.generated/reports/*_closed_loop_arsim.json`。
+该工具会执行下方同等步骤，并写入 `var/reports/*_closed_loop_arsim.json`。
 
 ### 步骤
 
@@ -116,7 +116,7 @@ plc_run_arsim_closed_loop(arguments: { "config": "<actual_config>", "target": "a
    → 检查兼容性判定
 
 4. 读取日志:
-   - tools/.generated/probe_<target>.log
+   - var/probe_<target>.log
    - 下载日志 (data.log_path)
 ```
 
@@ -191,7 +191,7 @@ plc_run_arsim_closed_loop(arguments: { "config": "<actual_config>", "target": "a
 - 每个测试用例的写入均通过 `access_policy` 校验
 - 每个测试用例的断言均通过
 - restore/reset 成功
-- 报告写入 `tools/.generated/reports/*_io_test_<suite>.json`
+- 报告写入 `var/reports/*_io_test_<suite>.json`
 
 ### 失败处置
 

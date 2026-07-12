@@ -28,7 +28,7 @@ flowchart TD
     CLI --> Logger["tools/plc_logger_read.py\nLogger 只读诊断"]
     Wrapper --> SymbolIndex["tools/plc_symbol_index.py\n变量目录 / 动态变量搜索"]
     CLI --> Config["tools/plc_targets*.json / config/environments/environments.json\n目标、白名单、环境配置"]
-    CLI --> Reports["tools/.generated/\n日志、临时参数、验证报告"]
+    CLI --> Reports["var/\n日志、临时参数、验证报告"]
     CLI --> PLC["ARsim / 白名单测试 PLC"]
 ```
 
@@ -46,17 +46,17 @@ flowchart TD
 | MCP Wrapper | `tools/mcp_server/toolchain.py` | 解析环境参数，调用 PowerShell CLI，整理 JSON 返回、日志路径、警告、下一步建议 | 不绕过 CLI 直接调用 B&R 工具 |
 | 本地 CLI | `tools/plc_toolchain.ps1` | 项目内唯一执行底座：构建、启动 ARsim、探针、安全检查、下载、验证、报告 | 不承担 Agent 策略判断 |
 | 官方/协议工具 | `BR.AS.Build.exe`、`PVITransfer.exe`、OPC UA/PVI 脚本 | 执行真实构建、下载、读取、写入测试变量、Logger 抓取 | 不理解 Agent 任务语义 |
-| 配置和报告 | `tools/plc_targets*.json`、`config/environments/environments.json`、`tools/.generated/*` | 目标配置、白名单、环境切换、日志和报告归档 | 不发起动作 |
+| 配置和报告 | `tools/plc_targets*.json`、`config/environments/environments.json`、`var/*` | 目标配置、白名单、环境切换、日志和报告归档 | 不发起动作 |
 
 变量访问策略由 `tools/plc_access_policy.py` 唯一实现。`tools/plc_access_policy_cli.py` 提供稳定 JSON 契约，PowerShell 的 PVI/OPC UA 读取门控也调用该 CLI，不再单独维护白名单、目标角色或黑名单判断。
 
-MCP Server 对构建、工程修改、目标状态变更和完整测试流程执行文件锁与审计。锁位于 `tools/.generated/locks/`，同一工程/config 或同一目标不能并发执行关键动作；审计位于 `tools/.generated/audit/`，记录开始和最终状态、目标角色、环境、请求摘要、报告/日志路径，并对写入值和敏感字段脱敏。
+MCP Server 对构建、工程修改、目标状态变更和完整测试流程执行文件锁与审计。锁位于 `var/locks/`，同一工程/config 或同一目标不能并发执行关键动作；审计位于 `var/audit/`，记录开始和最终状态、目标角色、环境、请求摘要、报告/日志路径，并对写入值和敏感字段脱敏。
 
 IO 测试报告声明套件 `fixture`，并使用 `validation`、`write`、`read`、`assert`、`restore` 五类失败阶段。`reset_records` 记录套件和 case 前后的恢复动作；前置 reset 失败会跳过后续 case，任何最终 restore 失败都会覆盖测试成功状态并要求人工检查。
 
 变量 catalog 优先解析 Automation Studio 生成头文件，并用 `Symbols.map` 作为构建证据；生成文件缺失、不可解析或旧于 `.var` 源文件时降级到源码扫描。`catalog_source`、`confidence`、`generated_from` 和 `warnings` 会保留在列表与搜索结果中，低可信结果不得被视为运行时变量绝对事实。
 
-Agent 在执行闭环前可调用 `plc_doctor` 和 `plc_validate_environment` 定位本机依赖或环境映射问题。`plc_list_reports` 与 `plc_read_report_summary` 只访问 `tools/.generated/reports/`，返回状态、计数、失败阶段、case 摘要和路径，不返回任意大字段或日志正文。
+Agent 在执行闭环前可调用 `plc_doctor` 和 `plc_validate_environment` 定位本机依赖或环境映射问题。`plc_list_reports` 与 `plc_read_report_summary` 只访问 `var/reports/`，返回状态、计数、失败阶段、case 摘要和路径，不返回任意大字段或日志正文。
 
 ## AGENTS.md、Prompt、Skill、MCP 的关系
 
@@ -164,7 +164,7 @@ plc_verify_opcua
 plc_run_verification_suite
 ```
 
-该组合工具会生成 `tools/.generated/reports/*_verification_<target>.json`。
+该组合工具会生成 `var/reports/*_verification_<target>.json`。
 
 ### 4. IO 测试闭环
 
@@ -301,12 +301,12 @@ Automation Studio config 必须按项目真实名称处理。本项目当前可�
 | PVI 写入 | `tools/pvi_write.py` | 测试 harness 白名单写入 |
 | IO 测试 runner | `tools/plc_io_test_runner.py` | 单用例/测试套件执行、断言和恢复 |
 | Logger 读取 | `tools/plc_logger_read.py` | PVITransfer Logger 只读诊断 |
-| 变量目录/搜索 | `tools/plc_symbol_index.py` | 扫描 PLC 变量，生成 `tools/.generated/plc_symbol_catalog.json`，供 Agent 动态选变量 |
+| 变量目录/搜索 | `tools/plc_symbol_index.py` | 扫描 PLC 变量，生成 `var/catalogs/plc_symbol_catalog.json`，供 Agent 动态选变量 |
 | MCP Server | `tools/mcp_server/*` | MCP JSON-RPC 工具接口 |
 | 目标配置 | `tools/plc_targets*.json` | 工具路径、目标、白名单、安全角色 |
 | 环境配置 | `config/environments/environments.json` | 多环境默认参数映射 |
 | 测试套件 | `tests/plc/lqr_io_tests.json` | LQR IO 测试用例 |
-| 生成物目录 | `tools/.generated/*` | 日志、临时 JSON、报告、logger 输出 |
+| 生成物目录 | `var/*` | 日志、临时 JSON、报告、logger 输出 |
 
 ### 3. Agent 支持模块
 

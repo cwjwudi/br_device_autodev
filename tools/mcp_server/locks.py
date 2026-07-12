@@ -15,7 +15,7 @@ from schemas import TOOL_RISK_LEVELS
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-LOCK_DIR = REPO_ROOT / "tools" / ".generated" / "locks"
+LOCK_DIR = REPO_ROOT / "var" / "locks"
 DEFAULT_ENVIRONMENTS_PATH = REPO_ROOT / "config" / "environments" / "environments.json"
 DEFAULT_TARGETS_PATH = "config\\targets\\default-safe.json"
 DEFAULT_PROJECT_PATH = "PrintDemo\\Huitong_FrontEval.apj"

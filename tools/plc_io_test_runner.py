@@ -19,7 +19,7 @@ from pvi_write import load_target_config, validate_writes, write_variables
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_REPORT_DIR = REPO_ROOT / "tools" / ".generated" / "reports"
+DEFAULT_REPORT_DIR = REPO_ROOT / "var" / "reports"
 FAILURE_STAGES = ("validation", "write", "read", "assert", "restore")
 
 

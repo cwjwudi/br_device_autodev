@@ -28,7 +28,7 @@
       "*system*",
       "sys:*"
     ],
-    "catalog_path": "tools/.generated/plc_symbol_catalog.json"
+    "catalog_path": "var/catalogs/plc_symbol_catalog.json"
   },
   "opcua": {
     "auto_expose_all": false,

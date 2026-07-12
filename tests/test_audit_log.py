@@ -50,7 +50,7 @@ class AuditLogTests(unittest.TestCase):
                 "tool": "plc_write_pvi",
                 "target": "arsim",
                 "summary": "write completed",
-                "data": {"report_path": "tools/.generated/reports/write.json"},
+                "data": {"report_path": "var/reports/write.json"},
                 "logs": [],
                 "warnings": [],
             }

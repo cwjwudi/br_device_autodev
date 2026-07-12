@@ -105,7 +105,7 @@ PrintDemo/
   - `prompts/plc_toolchain/safe_download_check.md`
   - `prompts/plc_toolchain/add_plc_feature_with_feedback.md`
   - `prompts/plc_toolchain/diagnose_download_failure.md`
-- 完成 M5：统一验证报告，输出到 `tools/.generated/reports/*.json`。
+- 完成 M5：统一验证报告，输出到 `var/reports/*.json`。
 - 工具新增、风险分级和确认参数由 `tools/mcp_server/schemas.py` 统一维护。
 
 已验证结果：
@@ -198,8 +198,8 @@ MCP server version: `0.12.0`. Full catalog: [skills/br-plc-toolchain/references/
 | --- | --- | --- | --- | --- |
 | `plc_doctor` | `readonly` | `MCP native diagnostics` | - | Check local Python, PowerShell, Automation Studio, PVITransfer, PVI Python dependency, target config, project/config, ARsim loader, and generated-output write access. |
 | `plc_validate_environment` | `readonly` | `MCP native diagnostics` | - | Validate the selected environment or explicit project/config/target/targets_path mapping without connecting to a PLC. |
-| `plc_list_reports` | `readonly` | `MCP native report index` | - | List compact metadata for historical JSON reports under tools/.generated/reports without returning report bodies. |
-| `plc_read_report_summary` | `readonly` | `MCP native report summary` | - | Read a compact summary of one JSON report confined to tools/.generated/reports. Does not return large logs or arbitrary report fields. |
+| `plc_list_reports` | `readonly` | `MCP native report index` | - | List compact metadata for historical JSON reports under var/reports without returning report bodies. |
+| `plc_read_report_summary` | `readonly` | `MCP native report summary` | - | Read a compact summary of one JSON report confined to var/reports. Does not return large logs or arbitrary report fields. |
 | `plc_build_project` | `local_write` | `Build` | - | Build the B&R Automation Studio project. Optionally generate a RUC package for download. |
 | `plc_find_library_for_symbol` | `readonly` | `as_library_manager.py find` | - | Find the trusted, locally installed Automation Studio libraries that declare a missing function, function block, type, constant, or C symbol. |
 | `plc_plan_project_library` | `readonly` | `as_library_manager.py plan` | - | Plan adding an installed Automation Studio library and its dependencies without modifying the project. Rejects ambiguous versions, incompatible Technology Packages, and Safety-related libraries. |
@@ -280,10 +280,10 @@ plc_build_project(build_ruc_package=true)
 
 ```text
 plc_run_arsim_closed_loop(target="arsim", execute=true)
-  -> writes tools/.generated/reports/*_closed_loop_arsim.json
+  -> writes var/reports/*_closed_loop_arsim.json
 
 plc_run_verification_suite(target="arsim")
-  -> writes tools/.generated/reports/*_verification_arsim.json
+  -> writes var/reports/*_verification_arsim.json
 ```
 
 ### 测试验证结果（2026-05-22）
@@ -364,7 +364,7 @@ config/targets/default-safe.json
    - 未使能输出清零
    - reset 清零
 6. 输出统一 IO 测试报告：
-   - `tools/.generated/reports/*_io_test_<suite>.json`
+   - `var/reports/*_io_test_<suite>.json`
 
 M6 安全边界：
 
@@ -387,7 +387,7 @@ M7：Logger 日志读取（已实现，2026-05-26 验证）。
    - `logger.default_format`
    - `logger.allowed_modules`
    - `logger.blocked_modules`
-5. 输出日志到 `tools/.generated/logger/*`，MCP 只返回路径和摘要，不直接输出大段 HTML/CSV 内容。
+5. 输出日志到 `var/logger/*`，MCP 只返回路径和摘要，不直接输出大段 HTML/CSV 内容。
 6. 测试报告归档在 `docs/PLC_LOGGER_READ_TEST_REPORT.md`。
 
 已验证命令：

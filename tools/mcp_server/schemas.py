@@ -129,7 +129,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "plc_list_reports",
-        "description": "List compact metadata for historical JSON reports under tools/.generated/reports without returning report bodies.",
+        "description": "List compact metadata for historical JSON reports under var/reports without returning report bodies.",
         "inputSchema": object_schema(
             {
                 "limit": {
@@ -156,7 +156,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "plc_read_report_summary",
-        "description": "Read a compact summary of one JSON report confined to tools/.generated/reports. Does not return large logs or arbitrary report fields.",
+        "description": "Read a compact summary of one JSON report confined to var/reports. Does not return large logs or arbitrary report fields.",
         "inputSchema": required_schema(
             object_schema(
                 {
@@ -373,7 +373,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 },
                 "output_path": {
                     "type": "string",
-                    "description": "Optional output file or directory. Must stay inside the repository. Defaults to tools/.generated/logger/.",
+                    "description": "Optional output file or directory. Must stay inside the repository. Defaults to var/logger/.",
                 },
             }
         ),

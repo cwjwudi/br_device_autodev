@@ -21,7 +21,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 PLC_TOOLCHAIN = REPO_ROOT / "tools" / "plc_toolchain.ps1"
 AS_LIBRARY_MANAGER = REPO_ROOT / "tools" / "as_library_manager.py"
-GENERATED_DIR = REPO_ROOT / "tools" / ".generated"
+GENERATED_DIR = REPO_ROOT / "var"
 DEFAULT_PROJECT_PATH = "PrintDemo\\Huitong_FrontEval.apj"
 DEFAULT_CONFIG = "x1685"
 DEFAULT_TARGETS_PATH = "config\\targets\\default-safe.json"
@@ -1041,7 +1041,7 @@ def plc_read_report_summary(arguments: dict[str, Any]) -> dict[str, Any]:
 def run_symbol_index(arguments: dict[str, Any], *, search: bool) -> dict[str, Any]:
     options = resolve_call_options(arguments, default_target="arsim")
     script = REPO_ROOT / "tools" / "plc_symbol_index.py"
-    catalog_path = REPO_ROOT / "tools" / ".generated" / "plc_symbol_catalog.json"
+    catalog_path = REPO_ROOT / "var" / "catalogs" / "plc_symbol_catalog.json"
     project_file = Path(options["project_path"])
     if not project_file.is_absolute():
         project_file = REPO_ROOT / project_file

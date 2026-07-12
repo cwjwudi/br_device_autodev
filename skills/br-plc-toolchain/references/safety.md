@@ -124,12 +124,12 @@ PVI 写入能力默认只能用于输入输出测试 harness。若用户手动�
 3. `error(s) > 0` → 构建失败，停止后续步骤
 4. `error(s) = 0` → 构建成功，可以继续
 5. warnings 仅记录，不阻止流程
-6. 构建日志保存在 `tools/.generated/build_<Config>.log`
+6. 构建日志保存在 `var/build_<Config>.log`
 
 ## 日志和审计
 
-1. 每次构建日志自动保存到 `tools/.generated/`
-2. 每次探针日志保存到 `tools/.generated/probe_<target>.log`
+1. 每次构建日志自动保存到 `var/`
+2. 每次探针日志保存到 `var/probe_<target>.log`
 3. 下载日志在 `PrintDemo/Binaries/` 下对应目录
-4. OPC UA 读取的节点文件保存在 `tools/.generated/opcua_nodes_<target>.json`
-5. PVI 读取的变量文件保存在 `tools/.generated/pvi_variables_<target>.json`
+4. OPC UA 读取的节点文件保存在 `var/opcua_nodes_<target>.json`
+5. PVI 读取的变量文件保存在 `var/pvi_variables_<target>.json`

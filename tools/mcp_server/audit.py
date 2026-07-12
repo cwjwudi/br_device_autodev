@@ -11,7 +11,7 @@ from locks import resolve_scope_context
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-AUDIT_DIR = REPO_ROOT / "tools" / ".generated" / "audit"
+AUDIT_DIR = REPO_ROOT / "var" / "audit"
 SENSITIVE_KEY_PARTS = ("password", "secret", "token", "credential")
 
 

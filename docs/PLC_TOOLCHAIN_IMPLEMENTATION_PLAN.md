@@ -148,7 +148,7 @@ MCP 只做结构化参数、调用 CLI、返回 JSON；核心逻辑仍放在本�
 - M2：MCP Server 第一批 8 个工具已实现并验证。
 - M3：`br-plc-toolchain` Skill 已创建。
 - M4：Prompt 模板已创建于 `prompts/plc_toolchain/`。
-- M5：统一验证报告已实现，输出到 `tools/.generated/reports/*.json`。
+- M5：统一验证报告已实现，输出到 `var/reports/*.json`。
 - 第二批 MCP 工具已实现：`plc_run_arsim_closed_loop`、`plc_run_verification_suite`、`plc_get_target_config`、`plc_list_targets`。
 
 下一步：
@@ -402,7 +402,7 @@ tests/plc/
 报告路径：
 
 ```text
-tools/.generated/reports/*_io_test_<suite>.json
+var/reports/*_io_test_<suite>.json
 ```
 
 报告必须包含：
@@ -441,7 +441,7 @@ tools/.generated/reports/*_io_test_<suite>.json
   - 调用 `tools/invoke_pvitransfer_silent.ps1`。
   - 校验 logger 模块白名单和输出格式。
   - 返回 output 路径、PVITransfer log 路径和错误摘要。
-  - 默认输出到 `tools/.generated/logger/`。
+  - 默认输出到 `var/logger/`。
   - 对 `.csvx` 输出做轻量摘要解析；解析失败只返回 `summary_parse_error`，不影响读取结果。
 - `tools/plc_toolchain.ps1 -Command ReadLogger`
   - CLI 统一入口。
@@ -453,7 +453,7 @@ tools/.generated/reports/*_io_test_<suite>.json
 输出目录：
 
 ```text
-tools/.generated/logger/
+var/logger/
 ```
 
 ### PVITransfer 命令
@@ -507,7 +507,7 @@ Logger "Connectivity", "$arlogconn", ".csvx", "<output>", "en"
 - 不提供清空、删除、修改 Logger 的能力。
 - Safety logger 默认禁用；如未来需要，必须单独设计显式确认和审计流程。
 - 生产目标默认不自动读取；如需现场诊断，应先明确目标角色和授权方式。
-- 输出文件必须写入 `tools/.generated/logger/` 或调用方显式指定的仓库内路径。
+- 输出文件必须写入 `var/logger/` 或调用方显式指定的仓库内路径。
 
 ### 验收标准
 

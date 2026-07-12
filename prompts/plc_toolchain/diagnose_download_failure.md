@@ -16,9 +16,9 @@
 4. 执行 `plc_describe_ruc_package(config="{config}", target="{target}")`，确认包信息。
 5. 执行 `plc_check_download(config="{config}", target="{target}")`，判断包-目标兼容性。
 6. 读取相关日志路径：
-   - `tools/.generated/probe_{target}.log`
+   - `var/probe_{target}.log`
    - 下载结果返回的 `log_path`
-   - 构建日志 `tools/.generated/build_{config}.log`
+   - 构建日志 `var/build_{config}.log`
 
 输出：
 

@@ -104,8 +104,8 @@ MCP server version: `0.12.0`. Full catalog: [../skills/br-plc-toolchain/referenc
 | --- | --- | --- | --- | --- |
 | `plc_doctor` | `readonly` | `MCP native diagnostics` | - | Check local Python, PowerShell, Automation Studio, PVITransfer, PVI Python dependency, target config, project/config, ARsim loader, and generated-output write access. |
 | `plc_validate_environment` | `readonly` | `MCP native diagnostics` | - | Validate the selected environment or explicit project/config/target/targets_path mapping without connecting to a PLC. |
-| `plc_list_reports` | `readonly` | `MCP native report index` | - | List compact metadata for historical JSON reports under tools/.generated/reports without returning report bodies. |
-| `plc_read_report_summary` | `readonly` | `MCP native report summary` | - | Read a compact summary of one JSON report confined to tools/.generated/reports. Does not return large logs or arbitrary report fields. |
+| `plc_list_reports` | `readonly` | `MCP native report index` | - | List compact metadata for historical JSON reports under var/reports without returning report bodies. |
+| `plc_read_report_summary` | `readonly` | `MCP native report summary` | - | Read a compact summary of one JSON report confined to var/reports. Does not return large logs or arbitrary report fields. |
 | `plc_build_project` | `local_write` | `Build` | - | Build the B&R Automation Studio project. Optionally generate a RUC package for download. |
 | `plc_find_library_for_symbol` | `readonly` | `as_library_manager.py find` | - | Find the trusted, locally installed Automation Studio libraries that declare a missing function, function block, type, constant, or C symbol. |
 | `plc_plan_project_library` | `readonly` | `as_library_manager.py plan` | - | Plan adding an installed Automation Studio library and its dependencies without modifying the project. Rejects ambiguous versions, incompatible Technology Packages, and Safety-related libraries. |
@@ -174,7 +174,7 @@ Logger 读取工具额外支持：
 - `logger_type`：Logger module type，例如 `System`、`User`、`Connectivity`。
 - `logger_name`：Logger module name，例如 `$arlogsys`、`$arlogusr`、`$arlogconn`。
 - `format`：输出格式，建议首批支持 `.html`、`.csvx`、`.arl`、`.logpkg`。
-- `output_path`：可选输出路径，默认写入 `tools/.generated/logger/`。
+- `output_path`：可选输出路径，默认写入 `var/logger/`。
 - `include_summary`：可选，后续用于解析 `.csvx` 并返回结构化摘要。
 
 ### 返回格式
@@ -227,7 +227,7 @@ M7 Logger 读取守卫：
 2. 只允许读取 `config/targets/default-safe.json` 中 `logger.allowed_modules` 的模块。
 3. Safety logger 默认禁用；如未来需要，必须单独设计显式确认和审计流程。
 4. 生产目标默认不自动读取；如需现场诊断，应先明确目标角色和授权方式。
-5. 输出文件默认写入 `tools/.generated/logger/`，并在 JSON 返回值中记录路径。
+5. 输出文件默认写入 `var/logger/`，并在 JSON 返回值中记录路径。
 
 ## Skill 规划
 
@@ -394,8 +394,8 @@ prompts/plc_toolchain/
 
 已完成内容：
 
-- `Build` 不再向 stdout 输出完整 Automation Studio 日志；日志写入 `tools/.generated/build_Config1.log`。
-- `Probe` 不再向 stdout 输出 PVITransfer 日志；日志写入 `tools/.generated/probe_<target>.log`。
+- `Build` 不再向 stdout 输出完整 Automation Studio 日志；日志写入 `var/build_Config1.log`。
+- `Probe` 不再向 stdout 输出 PVITransfer 日志；日志写入 `var/probe_<target>.log`。
 - `CheckDownload` 失败时返回 JSON，并以非零 exit code 退出。
 - `VerifyOpcUa` 和 `ReadPvi` 由 PowerShell 统一捕获 Python JSON，并补充 `process_exit_code`、临时变量文件路径等字段。
 - 顶层异常统一返回 `{ ok=false, command, error, target }` JSON。
@@ -481,7 +481,7 @@ prompts/plc_toolchain/
 
 目标：
 
-- 输出 `tools/.generated/reports/*.json`。
+- 输出 `var/reports/*.json`。
 - 报告同时包含构建、包信息、目标信息、下载日志、OPC UA/PVI 读数。
 
 验收：
@@ -491,8 +491,8 @@ prompts/plc_toolchain/
 
 已完成内容：
 
-- `RunVerificationSuite` 输出 `tools/.generated/reports/*_verification_<target>.json`。
-- `RunArsimClosedLoop` 输出 `tools/.generated/reports/*_closed_loop_<target>.json`。
+- `RunVerificationSuite` 输出 `var/reports/*_verification_<target>.json`。
+- `RunArsimClosedLoop` 输出 `var/reports/*_closed_loop_<target>.json`。
 - MCP 已暴露 `plc_run_verification_suite` 和 `plc_run_arsim_closed_loop`。
 - 报告包含构建、包信息、目标探针、下载检查、下载结果和 OPC UA/PVI 验证结果。
 
@@ -503,7 +503,7 @@ prompts/plc_toolchain/
 - 从“变量可读”升级到“输入输出行为可验证”。
 - 支持 LQR 等控制算法的输入、输出和容差断言。
 - 通过 PVI 对白名单测试变量写入输入，再读取输出并自动判定 pass/fail。
-- 输出 `tools/.generated/reports/*_io_test_<suite>.json`。
+- 输出 `var/reports/*_io_test_<suite>.json`。
 
 建议新增本地文件：
 
@@ -561,7 +561,7 @@ tests/plc/
 - 从“构建/下载工具自身日志”扩展到“PLC/AR logger 模块读取”。
 - 用于下载失败、运行异常、WarmStart/ColdStart、Connectivity/OPC UA 等诊断。
 - 基于 PVITransfer `Logger` 命令实现，只读读取白名单 logger 模块。
-- 输出 `tools/.generated/logger/*`，并在 MCP 返回值中给出报告路径。
+- 输出 `var/logger/*`，并在 MCP 返回值中给出报告路径。
 
 已新增：
 
