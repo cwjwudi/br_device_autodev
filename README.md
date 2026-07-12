@@ -47,6 +47,9 @@ docs/
   PLC_AUTOMATION_TOOLCHAIN_CONTEXT.md
   PLC_TOOLCHAIN_IMPLEMENTATION_PLAN.md
   PLC_MCP_SKILL_PROMPT_ROADMAP.md
+  PVI_RUNTIME_ARCHITECTURE.md
+  CONFIGURATION.md
+  OFFICE_TEST_QUICKSTART.md
 
 config/
   defaults/             # 内置运行默认值
@@ -65,6 +68,12 @@ src/br_plc_toolchain/
 tools/                  # 旧 CLI 兼容入口，逐步缩减
   plc_toolchain.ps1
   mcp_server/
+
+scripts/
+  windows/              # Windows/厂商工具包装器
+  maintenance/          # 仓库维护与文档生成
+
+var/                    # 运行输出、审计、锁与发现清单（Git 忽略）
 
 PrintDemo/
   Huitong_FrontEval.apj
