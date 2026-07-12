@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "runtime": {
+    "discovery_enabled": true,
+    "pvi_port": 11169,
+    "request_timeout_seconds": 10,
+    "max_read_batch": 100,
+    "max_write_batch": 20
+  },
+  "access": {
+    "dynamic_read": true,
+    "same_value_write": false,
+    "changed_value_write": false,
+    "changed_value_requires_session": true,
+    "session_ttl_minutes": 60,
+    "require_execute": true,
+    "require_readback": true,
+    "require_restore_for_suite": true
+  }
+}
+

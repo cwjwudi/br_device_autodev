@@ -1,0 +1,11 @@
+{
+  "description": "Local ARsim development with automatic runtime discovery.",
+  "access": {
+    "dynamic_read": true,
+    "same_value_write": true,
+    "changed_value_write": true,
+    "changed_value_requires_session": true,
+    "session_ttl_minutes": 120
+  }
+}
+

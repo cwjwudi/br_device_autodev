@@ -1,0 +1,11 @@
+{
+  "description": "Explicitly declared dedicated office test PLC.",
+  "access": {
+    "dynamic_read": true,
+    "same_value_write": true,
+    "changed_value_write": true,
+    "changed_value_requires_session": true,
+    "session_ttl_minutes": 60
+  }
+}
+

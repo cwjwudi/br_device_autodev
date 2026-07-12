@@ -1,6 +1,9 @@
 tools/.generated/
 tools/*.log
 PrintDemo/Binaries/**/pvi_download_*.log
+config/local/*
+!config/local/.gitkeep
+var/
 
 # Python
 __pycache__/
@@ -18,7 +21,6 @@ lib/
 lib64/
 parts/
 sdist/
-var/
 wheels/
 pip-wheel-metadata/
 share/python-wheels/

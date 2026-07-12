@@ -1,0 +1,9 @@
+{
+  "description": "Unknown or unregistered target: runtime discovery and reads only.",
+  "access": {
+    "dynamic_read": true,
+    "same_value_write": false,
+    "changed_value_write": false
+  }
+}
+

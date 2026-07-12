@@ -1,0 +1,9 @@
+{
+  "description": "Production target: discovery may be used for diagnostics; all dynamic writes are denied.",
+  "access": {
+    "dynamic_read": false,
+    "same_value_write": false,
+    "changed_value_write": false
+  }
+}
+

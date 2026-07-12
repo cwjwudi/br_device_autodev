@@ -1,0 +1,25 @@
+{
+  "default_safe": {
+    "description": "Conservative default using the legacy checked-in target configuration.",
+    "project_path": "PrintDemo\\Huitong_FrontEval.apj",
+    "config": "x1685",
+    "target": "arsim",
+    "targets_path": "tools\\plc_targets.local.json",
+    "access_profile": "readonly-discovery"
+  },
+  "office_test_233": {
+    "description": "Dedicated office test PLC at 192.168.50.233 with runtime discovery.",
+    "target": "test_plc_233",
+    "ip": "192.168.50.233",
+    "declared_role": "dedicated_test_plc",
+    "access_profile": "office-test"
+  },
+  "local_arsim": {
+    "description": "Locally running ARsim discovered through PVI.",
+    "target": "arsim",
+    "ip": "127.0.0.1",
+    "declared_role": "arsim",
+    "access_profile": "arsim-development"
+  }
+}
+
