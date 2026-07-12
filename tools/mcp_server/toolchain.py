@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
+import threading
 import uuid
 from pathlib import Path
 from typing import Any
@@ -14,6 +16,9 @@ from diagnostics import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+SRC_ROOT = REPO_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
 PLC_TOOLCHAIN = REPO_ROOT / "tools" / "plc_toolchain.ps1"
 AS_LIBRARY_MANAGER = REPO_ROOT / "tools" / "as_library_manager.py"
 GENERATED_DIR = REPO_ROOT / "tools" / ".generated"
@@ -21,6 +26,29 @@ DEFAULT_PROJECT_PATH = "PrintDemo\\Huitong_FrontEval.apj"
 DEFAULT_CONFIG = "x1685"
 DEFAULT_TARGETS_PATH = "tools\\plc_targets.local.json"
 DEFAULT_ENVIRONMENTS_PATH = "tools\\plc_environments.json"
+
+_RUNTIME_SERVICE = None
+_RUNTIME_SERVICE_LOCK = threading.Lock()
+
+
+def runtime_pvi_service():
+    global _RUNTIME_SERVICE
+    if _RUNTIME_SERVICE is None:
+        with _RUNTIME_SERVICE_LOCK:
+            if _RUNTIME_SERVICE is None:
+                from br_plc_toolchain.services import RuntimePviService
+
+                _RUNTIME_SERVICE = RuntimePviService()
+    return _RUNTIME_SERVICE
+
+
+def close_runtime_pvi_service() -> None:
+    global _RUNTIME_SERVICE
+    with _RUNTIME_SERVICE_LOCK:
+        service = _RUNTIME_SERVICE
+        _RUNTIME_SERVICE = None
+    if service is not None:
+        service.close()
 
 
 class ToolchainError(RuntimeError):
@@ -1083,6 +1111,90 @@ def plc_search_variables(arguments: dict[str, Any]) -> dict[str, Any]:
     return wrap_result("plc_search_variables", "SearchVariables", data, options["target"])
 
 
+def _ensure_runtime_target(arguments: dict[str, Any]) -> tuple[Any, str]:
+    service = runtime_pvi_service()
+    target = str(arguments.get("target") or "").strip()
+    ip = arguments.get("ip")
+    if ip:
+        registration = service.register_ephemeral_target(
+            ip=str(ip), name=target or None, declared_role=arguments.get("declared_role")
+        )
+        target = registration["target"]["name"]
+    if not target:
+        raise ValueError("target is required after initial runtime discovery")
+    return service, target
+
+
+def _runtime_ref(arguments: dict[str, Any]):
+    from br_plc_toolchain.backends.pvi import VariableRef
+
+    return VariableRef(
+        name=str(arguments.get("name") or ""),
+        scope=str(arguments.get("scope") or "task"),
+        task=arguments.get("task"),
+    )
+
+
+def plc_discover_runtime_target(arguments: dict[str, Any]) -> dict[str, Any]:
+    service, target = _ensure_runtime_target(arguments)
+    return service.discover_target(target)
+
+
+def plc_runtime_health(arguments: dict[str, Any]) -> dict[str, Any]:
+    service, target = _ensure_runtime_target(arguments)
+    return service.health(target)
+
+
+def plc_list_runtime_tasks(arguments: dict[str, Any]) -> dict[str, Any]:
+    service, target = _ensure_runtime_target(arguments)
+    return service.list_tasks(target)
+
+
+def plc_list_runtime_variables(arguments: dict[str, Any]) -> dict[str, Any]:
+    service, target = _ensure_runtime_target(arguments)
+    return service.list_variables(
+        target,
+        scope=str(arguments.get("scope") or "task"),
+        task=arguments.get("task"),
+        pattern=str(arguments.get("pattern") or "*"),
+        limit=int(arguments.get("limit") or 200),
+    )
+
+
+def plc_get_runtime_variable_info(arguments: dict[str, Any]) -> dict[str, Any]:
+    service, target = _ensure_runtime_target(arguments)
+    return service.variable_info(target, _runtime_ref(arguments))
+
+
+def plc_read_runtime_variable(arguments: dict[str, Any]) -> dict[str, Any]:
+    service, target = _ensure_runtime_target(arguments)
+    return service.read(target, _runtime_ref(arguments))
+
+
+def plc_open_test_session(arguments: dict[str, Any]) -> dict[str, Any]:
+    service, target = _ensure_runtime_target(arguments)
+    return service.open_test_session(
+        target,
+        execute=arguments.get("execute") is True,
+        ttl_minutes=int(arguments.get("ttl_minutes") or 60),
+    )
+
+
+def plc_close_test_session(arguments: dict[str, Any]) -> dict[str, Any]:
+    return runtime_pvi_service().close_test_session(str(arguments.get("session_id") or ""))
+
+
+def plc_write_runtime_variable(arguments: dict[str, Any]) -> dict[str, Any]:
+    service, target = _ensure_runtime_target(arguments)
+    return service.write(
+        target,
+        _runtime_ref(arguments),
+        arguments.get("value"),
+        execute=arguments.get("execute") is True,
+        session_id=arguments.get("session_id"),
+    )
+
+
 TOOLS = {
     "plc_doctor": plc_doctor,
     "plc_validate_environment": plc_validate_environment,
@@ -1111,4 +1223,13 @@ TOOLS = {
     "plc_list_environments": plc_list_environments,
     "plc_list_variables": plc_list_variables,
     "plc_search_variables": plc_search_variables,
+    "plc_discover_runtime_target": plc_discover_runtime_target,
+    "plc_runtime_health": plc_runtime_health,
+    "plc_list_runtime_tasks": plc_list_runtime_tasks,
+    "plc_list_runtime_variables": plc_list_runtime_variables,
+    "plc_get_runtime_variable_info": plc_get_runtime_variable_info,
+    "plc_read_runtime_variable": plc_read_runtime_variable,
+    "plc_open_test_session": plc_open_test_session,
+    "plc_close_test_session": plc_close_test_session,
+    "plc_write_runtime_variable": plc_write_runtime_variable,
 }

@@ -15,7 +15,7 @@ from locks import (
     lock_keys_for_tool,
 )
 from schemas import EXPLICIT_TARGET_RISK_LEVELS, TOOL_DEFINITIONS, TOOL_RISK_LEVELS
-from toolchain import TOOLS, ToolchainError
+from toolchain import TOOLS, ToolchainError, close_runtime_pvi_service
 from validation import validate_json_schema
 from version import __version__
 
@@ -226,21 +226,24 @@ def handle_request(message: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def run() -> None:
-    for line in sys.stdin:
-        line = line.strip()
-        if not line:
-            continue
+    try:
+        for line in sys.stdin:
+            line = line.strip()
+            if not line:
+                continue
 
-        try:
-            message = json.loads(line)
-        except json.JSONDecodeError as exc:
-            response = make_error(None, -32700, f"Parse error: {exc}")
-        else:
-            response = handle_request(message)
+            try:
+                message = json.loads(line)
+            except json.JSONDecodeError as exc:
+                response = make_error(None, -32700, f"Parse error: {exc}")
+            else:
+                response = handle_request(message)
 
-        if response is not None:
-            sys.stdout.write(json.dumps(response, ensure_ascii=False) + "\n")
-            sys.stdout.flush()
+            if response is not None:
+                sys.stdout.write(json.dumps(response, ensure_ascii=False) + "\n")
+                sys.stdout.flush()
+    finally:
+        close_runtime_pvi_service()
 
 
 if __name__ == "__main__":

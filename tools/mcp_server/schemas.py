@@ -84,6 +84,38 @@ def build_schema(
     return schema
 
 
+RUNTIME_TARGET_PROPERTIES: dict[str, Any] = {
+    "target": {
+        "type": "string",
+        "description": "Runtime target name created during online discovery.",
+        "minLength": 1,
+    },
+    "ip": {
+        "type": "string",
+        "description": "PLC/ARsim IP; required when first discovering a runtime target.",
+        "minLength": 1,
+    },
+    "declared_role": {
+        "type": "string",
+        "description": "Explicit user declaration; omit for unknown read-only discovery.",
+        "enum": ["dedicated_test_plc", "production", "arsim"],
+    },
+}
+
+
+def runtime_schema(
+    properties: dict[str, Any], *required: str, include_target: bool = True
+) -> dict[str, Any]:
+    merged = dict(RUNTIME_TARGET_PROPERTIES) if include_target else {}
+    merged.update(properties)
+    return {
+        "type": "object",
+        "properties": merged,
+        "required": list(required),
+        "additionalProperties": False,
+    }
+
+
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "name": "plc_doctor",
@@ -492,6 +524,92 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             }
         ),
     },
+    {
+        "name": "plc_discover_runtime_target",
+        "description": "Connect through persistent PVI without source code or a policy file. Unknown physical targets are read-only; test roles must be explicitly declared.",
+        "inputSchema": runtime_schema({}, "ip"),
+    },
+    {
+        "name": "plc_runtime_health",
+        "description": "Return persistent PVI Manager, CPU, runtime, license and cache status.",
+        "inputSchema": runtime_schema({}, "target"),
+    },
+    {
+        "name": "plc_list_runtime_tasks",
+        "description": "List tasks from the running PLC image through PVI, independent of local source code.",
+        "inputSchema": runtime_schema({}, "target"),
+    },
+    {
+        "name": "plc_list_runtime_variables",
+        "description": "List online task or global variables from the running PLC image through PVI.",
+        "inputSchema": runtime_schema(
+            {
+                "scope": {"type": "string", "enum": ["task", "global"], "default": "task"},
+                "task": {"type": "string"},
+                "pattern": {"type": "string", "default": "*"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 5000, "default": 200},
+            },
+            "target",
+        ),
+    },
+    {
+        "name": "plc_get_runtime_variable_info",
+        "description": "Read online PVI type, access rights and metadata for a discovered variable.",
+        "inputSchema": runtime_schema(
+            {
+                "scope": {"type": "string", "enum": ["task", "global"], "default": "task"},
+                "task": {"type": "string"},
+                "name": {"type": "string", "minLength": 1},
+            },
+            "target", "name",
+        ),
+    },
+    {
+        "name": "plc_read_runtime_variable",
+        "description": "Read an online PVI variable. Missing external policy defaults to safe read-only discovery.",
+        "inputSchema": runtime_schema(
+            {
+                "scope": {"type": "string", "enum": ["task", "global"], "default": "task"},
+                "task": {"type": "string"},
+                "name": {"type": "string", "minLength": 1},
+            },
+            "target", "name",
+        ),
+    },
+    {
+        "name": "plc_open_test_session",
+        "description": "Open an expiring read-write session for ARsim or an explicitly declared dedicated test PLC.",
+        "inputSchema": runtime_schema(
+            {
+                "ttl_minutes": {"type": "integer", "minimum": 1, "maximum": 480, "default": 60},
+                "execute": {"type": "boolean"},
+            },
+            "target", "execute",
+        ),
+    },
+    {
+        "name": "plc_close_test_session",
+        "description": "Close a temporary runtime PVI test session immediately.",
+        "inputSchema": runtime_schema(
+            {"session_id": {"type": "string", "minLength": 1}},
+            "session_id",
+        ),
+    },
+    {
+        "name": "plc_write_runtime_variable",
+        "description": "Write a discovered variable with before/readback verification. Changed values require a target-bound test session.",
+        "inputSchema": runtime_schema(
+            {
+                "scope": {"type": "string", "enum": ["task", "global"], "default": "task"},
+                "task": {"type": "string"},
+                "name": {"type": "string", "minLength": 1},
+                "value": {},
+                "session_id": {"type": "string"},
+                "execute": {"type": "boolean"},
+            },
+            "target", "name", "value", "execute",
+        ),
+    },
 ]
 
 
@@ -523,6 +641,15 @@ TOOL_RISK_LEVELS: dict[str, str] = {
     "plc_start_arsim": "target_change",
     "plc_verify_opcua": "local_write",
     "plc_write_pvi": "target_change",
+    "plc_discover_runtime_target": "local_write",
+    "plc_runtime_health": "readonly",
+    "plc_list_runtime_tasks": "readonly",
+    "plc_list_runtime_variables": "readonly",
+    "plc_get_runtime_variable_info": "readonly",
+    "plc_read_runtime_variable": "readonly",
+    "plc_open_test_session": "target_change",
+    "plc_close_test_session": "local_write",
+    "plc_write_runtime_variable": "target_change",
 }
 
 TOOL_BACKENDS: dict[str, str] = {
@@ -553,6 +680,15 @@ TOOL_BACKENDS: dict[str, str] = {
     "plc_start_arsim": "StartArsim",
     "plc_verify_opcua": "VerifyOpcUa",
     "plc_write_pvi": "WritePvi",
+    "plc_discover_runtime_target": "persistent PVI runtime",
+    "plc_runtime_health": "persistent PVI runtime",
+    "plc_list_runtime_tasks": "persistent PVI runtime",
+    "plc_list_runtime_variables": "persistent PVI runtime",
+    "plc_get_runtime_variable_info": "persistent PVI runtime",
+    "plc_read_runtime_variable": "persistent PVI runtime",
+    "plc_open_test_session": "runtime test-session policy",
+    "plc_close_test_session": "runtime test-session policy",
+    "plc_write_runtime_variable": "persistent PVI runtime + policy",
 }
 
 CONFIRMATION_REQUIRED_RISK_LEVELS = {"project_write", "target_change"}

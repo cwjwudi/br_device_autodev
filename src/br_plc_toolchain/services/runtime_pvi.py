@@ -73,6 +73,10 @@ class RuntimePviService:
         target, _ = self._resolve(target_name)
         return self.manager.call(target, "list_tasks")
 
+    def health(self, target_name: str) -> dict[str, Any]:
+        target, _ = self._resolve(target_name)
+        return self.manager.call(target, "health")
+
     def list_variables(
         self,
         target_name: str,
@@ -182,4 +186,3 @@ class RuntimePviService:
 
     def close(self) -> None:
         self.manager.close_all()
-
