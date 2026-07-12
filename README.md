@@ -85,7 +85,7 @@ PrintDemo/
   - 按符号查找本机可信库，递归解析依赖与 Technology Package 版本。
   - 添加操作要求 `execute=true`，默认重新构建，构建失败自动回滚。
 - 实现 PVITransfer 静默包装：
-  - `tools/invoke_pvitransfer_silent.ps1`
+  - `scripts/windows/invoke-pvitransfer-silent.ps1`
 - 实现 ARsim 启动、探针、安全检查、下载闭环。
 - 实现 OPC UA 白名单读取验证：
   - `tools/opcua_read.py`

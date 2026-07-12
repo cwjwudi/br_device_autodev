@@ -31,7 +31,7 @@
 
 - `skills/br-plc-toolchain/references/mcp-tools.md`
 
-该目录由 `tools/generate_mcp_docs.py` 从 MCP schema 自动生成，不手工维护工具表。
+该目录由 `scripts/maintenance/generate_mcp_docs.py` 从 MCP schema 自动生成，不手工维护工具表。
 
 标准闭环顺序：doctor / validate_environment -> 确认实际 config 和 Simulation 设置 -> build -> start_arsim(target=arsim, execute=true) -> probe -> describe_package -> check_download -> download(target=arsim, execute=true) -> verify_opcua / read_pvi
 

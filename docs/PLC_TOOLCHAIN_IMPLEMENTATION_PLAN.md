@@ -31,7 +31,7 @@
   - 使用 `-silent`
   - 使用日志文件作为输出来源
   - 使用 `Start-Process -WindowStyle Hidden` 避免 GUI 窗口弹出
-  - 当前包装脚本：`tools/invoke_pvitransfer_silent.ps1`
+  - 当前包装脚本：`scripts/windows/invoke-pvitransfer-silent.ps1`
 - PVITransfer `.pil` 文件需要 Windows CRLF 换行；否则多行命令可能被当成一条指令。
 - `-Conn:"'device', 'cpu', 'WT=...', 'IGNORE'"` 可覆盖 `.pil` 内部 `Connection` 指令。
 - 只读探针已验证历史测试 PLC：
@@ -438,7 +438,7 @@ var/reports/*_io_test_<suite>.json
 
 - `tools/plc_logger_read.py`
   - 生成 PVITransfer `.pil` 脚本。
-  - 调用 `tools/invoke_pvitransfer_silent.ps1`。
+  - 调用 `scripts/windows/invoke-pvitransfer-silent.ps1`。
   - 校验 logger 模块白名单和输出格式。
   - 返回 output 路径、PVITransfer log 路径和错误摘要。
   - 默认输出到 `var/logger/`。

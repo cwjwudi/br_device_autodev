@@ -24,7 +24,7 @@
   - `Download`
   - `VerifyOpcUa`
   - `ReadPvi`
-- `tools/invoke_pvitransfer_silent.ps1`
+- `scripts/windows/invoke-pvitransfer-silent.ps1`
 - `tools/opcua_read.py`
 - `tools/pvi_read.py`
 - `config/targets/default-safe.json`

@@ -410,7 +410,7 @@ function Invoke-Probe {
 
     $cfg = Read-ToolchainConfig
     $targetConfig = Get-TargetConfig $cfg
-    $wrapper = Resolve-RepoPath "tools\invoke_pvitransfer_silent.ps1"
+    $wrapper = Resolve-RepoPath "scripts\windows\invoke-pvitransfer-silent.ps1"
     $pviTransfer = Resolve-RepoPath $cfg.automation_studio.pvi_transfer_exe
     $pil = New-ProbePil $targetConfig.ip
     $log = Join-Path $GeneratedDir "probe_$Target.log"
@@ -629,7 +629,7 @@ function Invoke-Download {
 
     $cfg = Read-ToolchainConfig
     $targetConfig = Get-TargetConfig $cfg
-    $wrapper = Resolve-RepoPath "tools\invoke_pvitransfer_silent.ps1"
+    $wrapper = Resolve-RepoPath "scripts\windows\invoke-pvitransfer-silent.ps1"
     $pviTransfer = Resolve-RepoPath $cfg.automation_studio.pvi_transfer_exe
     $pil = Resolve-TransferPilPath
     $forcePilPath = $null

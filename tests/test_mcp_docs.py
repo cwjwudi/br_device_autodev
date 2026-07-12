@@ -22,7 +22,7 @@ CATALOG_PATH = REPO_ROOT / "skills" / "br-plc-toolchain" / "references" / "mcp-t
 class McpDocumentationTests(unittest.TestCase):
     def test_generated_documentation_is_current(self) -> None:
         completed = subprocess.run(
-            [sys.executable, str(REPO_ROOT / "tools" / "generate_mcp_docs.py"), "--check"],
+            [sys.executable, str(REPO_ROOT / "scripts" / "maintenance" / "generate_mcp_docs.py"), "--check"],
             cwd=REPO_ROOT,
             text=True,
             capture_output=True,

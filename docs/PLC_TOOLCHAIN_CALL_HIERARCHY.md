@@ -295,7 +295,7 @@ Automation Studio config 必须按项目真实名称处理。本项目当前可�
 | 模块 | 路径 | 说明 |
 |---|---|---|
 | 本地 CLI | `tools/plc_toolchain.ps1` | 统一执行入口 |
-| PVITransfer wrapper | `tools/invoke_pvitransfer_silent.ps1` | 静默调用 PVITransfer |
+| PVITransfer wrapper | `scripts/windows/invoke-pvitransfer-silent.ps1` | 静默调用 PVITransfer |
 | OPC UA 读取 | `tools/opcua_read.py` | OPC UA 白名单验证 |
 | PVI 读取 | `tools/pvi_read.py` | PVI 白名单读取 |
 | PVI 写入 | `tools/pvi_write.py` | 测试 harness 白名单写入 |

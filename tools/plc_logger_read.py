@@ -248,7 +248,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     report["pil_path"] = str(pil_path)
     report["log_path"] = str(log_path)
 
-    wrapper_path = (REPO_ROOT / "tools" / "invoke_pvitransfer_silent.ps1").resolve()
+    wrapper_path = (REPO_ROOT / "scripts" / "windows" / "invoke-pvitransfer-silent.ps1").resolve()
     pvi_transfer_path = Path(args.pvi_transfer_path or (config.get("automation_studio") or {}).get("pvi_transfer_exe") or "").resolve()
     if not pvi_transfer_path.exists():
         report["error_summary"] = f"PVITransfer.exe was not found: {pvi_transfer_path}"

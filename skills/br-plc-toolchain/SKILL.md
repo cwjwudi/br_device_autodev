@@ -30,7 +30,7 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 
 - `skills/br-plc-toolchain/references/mcp-tools.md`
 
-该目录由 `tools/generate_mcp_docs.py` 从 MCP schema 自动生成，不手工维护工具表。
+该目录由 `scripts/maintenance/generate_mcp_docs.py` 从 MCP schema 自动生成，不手工维护工具表。
 
 ## 标准操作顺序
 
