@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "default_toolchain": "as6_default",
+  "toolchains": {
+    "as4_default": {
+      "enabled": true,
+      "family": "AS4",
+      "version": "4.x",
+      "description": "Automation Studio 4.12 and PVI4.12 installed on this workstation.",
+      "automation_studio": {
+        "install_root": "C:\\Program Files\\BRAutomation4\\AS412",
+        "bin_dir": "C:\\Program Files\\BRAutomation4\\AS412\\bin-en",
+        "build_exe": "C:\\Program Files\\BRAutomation4\\AS412\\bin-en\\BR.AS.Build.exe",
+        "library_roots": [
+          "C:\\Program Files\\BRAutomation4\\AS\\Library",
+          "C:\\Program Files\\BRAutomation4\\AS\\Library_2",
+          "C:\\Program Files\\BRAutomation4\\AS412\\AS\\TechnologyPackages"
+        ]
+      },
+      "pvi": {
+        "family": "PVI4",
+        "transfer_exe": "C:\\Program Files\\BRAutomation4\\PVI\\V4.12\\PVI\\Tools\\PVITransfer\\PVITransfer.exe",
+        "dll_dir": "C:\\Program Files\\BRAutomation4\\PVI\\V4.12\\Bin"
+      }
+    },
+    "as6_default": {
+      "enabled": true,
+      "family": "AS6",
+      "version": "6.x",
+      "description": "Automation Studio 6 and PVI6 installed on this workstation.",
+      "automation_studio": {
+        "install_root": "C:\\Program Files (x86)\\BRAutomation\\AS6",
+        "bin_dir": "C:\\Program Files (x86)\\BRAutomation\\AS6\\bin-en",
+        "build_exe": "C:\\Program Files (x86)\\BRAutomation\\AS6\\bin-en\\BR.AS.Build.exe",
+        "library_roots": [
+          "C:\\Program Files (x86)\\BRAutomation\\AS6"
+        ]
+      },
+      "pvi": {
+        "family": "PVI6",
+        "transfer_exe": "C:\\Program Files (x86)\\BRAutomation\\PVI6\\PVI\\Tools\\PVITransfer\\PVITransfer.exe",
+        "dll_dir": "C:\\Program Files (x86)\\BRAutomation\\PVI6\\Bin"
+      }
+    }
+  }
+}

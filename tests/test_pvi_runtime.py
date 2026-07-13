@@ -67,3 +67,12 @@ def test_session_manager_reuses_and_invalidates_workers() -> None:
     manager.close_all()
     assert third.closed is True
 
+
+def test_session_manager_rejects_mixed_pvi_dll_families() -> None:
+    manager = PviSessionManager(worker_factory=FakeWorker)  # type: ignore[arg-type]
+    manager.get(PviTarget(name="as4", ip="127.0.0.1", pvi_dll_path="C:/PVI4"))
+    with pytest.raises(RuntimeError, match="cannot be mixed"):
+        manager.get(PviTarget(name="as6", ip="127.0.0.2", pvi_dll_path="C:/PVI6"))
+    manager.close_all()
+    manager.get(PviTarget(name="as6", ip="127.0.0.2", pvi_dll_path="C:/PVI6"))
+    manager.close_all()

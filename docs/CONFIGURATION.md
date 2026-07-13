@@ -6,6 +6,7 @@
 config/
   defaults/       内置安全基线和运行默认值
   profiles/       readonly、office-test、ARsim、production 策略
+  toolchains/     全局 AS4/AS6、Library 与 PVI 工具路径
   targets/        可提交的团队目标配置
   environments/   工程、配置和目标的命名组合
   examples/       可复制的模板，不直接作为本机配置
@@ -28,6 +29,9 @@ var/              审计、锁、报告、发现清单和临时文件；Git 忽�
 - 新配置从 `config/examples/` 复制，不修改 examples 本身。
 - 自动发现先使用内存临时配置；确实需要复用时再显式保存。
 - 不把 `var/discovery/*.json` 当作安全策略，它仅记录发现结果。
+- 本机 AS/PVI 路径放入 `config/local/toolchains.json`；不要放入 PLC targets 文件。
+
+工具链配置、environment 选择和版本切换见 [TOOLCHAINS.md](TOOLCHAINS.md)。
 
 ## Profile 选择
 
@@ -37,4 +41,3 @@ var/              审计、锁、报告、发现清单和临时文件；Git 忽�
 | 回环地址/本地 ARsim | `arsim-development` | 开发测试读写 |
 | 明确声明专用测试 PLC | `office-test` | 发现、读取；会话内改值 |
 | 生产目标 | `production-locked` | 严格限制，使用既有审批/白名单流程 |
-

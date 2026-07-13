@@ -22,7 +22,8 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 
 1. `docs/PLC_AUTOMATION_TOOLCHAIN_CONTEXT.md` — 工具链整体上下文
 2. `docs/PLC_TOOLCHAIN_IMPLEMENTATION_PLAN.md` — 已验证事实和约束
-3. `config/targets/default-safe.json` — 当前可用的目标、白名单和路径
+3. `config/toolchains/toolchains.json` 或 `config/local/toolchains.json` — AS4/AS6、Library 与 PVI 工具路径
+4. `config/targets/default-safe.json` — 当前 PLC 目标、角色和白名单
 
 ## MCP 工具集
 
@@ -44,6 +45,13 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 ```
 
 不得从互联网任意下载 Library。候选不唯一、版本不兼容、依赖缺失或涉及 Safety 时必须停止并报告。
+
+### AS4 / AS6 工具链选择
+
+- 构建前先调用 `plc_get_toolchain` 或 `plc_validate_environment`，确认 environment 的 `toolchain`。
+- AS4 工程只能选择 `family=AS4`，AS6 工程只能选择 `family=AS6`；major version 不一致时停止。
+- 编译器、Library、PVITransfer 和 PVI DLL 统一来自同一个全局 toolchain 条目，不从 targets 文件读取。
+- PVI4 与 PVI6 不得在同一个 MCP Server 进程中混用；切换主版本必须重启 MCP Server。
 
 ### ARsim config 和仿真文件规则
 

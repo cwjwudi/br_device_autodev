@@ -888,6 +888,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--repo-root", default=str(Path(__file__).resolve().parents[1]))
     parser.add_argument("--project-path", default="PrintDemo\\Huitong_FrontEval.apj")
     parser.add_argument("--targets-file", default="config\\targets\\default-safe.json")
+    parser.add_argument("--toolchains-file", default="config\\toolchains\\toolchains.json")
+    parser.add_argument("--toolchain")
     parser.add_argument("--library-root", action="append", default=[])
     parser.add_argument("--symbol")
     parser.add_argument("--library")
@@ -904,6 +906,17 @@ def main(argv: list[str] | None = None) -> int:
     targets_file = resolve_path(args.targets_file, repo_root)
     explicit_roots = [resolve_path(path, repo_root) for path in args.library_root]
     try:
+        registry_path = resolve_path(args.toolchains_file, repo_root)
+        if not explicit_roots and registry_path.is_file():
+            src_root = repo_root / "src"
+            if str(src_root) not in sys.path:
+                sys.path.insert(0, str(src_root))
+            from br_plc_toolchain.config import resolve_toolchain
+
+            selected_toolchain = resolve_toolchain(
+                args.toolchain, registry_path=registry_path
+            )
+            explicit_roots = list(selected_toolchain.library_roots)
         if args.command == "find":
             if not args.symbol:
                 raise LibraryManagerError("--symbol is required for find")

@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "default_toolchain": "as6_5",
+  "toolchains": {
+    "as4_12": {
+      "enabled": true,
+      "family": "AS4",
+      "version": "4.12",
+      "automation_studio": {
+        "install_root": "D:\\BRAutomation\\AS412",
+        "bin_dir": "D:\\BRAutomation\\AS412\\Bin-en",
+        "build_exe": "D:\\BRAutomation\\AS412\\Bin-en\\BR.AS.Build.exe",
+        "library_roots": ["D:\\BRAutomation\\AS412"]
+      },
+      "pvi": {
+        "family": "PVI4",
+        "transfer_exe": "D:\\BRAutomation\\PVI4\\PVI\\Tools\\PVITransfer\\PVITransfer.exe",
+        "dll_dir": "D:\\BRAutomation\\PVI4\\Bin"
+      }
+    },
+    "as6_5": {
+      "enabled": true,
+      "family": "AS6",
+      "version": "6.5",
+      "automation_studio": {
+        "install_root": "D:\\BRAutomation\\AS65",
+        "bin_dir": "D:\\BRAutomation\\AS65\\AS6\\bin-en",
+        "build_exe": "D:\\BRAutomation\\AS65\\AS6\\bin-en\\BR.AS.Build.exe",
+        "library_roots": ["D:\\BRAutomation\\AS65"]
+      },
+      "pvi": {
+        "family": "PVI6",
+        "transfer_exe": "D:\\BRAutomation\\AS65\\PVI6\\PVI\\Tools\\PVITransfer\\PVITransfer.exe",
+        "dll_dir": "D:\\BRAutomation\\AS65\\PVI6\\Bin"
+      }
+    }
+  }
+}

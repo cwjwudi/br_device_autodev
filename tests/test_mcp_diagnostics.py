@@ -89,6 +89,18 @@ class McpDiagnosticsTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertTrue(any(item["name"] == "target" and not item["ok"] for item in result["checks"]))
 
+    def test_environment_validation_rejects_as4_project_with_as6_toolchain(self) -> None:
+        self.project.write_text(
+            '<?xml version="1.0"?>\n<?AutomationStudio Version="4.12.6.99"?>\n<Project />',
+            encoding="utf-8",
+        )
+        result = diagnostics.validate_environment(self.options)
+        self.assertFalse(result["ok"])
+        mismatch = next(
+            item for item in result["checks"] if item["name"] == "project_toolchain_compatibility"
+        )
+        self.assertFalse(mismatch["ok"])
+
     def test_doctor_reports_all_dependencies_as_structured_checks(self) -> None:
         generated = self.root / "generated"
         with (
@@ -106,6 +118,7 @@ class McpDiagnosticsTests(unittest.TestCase):
                 "powershell",
                 "build_exe",
                 "pvi_transfer_exe",
+                "pvi_dll",
                 "pvi_python",
                 "arsim_loader",
                 "generated_write",

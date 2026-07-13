@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import os
 from collections.abc import Callable
 from typing import Any
 
@@ -15,9 +16,18 @@ class PviSessionManager:
         self._worker_factory = worker_factory
         self._workers: dict[str, PviWorker] = {}
         self._lock = threading.RLock()
+        self._pvi_dll_path: str | None = None
 
     def get(self, target: PviTarget) -> PviWorker:
         with self._lock:
+            requested_dll = os.path.normcase(os.path.abspath(target.pvi_dll_path)) if target.pvi_dll_path else None
+            if self._pvi_dll_path and requested_dll and requested_dll != self._pvi_dll_path:
+                raise RuntimeError(
+                    "PVI DLL families cannot be mixed in one MCP process. "
+                    "Close the current MCP server before switching AS4/PVI4 and AS6/PVI6."
+                )
+            if requested_dll:
+                self._pvi_dll_path = requested_dll
             worker = self._workers.get(target.key)
             if worker is None or not worker.running:
                 if worker is not None:
@@ -40,6 +50,7 @@ class PviSessionManager:
         with self._lock:
             workers = list(self._workers.values())
             self._workers.clear()
+            self._pvi_dll_path = None
         for worker in workers:
             worker.close()
 
@@ -52,4 +63,3 @@ class PviSessionManager:
 
     def __exit__(self, *_: object) -> None:
         self.close_all()
-

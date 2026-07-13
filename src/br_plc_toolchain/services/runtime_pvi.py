@@ -40,12 +40,17 @@ class RuntimePviService:
         ip: str,
         name: str | None = None,
         declared_role: str | None = None,
+        pvi_dll_path: str | None = None,
     ) -> dict[str, Any]:
         config = create_ephemeral_target_config(ip=ip, name=name, declared_role=declared_role)
         target_data = config["target"]
         target = PviTarget(
-            name=target_data["name"], ip=target_data["ip"], role=target_data["role"]
+            name=target_data["name"],
+            ip=target_data["ip"],
+            role=target_data["role"],
+            pvi_dll_path=pvi_dll_path,
         )
+        config["target"]["pvi_dll_path"] = pvi_dll_path
         with self._lock:
             self._configs[target.name] = config
             self._targets[target.name] = target

@@ -6,6 +6,8 @@ param(
     [string]$Config = "x1685",
     [string]$Target = "arsim",
     [string]$TargetsPath = "config\targets\default-safe.json",
+    [string]$Toolchain = "",
+    [string]$ToolchainsPath = "config\toolchains\toolchains.json",
     [string]$PackagePath = "",
     [string]$TransferPilPath = "",
     [string[]]$OpcUaNodeId,
@@ -69,6 +71,43 @@ function Resolve-TransferPilPath {
 function Read-ToolchainConfig {
     $path = Resolve-RepoPath $TargetsPath
     return Get-Content -LiteralPath $path -Encoding UTF8 | ConvertFrom-Json
+}
+
+function Read-GlobalToolchainRegistry {
+    $requested = Resolve-RepoPath $ToolchainsPath
+    $local = Resolve-RepoPath "config\local\toolchains.json"
+    if ($ToolchainsPath -eq "config\toolchains\toolchains.json" -and (Test-Path -LiteralPath $local)) {
+        $requested = $local
+    }
+    if (-not (Test-Path -LiteralPath $requested)) {
+        throw "Global toolchain registry was not found: $requested"
+    }
+    return [pscustomobject]@{
+        path = $requested
+        data = Get-Content -LiteralPath $requested -Encoding UTF8 | ConvertFrom-Json
+    }
+}
+
+function Get-SelectedToolchain {
+    $registry = Read-GlobalToolchainRegistry
+    $selected = if ($Toolchain) { $Toolchain } else { [string]$registry.data.default_toolchain }
+    if (-not $selected) {
+        throw "No toolchain was selected and the registry has no default_toolchain."
+    }
+    $entry = $registry.data.toolchains.$selected
+    if (-not $entry) {
+        $choices = @($registry.data.toolchains.PSObject.Properties.Name) -join ", "
+        throw "Toolchain '$selected' was not found in $($registry.path). Available: $choices"
+    }
+    if ($entry.enabled -eq $false) {
+        throw "Toolchain '$selected' is disabled in $($registry.path)."
+    }
+    if ($entry.family -notin @("AS4", "AS6")) {
+        throw "Toolchain '$selected' has unsupported family '$($entry.family)'."
+    }
+    $entry | Add-Member -NotePropertyName id -NotePropertyValue $selected -Force
+    $entry | Add-Member -NotePropertyName registry_path -NotePropertyValue $registry.path -Force
+    return $entry
 }
 
 function Get-TargetConfig {
@@ -301,8 +340,8 @@ function Invoke-Build {
         [switch]$ForceBuildRucPackage
     )
 
-    $cfg = Read-ToolchainConfig
-    $buildExe = Resolve-RepoPath $cfg.automation_studio.build_exe
+    $toolchainConfig = Get-SelectedToolchain
+    $buildExe = Resolve-RepoPath $toolchainConfig.automation_studio.build_exe
     $project = Resolve-RepoPath $ProjectPath
 
     if (-not (Test-Path -LiteralPath $buildExe)) {
@@ -345,6 +384,9 @@ function Invoke-Build {
         summary = $summaryLine
         project = $project
         config = $Config
+        toolchain = $toolchainConfig.id
+        toolchain_family = $toolchainConfig.family
+        toolchain_version = $toolchainConfig.version
         build_ruc_package = $buildRuc
         log_path = $log
         warning_lines = @($warningLines)
@@ -409,9 +451,10 @@ function Invoke-Probe {
     param([switch]$Quiet)
 
     $cfg = Read-ToolchainConfig
+    $toolchainConfig = Get-SelectedToolchain
     $targetConfig = Get-TargetConfig $cfg
     $wrapper = Resolve-RepoPath "scripts\windows\invoke-pvitransfer-silent.ps1"
-    $pviTransfer = Resolve-RepoPath $cfg.automation_studio.pvi_transfer_exe
+    $pviTransfer = Resolve-RepoPath $toolchainConfig.pvi.transfer_exe
     $pil = New-ProbePil $targetConfig.ip
     $log = Join-Path $GeneratedDir "probe_$Target.log"
 
@@ -628,9 +671,10 @@ function Invoke-Download {
     }
 
     $cfg = Read-ToolchainConfig
+    $toolchainConfig = Get-SelectedToolchain
     $targetConfig = Get-TargetConfig $cfg
     $wrapper = Resolve-RepoPath "scripts\windows\invoke-pvitransfer-silent.ps1"
-    $pviTransfer = Resolve-RepoPath $cfg.automation_studio.pvi_transfer_exe
+    $pviTransfer = Resolve-RepoPath $toolchainConfig.pvi.transfer_exe
     $pil = Resolve-TransferPilPath
     $forcePilPath = $null
     if ($ForceArsimDownload -and $targetConfig.role -match "arsim") {
@@ -924,6 +968,7 @@ function Invoke-ReadPvi {
     param([switch]$Quiet)
 
     $cfg = Read-ToolchainConfig
+    $toolchainConfig = Get-SelectedToolchain
     $targetConfig = Get-TargetConfig $cfg
 
     if ($cfg.pvi.enabled -eq $false) {
@@ -980,8 +1025,8 @@ function Invoke-ReadPvi {
         "--variables-file", $variablesFile,
         "--cpu-name", $Target
     )
-    if ($cfg.pvi.pvi_dll_dir) {
-        $args += @("--pvi-dll-dir", (Resolve-RepoPath $cfg.pvi.pvi_dll_dir))
+    if ($toolchainConfig.pvi.dll_dir) {
+        $args += @("--pvi-dll-dir", (Resolve-RepoPath $toolchainConfig.pvi.dll_dir))
     }
 
     $oldErrorActionPreference = $ErrorActionPreference
@@ -1013,7 +1058,7 @@ function Invoke-ReadPvi {
 function Invoke-ReadLogger {
     param([switch]$Quiet)
 
-    $cfg = Read-ToolchainConfig
+    $toolchainConfig = Get-SelectedToolchain
     $script = Resolve-RepoPath "tools\plc_logger_read.py"
     $args = @(
         $script,
@@ -1022,7 +1067,7 @@ function Invoke-ReadLogger {
         "--logger-type", $LoggerType,
         "--logger-name", $LoggerName,
         "--format", $Format,
-        "--pvi-transfer-path", (Resolve-RepoPath $cfg.automation_studio.pvi_transfer_exe)
+        "--pvi-transfer-path", (Resolve-RepoPath $toolchainConfig.pvi.transfer_exe)
     )
     if ($OutputPath) {
         $args += @("--output-path", (Resolve-RepoPath $OutputPath))
@@ -1059,6 +1104,7 @@ function Invoke-WritePvi {
     }
 
     $cfg = Read-ToolchainConfig
+    $toolchainConfig = Get-SelectedToolchain
     $targetConfig = Get-TargetConfig $cfg
     if ($targetConfig.role -match "production") {
         throw "Refusing to write PVI variables to production target '$Target'."
@@ -1083,8 +1129,8 @@ function Invoke-WritePvi {
     if ($Execute) {
         $args += "--execute"
     }
-    if ($cfg.pvi.pvi_dll_dir) {
-        $args += @("--pvi-dll-dir", (Resolve-RepoPath $cfg.pvi.pvi_dll_dir))
+    if ($toolchainConfig.pvi.dll_dir) {
+        $args += @("--pvi-dll-dir", (Resolve-RepoPath $toolchainConfig.pvi.dll_dir))
     }
 
     $oldErrorActionPreference = $ErrorActionPreference
@@ -1118,6 +1164,7 @@ function Invoke-IoTestRunner {
     )
 
     $cfg = Read-ToolchainConfig
+    $toolchainConfig = Get-SelectedToolchain
     $targetConfig = Get-TargetConfig $cfg
     if ($targetConfig.role -match "production") {
         throw "Refusing to run IO tests on production target '$Target'."
@@ -1148,8 +1195,8 @@ function Invoke-IoTestRunner {
     elseif ($RunnerCommand -eq "ResetTestHarness") {
         $args += "--reset-only"
     }
-    if ($cfg.pvi.pvi_dll_dir) {
-        $args += @("--pvi-dll-dir", (Resolve-RepoPath $cfg.pvi.pvi_dll_dir))
+    if ($toolchainConfig.pvi.dll_dir) {
+        $args += @("--pvi-dll-dir", (Resolve-RepoPath $toolchainConfig.pvi.dll_dir))
     }
 
     $oldErrorActionPreference = $ErrorActionPreference

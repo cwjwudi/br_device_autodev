@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "br-plc-toolchain"
-version = "0.12.0"
+version = "0.13.0"
 description = "B&R Automation Studio development, verification, and runtime PVI toolchain"
 requires-python = ">=3.10"
 dependencies = ["mcp>=1.28,<2", "pvipy==1.2.11"]

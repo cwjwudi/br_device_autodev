@@ -1,10 +1,4 @@
 {
-  "automation_studio": {
-    "version": "AS6.5",
-    "bin_dir": "D:\\BRAutomation\\AS65\\AS6\\bin-en",
-    "build_exe": "D:\\BRAutomation\\AS65\\AS6\\bin-en\\BR.AS.Build.exe",
-    "pvi_transfer_exe": "D:\\BRAutomation\\AS65\\PVI6\\PVI\\Tools\\PVITransfer\\PVITransfer.exe"
-  },
   "access_policy": {
     "mode": "whitelist",
     "allow_dynamic_pvi_read": false,
@@ -42,7 +36,6 @@
   "pvi": {
     "enabled": true,
     "verify_after_download": false,
-    "pvi_dll_dir": null,
     "read_whitelist": [
       {
         "scope": "task",

@@ -49,4 +49,6 @@
 
 ## 配置
 
-目标和工具路径：`config/targets/default-safe.json`
+全局 AS4/AS6 与 PVI 工具路径：`config/toolchains/toolchains.json` 或 Git 忽略的 `config/local/toolchains.json`。
+
+PLC 目标与安全策略：`config/targets/default-safe.json`。执行构建、Library、PVI 或下载操作前必须确认 environment 选择的 `toolchain` 与工程 AS major version 一致。
