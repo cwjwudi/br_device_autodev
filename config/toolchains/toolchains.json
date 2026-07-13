@@ -3,22 +3,24 @@
   "default_toolchain": "as6_default",
   "toolchains": {
     "as4_default": {
-      "enabled": false,
+      "enabled": true,
       "family": "AS4",
       "version": "4.x",
-      "description": "Automation Studio 4 installation. Enable and adjust paths in config/local/toolchains.json.",
+      "description": "Automation Studio 4.12 and PVI4.12 installed on this workstation.",
       "automation_studio": {
-        "install_root": "C:\\Program Files (x86)\\BRAutomation\\AS4",
-        "bin_dir": "C:\\Program Files (x86)\\BRAutomation\\AS4\\Bin-en",
-        "build_exe": "C:\\Program Files (x86)\\BRAutomation\\AS4\\Bin-en\\BR.AS.Build.exe",
+        "install_root": "C:\\Program Files\\BRAutomation4\\AS412",
+        "bin_dir": "C:\\Program Files\\BRAutomation4\\AS412\\bin-en",
+        "build_exe": "C:\\Program Files\\BRAutomation4\\AS412\\bin-en\\BR.AS.Build.exe",
         "library_roots": [
-          "C:\\Program Files (x86)\\BRAutomation\\AS4"
+          "C:\\Program Files\\BRAutomation4\\AS\\Library",
+          "C:\\Program Files\\BRAutomation4\\AS\\Library_2",
+          "C:\\Program Files\\BRAutomation4\\AS412\\AS\\TechnologyPackages"
         ]
       },
       "pvi": {
         "family": "PVI4",
-        "transfer_exe": "C:\\Program Files (x86)\\BRAutomation\\PVI4\\PVI\\Tools\\PVITransfer\\PVITransfer.exe",
-        "dll_dir": "C:\\Program Files (x86)\\BRAutomation\\PVI4\\Bin"
+        "transfer_exe": "C:\\Program Files\\BRAutomation4\\PVI\\V4.12\\PVI\\Tools\\PVITransfer\\PVITransfer.exe",
+        "dll_dir": "C:\\Program Files\\BRAutomation4\\PVI\\V4.12\\Bin"
       }
     },
     "as6_default": {

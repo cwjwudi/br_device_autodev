@@ -13,7 +13,10 @@
 - 找到 AS6 编译器：`C:\Program Files (x86)\BRAutomation\AS6\bin-en\BR.AS.Build.exe`。
 - 找到 PVI6 Transfer：`C:\Program Files (x86)\BRAutomation\PVI6\PVI\Tools\PVITransfer\PVITransfer.exe`。
 - 找到 PVI6 DLL：`C:\Program Files (x86)\BRAutomation\PVI6\Bin\Pvi6Com64.dll`。
-- 未找到 AS4/PVI4，因此 `as4_default` 保持 `enabled=false`、`available=false`，没有伪造 AS4 实机构建结果。
+- 找到 AS4.12：`C:\Program Files\BRAutomation4\AS412`。
+- 找到 PVI4.12 Transfer：`C:\Program Files\BRAutomation4\PVI\V4.12\PVI\Tools\PVITransfer\PVITransfer.exe`。
+- 找到 PVI4 64 位 DLL：`C:\Program Files\BRAutomation4\PVI\V4.12\Bin\PviCom64.dll`。
+- 按用户要求未执行 AS4 编译、安装或下载测试。
 
 ## AS6 真实构建
 
@@ -36,3 +39,14 @@
 - 未执行 PLC 写入、下载或状态修改。
 
 首次测试曾把 `dll_dir` 指向 PVI 根目录并被 pvipy 拒绝。根据实际 DLL 位置修正为 `PVI6\Bin` 后复测通过；registry 可用性和 Doctor 现同时检查具体通信 DLL，防止该配置错误再次发生。
+
+## PVI4 只读实机回归
+
+- PLC：`192.168.50.233`
+- Toolchain：`as4_default` / PVI4.12
+- PVI Manager：连接成功
+- CPU：`RUN / WarmStart`
+- Runtime：`J4.93`
+- 自动发现：成功，11 个任务
+- 读取：`DataSQLBat:bSimEnable=false`，类型 `boolean`
+- 未打开写会话，未执行变量写入、下载、安装或 AS4 编译。

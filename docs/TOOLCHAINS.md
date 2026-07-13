@@ -53,4 +53,4 @@ PVI DLL 在 Python 进程中加载后不能安全地通过修改环境变量切�
 ## 当前机器验证
 
 - `as6_default`：本机编译器、PVITransfer 和包含 `Pvi6Com64.dll` 的 `PVI6/Bin` 路径存在，已完成 AS6.5 工程真实构建。
-- `as4_default`：本机未发现 AS4/PVI4，保持 disabled；配置真实路径后再启用。
+- `as4_default`：本机 AS4.12/PVI4.12 位于 `C:\Program Files\BRAutomation4`；当前仅验证路径、PVI 探针和只读变量读取，不执行 AS4 编译、安装或下载。
