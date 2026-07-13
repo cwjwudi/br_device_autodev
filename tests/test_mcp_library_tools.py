@@ -133,6 +133,33 @@ class McpLibraryToolTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            toolchains_path = temp_root / "toolchains.json"
+            toolchains_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "default_toolchain": "as4_test",
+                        "toolchains": {
+                            "as4_test": {
+                                "family": "AS4",
+                                "version": "4.12",
+                                "automation_studio": {
+                                    "install_root": str(install_root),
+                                    "bin_dir": str(install_root / "bin-en"),
+                                    "build_exe": str(install_root / "bin-en" / "BR.AS.Build.exe"),
+                                    "library_roots": [str(install_root / "AS" / "Library_2")],
+                                },
+                                "pvi": {
+                                    "family": "PVI4",
+                                    "transfer_exe": str(install_root / "PVITransfer.exe"),
+                                    "dll_dir": str(install_root / "PVI"),
+                                },
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
 
             request = {
                 "jsonrpc": "2.0",
@@ -144,6 +171,8 @@ class McpLibraryToolTests(unittest.TestCase):
                         "library": "AsTCP",
                         "project_path": str(project_path),
                         "targets_path": str(targets_path),
+                        "toolchain": "as4_test",
+                        "toolchains_path": str(toolchains_path),
                         "execute": True,
                         "rebuild": False,
                     },
@@ -162,7 +191,7 @@ class McpLibraryToolTests(unittest.TestCase):
             self.assertEqual(0, completed.returncode, completed.stderr)
             response = json.loads(completed.stdout)
             structured = response["result"]["structuredContent"]
-            self.assertTrue(structured["ok"])
+            self.assertTrue(structured["ok"], structured)
             self.assertTrue((libraries_dir / "AsTCP" / "binary.lby").is_file())
             transaction_path = Path(structured["data"]["transaction_path"]).resolve()
             self.assertEqual(

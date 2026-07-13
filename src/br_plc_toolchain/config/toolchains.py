@@ -69,6 +69,8 @@ def load_toolchain_registry(path: str | Path | None = None) -> tuple[dict[str, A
         selected = Path(path)
         if not selected.is_absolute():
             selected = REPO_ROOT / selected
+        if selected.resolve() == DEFAULT_TOOLCHAINS_PATH.resolve() and LOCAL_TOOLCHAINS_PATH.is_file():
+            selected = LOCAL_TOOLCHAINS_PATH
     selected = selected.resolve()
     registry = load_json_config(selected)
     if registry.get("schema_version") != 1:

@@ -15,9 +15,11 @@ import toolchain  # noqa: E402
 class FakeRuntimeService:
     def __init__(self):
         self.registered = False
+        self.registration_kwargs = None
 
     def register_ephemeral_target(self, **kwargs):
         self.registered = True
+        self.registration_kwargs = kwargs
         return {"target": {"name": kwargs.get("name") or "discovered"}}
 
     def discover_target(self, target):
@@ -58,6 +60,15 @@ def call(name: str, arguments: dict):
     return server.handle_tools_call({"name": name, "arguments": arguments})
 
 
+def test_mcp_lists_and_resolves_global_toolchains() -> None:
+    listed = call("plc_list_toolchains", {})
+    assert listed["isError"] is False
+    ids = {item["id"] for item in listed["structuredContent"]["data"]["toolchains"]}
+    assert {"as4_default", "as6_default"}.issubset(ids)
+    selected = call("plc_get_toolchain", {"toolchain": "as6_default"})
+    assert selected["structuredContent"]["data"]["toolchain"]["family"] == "AS6"
+
+
 def test_runtime_discovery_bootstraps_without_policy_file() -> None:
     fake = FakeRuntimeService()
     with patch.object(toolchain, "_RUNTIME_SERVICE", fake):
@@ -68,6 +79,7 @@ def test_runtime_discovery_bootstraps_without_policy_file() -> None:
     assert result["isError"] is False
     assert result["structuredContent"]["tasks"] == ["Main"]
     assert fake.registered
+    assert fake.registration_kwargs["pvi_dll_path"].endswith("PVI6\\PVI")
 
 
 def test_runtime_variable_tools_use_online_reference() -> None:

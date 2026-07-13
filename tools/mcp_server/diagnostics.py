@@ -6,12 +6,18 @@ import os
 import shutil
 import sys
 import tempfile
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+SRC_ROOT = REPO_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
+from br_plc_toolchain.config import ConfigError, resolve_toolchain  # noqa: E402
 REPORTS_DIR = REPO_ROOT / "var" / "reports"
 GENERATED_DIR = REPO_ROOT / "var"
 MAX_REPORT_BYTES = 10 * 1024 * 1024
@@ -58,6 +64,23 @@ def validate_environment(options: dict[str, str]) -> dict[str, Any]:
     project_path = repo_path(options["project_path"]).resolve()
     config_name = options["config"]
     target_name = options["target"]
+    toolchain = None
+    try:
+        toolchain = resolve_toolchain(
+            options.get("toolchain") or None,
+            registry_path=options.get("toolchains_path") or None,
+        )
+        add_check(
+            checks,
+            "toolchain",
+            toolchain.enabled,
+            f"Toolchain '{toolchain.id}' resolves to {toolchain.family} {toolchain.version}."
+            if toolchain.enabled
+            else f"Toolchain '{toolchain.id}' is disabled.",
+            path=toolchain.source_path,
+        )
+    except ConfigError as exc:
+        add_check(checks, "toolchain", False, str(exc))
 
     targets, targets_error = load_targets(targets_path)
     add_check(
@@ -91,6 +114,34 @@ def validate_environment(options: dict[str, str]) -> dict[str, Any]:
         else "Automation Studio project file is missing or is not an .apj file.",
         path=project_path,
     )
+
+    project_as_family = None
+    project_as_version = None
+    if project_ok:
+        head = project_path.read_text(encoding="utf-8-sig", errors="replace")[:4096]
+        match = re.search(r'<\?AutomationStudio\s+Version="([^"]+)"', head)
+        if match:
+            project_as_version = match.group(1)
+            major = project_as_version.split(".", 1)[0]
+            project_as_family = f"AS{major}" if major.isdigit() else None
+    if toolchain and project_as_family:
+        compatible = project_as_family == toolchain.family
+        add_check(
+            checks,
+            "project_toolchain_compatibility",
+            compatible,
+            f"Project declares {project_as_version}; selected toolchain is {toolchain.family} {toolchain.version}."
+            if compatible
+            else f"Project declares {project_as_version} ({project_as_family}) but selected toolchain is {toolchain.family} {toolchain.version}.",
+        )
+    elif project_ok:
+        add_check(
+            checks,
+            "project_toolchain_compatibility",
+            True,
+            "Project Automation Studio version declaration was not found; family compatibility was not asserted.",
+            severity="warning",
+        )
 
     physical_dir = project_path.parent / "Physical" / config_name
     hardware_file = physical_dir / "Hardware.hw"
@@ -132,6 +183,9 @@ def validate_environment(options: dict[str, str]) -> dict[str, Any]:
         "project_path": str(project_path),
         "config": config_name,
         "targets_path": str(targets_path),
+        "toolchain": toolchain.to_dict() if toolchain else None,
+        "project_as_family": project_as_family,
+        "project_as_version": project_as_version,
         "checks": checks,
         "errors": errors,
         "warnings": warnings,
@@ -141,9 +195,10 @@ def validate_environment(options: dict[str, str]) -> dict[str, Any]:
 def run_doctor(options: dict[str, str]) -> dict[str, Any]:
     environment_result = validate_environment(options)
     checks = list(environment_result["checks"])
-    targets_path = Path(environment_result["targets_path"])
-    targets, _ = load_targets(targets_path)
-    automation = (targets or {}).get("automation_studio") or {}
+    targets, _ = load_targets(Path(environment_result["targets_path"]))
+    toolchain_data = environment_result.get("toolchain") or {}
+    automation = toolchain_data.get("automation_studio") or {}
+    pvi = toolchain_data.get("pvi") or {}
 
     add_check(
         checks,
@@ -161,11 +216,10 @@ def run_doctor(options: dict[str, str]) -> dict[str, Any]:
         path=Path(powershell) if powershell else None,
     )
 
-    for key, label in (
-        ("build_exe", "Automation Studio build executable"),
-        ("pvi_transfer_exe", "PVITransfer executable"),
+    for key, label, raw_path in (
+        ("build_exe", "Automation Studio build executable", automation.get("build_exe")),
+        ("pvi_transfer_exe", "PVITransfer executable", pvi.get("transfer_exe")),
     ):
-        raw_path = automation.get(key)
         path = Path(str(raw_path)) if raw_path else None
         ok = bool(path and path.is_file())
         add_check(

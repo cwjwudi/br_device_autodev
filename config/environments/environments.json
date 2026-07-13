@@ -1,6 +1,7 @@
 {
   "default_safe": {
     "description": "Conservative default using the legacy checked-in target configuration.",
+    "toolchain": "as6_default",
     "project_path": "PrintDemo\\Huitong_FrontEval.apj",
     "config": "x1685",
     "target": "arsim",
@@ -9,6 +10,7 @@
   },
   "office_test_233": {
     "description": "Dedicated office test PLC at 192.168.50.233 with runtime discovery.",
+    "toolchain": "as6_default",
     "target": "test_plc_233",
     "ip": "192.168.50.233",
     "declared_role": "dedicated_test_plc",
@@ -16,6 +18,7 @@
   },
   "local_arsim": {
     "description": "Locally running ARsim discovered through PVI.",
+    "toolchain": "as6_default",
     "target": "arsim",
     "ip": "127.0.0.1",
     "declared_role": "arsim",
@@ -23,6 +26,7 @@
   },
   "development_example": {
     "description": "Agent-directed development example. Copy into config/local before adding machine paths.",
+    "toolchain": "as6_default",
     "project_path": "PrintDemo\\Huitong_FrontEval.apj",
     "config": "x1685",
     "target": "arsim",
@@ -31,6 +35,7 @@
   },
   "office_test_example": {
     "description": "Conservative physical test PLC example with downloads disabled.",
+    "toolchain": "as6_default",
     "project_path": "PrintDemo\\Huitong_FrontEval.apj",
     "config": "x1685",
     "target": "test_plc",

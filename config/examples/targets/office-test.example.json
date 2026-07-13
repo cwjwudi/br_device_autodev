@@ -4,12 +4,6 @@
     "risk_level": "dedicated_test",
     "description": "Dedicated test PLC profile. Replace documentation addresses and populate explicit variable whitelists before use."
   },
-  "automation_studio": {
-    "version": "AS6.5",
-    "bin_dir": "C:\\Path\\To\\BRAutomation\\AS6\\bin-en",
-    "build_exe": "C:\\Path\\To\\BRAutomation\\AS6\\bin-en\\BR.AS.Build.exe",
-    "pvi_transfer_exe": "C:\\Path\\To\\BRAutomation\\PVI\\Tools\\PVITransfer\\PVITransfer.exe"
-  },
   "access_policy": {
     "mode": "whitelist",
     "allow_dynamic_pvi_read": false,
@@ -39,7 +33,6 @@
   "pvi": {
     "enabled": true,
     "verify_after_download": false,
-    "pvi_dll_dir": null,
     "read_whitelist": [],
     "write_whitelist": [],
     "restore_writes": [],

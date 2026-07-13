@@ -28,6 +28,15 @@ COMMON_PROPERTIES: dict[str, Any] = {
         "description": "Toolchain target configuration JSON path. Overrides environment.targets_path when supplied.",
         "default": "config\\targets\\default-safe.json",
     },
+    "toolchain": {
+        "type": "string",
+        "description": "Global AS4/AS6 toolchain id. Overrides environment.toolchain.",
+        "minLength": 1,
+    },
+    "toolchains_path": {
+        "type": "string",
+        "description": "Global toolchain registry path. Local registry overrides the checked-in default when present.",
+    },
     "timeout_seconds": {
         "type": "integer",
         "description": "Maximum seconds to wait for the local CLI command.",
@@ -90,6 +99,15 @@ RUNTIME_TARGET_PROPERTIES: dict[str, Any] = {
         "description": "Runtime target name created during online discovery.",
         "minLength": 1,
     },
+    "toolchain": {
+        "type": "string",
+        "description": "Global AS4/AS6 toolchain id. Overrides environment.toolchain.",
+        "minLength": 1,
+    },
+    "toolchains_path": {
+        "type": "string",
+        "description": "Global toolchain registry path. Defaults to config/local/toolchains.json when present, otherwise config/toolchains/toolchains.json.",
+    },
     "ip": {
         "type": "string",
         "description": "PLC/ARsim IP; required when first discovering a runtime target.",
@@ -99,6 +117,15 @@ RUNTIME_TARGET_PROPERTIES: dict[str, Any] = {
         "type": "string",
         "description": "Explicit user declaration; omit for unknown read-only discovery.",
         "enum": ["dedicated_test_plc", "production", "arsim"],
+    },
+    "toolchain": {
+        "type": "string",
+        "description": "AS4/AS6 toolchain whose PVI DLL is used for the new runtime target.",
+        "minLength": 1,
+    },
+    "toolchains_path": {
+        "type": "string",
+        "description": "Optional global toolchain registry path.",
     },
 }
 
@@ -525,6 +552,16 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         ),
     },
     {
+        "name": "plc_list_toolchains",
+        "description": "List configured AS4/AS6 toolchains, selected paths, PVI family and local availability.",
+        "inputSchema": object_schema({}),
+    },
+    {
+        "name": "plc_get_toolchain",
+        "description": "Resolve one global AS4/AS6 toolchain and return its compiler, libraries and PVI paths.",
+        "inputSchema": object_schema({}),
+    },
+    {
         "name": "plc_discover_runtime_target",
         "description": "Connect through persistent PVI without source code or a policy file. Unknown physical targets are read-only; test roles must be explicitly declared.",
         "inputSchema": runtime_schema({}, "ip"),
@@ -641,6 +678,8 @@ TOOL_RISK_LEVELS: dict[str, str] = {
     "plc_find_library_for_symbol": "readonly",
     "plc_get_target_config": "readonly",
     "plc_list_environments": "readonly",
+    "plc_list_toolchains": "readonly",
+    "plc_get_toolchain": "readonly",
     "plc_list_targets": "readonly",
     "plc_list_variables": "local_write",
     "plc_plan_project_library": "readonly",
@@ -681,6 +720,8 @@ TOOL_BACKENDS: dict[str, str] = {
     "plc_find_library_for_symbol": "as_library_manager.py find",
     "plc_get_target_config": "GetTargetConfig",
     "plc_list_environments": "MCP native",
+    "plc_list_toolchains": "structured config",
+    "plc_get_toolchain": "structured config",
     "plc_list_targets": "ListTargets",
     "plc_list_variables": "plc_symbol_index.py",
     "plc_plan_project_library": "as_library_manager.py plan",

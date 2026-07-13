@@ -26,6 +26,7 @@ DEFAULT_PROJECT_PATH = "PrintDemo\\Huitong_FrontEval.apj"
 DEFAULT_CONFIG = "x1685"
 DEFAULT_TARGETS_PATH = "config\\targets\\default-safe.json"
 DEFAULT_ENVIRONMENTS_PATH = "config\\environments\\environments.json"
+DEFAULT_TOOLCHAINS_PATH = "config\\toolchains\\toolchains.json"
 
 _RUNTIME_SERVICE = None
 _RUNTIME_SERVICE_LOCK = threading.Lock()
@@ -117,6 +118,8 @@ def resolve_call_options(
         "project_path": pick("project_path", DEFAULT_PROJECT_PATH),
         "config": pick("config", DEFAULT_CONFIG),
         "targets_path": pick("targets_path", DEFAULT_TARGETS_PATH),
+        "toolchain": pick("toolchain", ""),
+        "toolchains_path": pick("toolchains_path", DEFAULT_TOOLCHAINS_PATH),
     }
 
 
@@ -127,6 +130,8 @@ def run_plc_toolchain(
     project_path: str = DEFAULT_PROJECT_PATH,
     config: str = DEFAULT_CONFIG,
     targets_path: str = DEFAULT_TARGETS_PATH,
+    toolchain: str = "",
+    toolchains_path: str = DEFAULT_TOOLCHAINS_PATH,
     package_path: str | None = None,
     transfer_pil_path: str | None = None,
     writes_path: str | None = None,
@@ -162,7 +167,11 @@ def run_plc_toolchain(
         config,
         "-TargetsPath",
         targets_path,
+        "-ToolchainsPath",
+        toolchains_path,
     ]
+    if toolchain:
+        args.extend(["-Toolchain", toolchain])
     if package_path:
         args.extend(["-PackagePath", package_path])
     if transfer_pil_path:
@@ -507,6 +516,8 @@ def plc_probe_target(arguments: dict[str, Any]) -> dict[str, Any]:
         project_path=options["project_path"],
         config=options["config"],
         targets_path=options["targets_path"],
+        toolchain=options["toolchain"],
+        toolchains_path=options["toolchains_path"],
         timeout_seconds=int(arguments.get("timeout_seconds") or 60),
     )
     return wrap_result("plc_probe_target", "Probe", data, target)
@@ -524,6 +535,8 @@ def plc_read_pvi(arguments: dict[str, Any]) -> dict[str, Any]:
         project_path=options["project_path"],
         config=options["config"],
         targets_path=options["targets_path"],
+        toolchain=options["toolchain"],
+        toolchains_path=options["toolchains_path"],
         pvi_variables=[str(item) for item in pvi_variables] if pvi_variables else None,
         timeout_seconds=int(arguments.get("timeout_seconds") or 60),
     )
@@ -545,6 +558,8 @@ def plc_read_logger(arguments: dict[str, Any]) -> dict[str, Any]:
         project_path=options["project_path"],
         config=options["config"],
         targets_path=options["targets_path"],
+        toolchain=options["toolchain"],
+        toolchains_path=options["toolchains_path"],
         logger_type=logger_type,
         logger_name=logger_name,
         logger_format=logger_format,
@@ -570,6 +585,8 @@ def plc_write_pvi(arguments: dict[str, Any]) -> dict[str, Any]:
         project_path=options["project_path"],
         config=options["config"],
         targets_path=options["targets_path"],
+        toolchain=options["toolchain"],
+        toolchains_path=options["toolchains_path"],
         writes_path=writes_path,
         execute=execute,
         timeout_seconds=int(arguments.get("timeout_seconds") or 90),
@@ -586,6 +603,8 @@ def plc_check_download(arguments: dict[str, Any]) -> dict[str, Any]:
         project_path=options["project_path"],
         config=options["config"],
         targets_path=options["targets_path"],
+        toolchain=options["toolchain"],
+        toolchains_path=options["toolchains_path"],
         package_path=arguments.get("package_path"),
         transfer_pil_path=arguments.get("transfer_pil_path"),
         force_arsim_download=arguments.get("force_arsim_download") is True,
@@ -604,6 +623,8 @@ def plc_build_project(arguments: dict[str, Any]) -> dict[str, Any]:
         project_path=options["project_path"],
         config=options["config"],
         targets_path=options["targets_path"],
+        toolchain=options["toolchain"],
+        toolchains_path=options["toolchains_path"],
         build_ruc_package=build_ruc,
         timeout_seconds=int(arguments.get("timeout_seconds") or 300),
     )
@@ -631,7 +652,13 @@ def run_library_manager(
         options["project_path"],
         "--targets-file",
         options["targets_path"],
+        "--toolchains-file",
+        options["toolchains_path"],
     ]
+    resolved_toolchain = _resolve_toolchain_arguments(options)
+    args.extend(["--toolchain", resolved_toolchain.id])
+    for root in resolved_toolchain.library_roots:
+        args.extend(["--library-root", str(root)])
     if symbol:
         args.extend(["--symbol", symbol])
     if library:
@@ -734,6 +761,8 @@ def plc_add_project_library(arguments: dict[str, Any]) -> dict[str, Any]:
                 project_path=options["project_path"],
                 config=options["config"],
                 targets_path=options["targets_path"],
+                toolchain=options["toolchain"],
+                toolchains_path=options["toolchains_path"],
                 timeout_seconds=timeout_seconds,
             )
         except Exception as exc:
@@ -781,6 +810,8 @@ def plc_start_arsim(arguments: dict[str, Any]) -> dict[str, Any]:
         project_path=options["project_path"],
         config=options["config"],
         targets_path=options["targets_path"],
+        toolchain=options["toolchain"],
+        toolchains_path=options["toolchains_path"],
         start_wait_seconds=int(arguments.get("start_wait_seconds") or 3),
         timeout_seconds=int(arguments.get("timeout_seconds") or 30),
     )
@@ -797,6 +828,8 @@ def plc_describe_ruc_package(arguments: dict[str, Any]) -> dict[str, Any]:
         project_path=options["project_path"],
         config=options["config"],
         targets_path=options["targets_path"],
+        toolchain=options["toolchain"],
+        toolchains_path=options["toolchains_path"],
         package_path=arguments.get("package_path"),
         timeout_seconds=int(arguments.get("timeout_seconds") or 30),
     )
@@ -815,6 +848,8 @@ def plc_download_ruc(arguments: dict[str, Any]) -> dict[str, Any]:
         project_path=options["project_path"],
         config=options["config"],
         targets_path=options["targets_path"],
+        toolchain=options["toolchain"],
+        toolchains_path=options["toolchains_path"],
         package_path=arguments.get("package_path"),
         transfer_pil_path=arguments.get("transfer_pil_path"),
         execute=execute,
@@ -836,6 +871,8 @@ def plc_verify_opcua(arguments: dict[str, Any]) -> dict[str, Any]:
         project_path=options["project_path"],
         config=options["config"],
         targets_path=options["targets_path"],
+        toolchain=options["toolchain"],
+        toolchains_path=options["toolchains_path"],
         opcua_node_ids=[str(item) for item in opcua_node_ids] if opcua_node_ids else None,
         timeout_seconds=int(arguments.get("timeout_seconds") or 60),
     )
@@ -854,6 +891,8 @@ def plc_run_arsim_closed_loop(arguments: dict[str, Any]) -> dict[str, Any]:
         project_path=options["project_path"],
         config=options["config"],
         targets_path=options["targets_path"],
+        toolchain=options["toolchain"],
+        toolchains_path=options["toolchains_path"],
         execute=execute,
         timeout_seconds=int(arguments.get("timeout_seconds") or 600),
     )
@@ -869,6 +908,8 @@ def plc_run_verification_suite(arguments: dict[str, Any]) -> dict[str, Any]:
         project_path=options["project_path"],
         config=options["config"],
         targets_path=options["targets_path"],
+        toolchain=options["toolchain"],
+        toolchains_path=options["toolchains_path"],
         timeout_seconds=int(arguments.get("timeout_seconds") or 120),
     )
     return wrap_result("plc_run_verification_suite", "RunVerificationSuite", data, target)
@@ -889,6 +930,8 @@ def plc_run_io_test_case(arguments: dict[str, Any]) -> dict[str, Any]:
         project_path=options["project_path"],
         config=options["config"],
         targets_path=options["targets_path"],
+        toolchain=options["toolchain"],
+        toolchains_path=options["toolchains_path"],
         suite_path=str(arguments.get("suite_path") or "tests\\plc\\lqr_io_tests.json"),
         case_name=str(case_name),
         execute=execute,
@@ -910,6 +953,8 @@ def plc_run_test_suite(arguments: dict[str, Any]) -> dict[str, Any]:
         project_path=options["project_path"],
         config=options["config"],
         targets_path=options["targets_path"],
+        toolchain=options["toolchain"],
+        toolchains_path=options["toolchains_path"],
         suite_path=str(arguments.get("suite_path") or "tests\\plc\\lqr_io_tests.json"),
         execute=execute,
         settle_ms=int(arguments.get("settle_ms") or 100),
@@ -930,6 +975,8 @@ def plc_reset_test_harness(arguments: dict[str, Any]) -> dict[str, Any]:
         project_path=options["project_path"],
         config=options["config"],
         targets_path=options["targets_path"],
+        toolchain=options["toolchain"],
+        toolchains_path=options["toolchains_path"],
         suite_path=str(arguments.get("suite_path") or "tests\\plc\\lqr_io_tests.json"),
         execute=execute,
         timeout_seconds=int(arguments.get("timeout_seconds") or 120),
@@ -946,6 +993,8 @@ def plc_get_target_config(arguments: dict[str, Any]) -> dict[str, Any]:
         project_path=options["project_path"],
         config=options["config"],
         targets_path=options["targets_path"],
+        toolchain=options["toolchain"],
+        toolchains_path=options["toolchains_path"],
         timeout_seconds=int(arguments.get("timeout_seconds") or 30),
     )
     return wrap_result("plc_get_target_config", "GetTargetConfig", data, target)
@@ -960,6 +1009,8 @@ def plc_list_targets(arguments: dict[str, Any]) -> dict[str, Any]:
         project_path=options["project_path"],
         config=options["config"],
         targets_path=options["targets_path"],
+        toolchain=options["toolchain"],
+        toolchains_path=options["toolchains_path"],
         timeout_seconds=int(arguments.get("timeout_seconds") or 30),
     )
     return wrap_result("plc_list_targets", "ListTargets", data, target)
@@ -989,6 +1040,8 @@ def plc_list_environments(arguments: dict[str, Any]) -> dict[str, Any]:
                 "config": env.get("config"),
                 "target": env.get("target"),
                 "targets_path": env.get("targets_path"),
+                "toolchain": env.get("toolchain"),
+                "toolchains_path": env.get("toolchains_path"),
             }
         )
 
@@ -999,6 +1052,28 @@ def plc_list_environments(arguments: dict[str, Any]) -> dict[str, Any]:
         "environments": environments,
     }
     return wrap_result("plc_list_environments", "ListEnvironments", data, "")
+
+
+def _resolve_toolchain_arguments(arguments: dict[str, Any]):
+    from br_plc_toolchain.config import resolve_toolchain
+
+    options = resolve_call_options(arguments)
+    registry_path = options["toolchains_path"]
+    return resolve_toolchain(options["toolchain"] or None, registry_path=registry_path)
+
+
+def plc_list_toolchains(arguments: dict[str, Any]) -> dict[str, Any]:
+    from br_plc_toolchain.config import list_toolchains
+
+    options = resolve_call_options(arguments)
+    data = list_toolchains(registry_path=options["toolchains_path"])
+    return wrap_result("plc_list_toolchains", "ListToolchains", data, "")
+
+
+def plc_get_toolchain(arguments: dict[str, Any]) -> dict[str, Any]:
+    resolved = _resolve_toolchain_arguments(arguments)
+    data = {"ok": True, "toolchain": resolved.to_dict()}
+    return wrap_result("plc_get_toolchain", "GetToolchain", data, "")
 
 
 def diagnostic_options(arguments: dict[str, Any]) -> dict[str, str]:
@@ -1116,8 +1191,21 @@ def _ensure_runtime_target(arguments: dict[str, Any]) -> tuple[Any, str]:
     target = str(arguments.get("target") or "").strip()
     ip = arguments.get("ip")
     if ip:
+        from br_plc_toolchain.config import resolve_toolchain
+
+        selected_toolchain = resolve_toolchain(
+            str(arguments.get("toolchain") or "") or None,
+            registry_path=arguments.get("toolchains_path") or DEFAULT_TOOLCHAINS_PATH,
+        )
         registration = service.register_ephemeral_target(
-            ip=str(ip), name=target or None, declared_role=arguments.get("declared_role")
+            ip=str(ip),
+            name=target or None,
+            declared_role=arguments.get("declared_role"),
+            pvi_dll_path=(
+                str(selected_toolchain.pvi_dll_dir)
+                if selected_toolchain.pvi_dll_dir
+                else None
+            ),
         )
         target = registration["target"]["name"]
     if not target:
@@ -1231,6 +1319,8 @@ TOOLS = {
     "plc_get_target_config": plc_get_target_config,
     "plc_list_targets": plc_list_targets,
     "plc_list_environments": plc_list_environments,
+    "plc_list_toolchains": plc_list_toolchains,
+    "plc_get_toolchain": plc_get_toolchain,
     "plc_list_variables": plc_list_variables,
     "plc_search_variables": plc_search_variables,
     "plc_discover_runtime_target": plc_discover_runtime_target,
