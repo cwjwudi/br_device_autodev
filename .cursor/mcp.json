@@ -1,15 +1,13 @@
 {
-  "servers": {
+  "mcpServers": {
     "br-plc-toolchain": {
-      "type": "stdio",
       "command": "python",
       "args": [
-        "c:/Users/BR/codex_ws/br_device_autodev/tools/mcp_server/server.py"
+        "tools/mcp_server/server.py"
       ],
       "cwd": "c:/Users/BR/codex_ws/br_device_autodev"
     },
     "mappview-widgets": {
-      "type": "stdio",
       "command": "python",
       "args": [
         "c:/Users/BR/codex_ws/mappview-ai-kb/mcp-server/server.py"
