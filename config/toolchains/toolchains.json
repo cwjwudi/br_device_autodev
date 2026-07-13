@@ -18,7 +18,7 @@
       "pvi": {
         "family": "PVI4",
         "transfer_exe": "C:\\Program Files (x86)\\BRAutomation\\PVI4\\PVI\\Tools\\PVITransfer\\PVITransfer.exe",
-        "dll_dir": "C:\\Program Files (x86)\\BRAutomation\\PVI4\\PVI"
+        "dll_dir": "C:\\Program Files (x86)\\BRAutomation\\PVI4\\Bin"
       }
     },
     "as6_default": {
@@ -37,7 +37,7 @@
       "pvi": {
         "family": "PVI6",
         "transfer_exe": "C:\\Program Files (x86)\\BRAutomation\\PVI6\\PVI\\Tools\\PVITransfer\\PVITransfer.exe",
-        "dll_dir": "C:\\Program Files (x86)\\BRAutomation\\PVI6\\PVI"
+        "dll_dir": "C:\\Program Files (x86)\\BRAutomation\\PVI6\\Bin"
       }
     }
   }

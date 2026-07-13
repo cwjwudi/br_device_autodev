@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import copy
-import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,6 +30,13 @@ class ResolvedToolchain:
     pvi_dll_dir: Path | None
     source_path: Path
 
+    @property
+    def expected_pvi_dll(self) -> Path | None:
+        if not self.pvi_dll_dir:
+            return None
+        filename = "PviCom64.dll" if self.pvi_family == "PVI4" else "Pvi6Com64.dll"
+        return self.pvi_dll_dir / filename
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
@@ -48,6 +53,7 @@ class ResolvedToolchain:
                 "family": self.pvi_family,
                 "transfer_exe": str(self.pvi_transfer_exe),
                 "dll_dir": str(self.pvi_dll_dir) if self.pvi_dll_dir else None,
+                "expected_dll": str(self.expected_pvi_dll) if self.expected_pvi_dll else None,
             },
             "source_path": str(self.source_path),
         }
@@ -125,6 +131,8 @@ def list_toolchains(*, registry_path: str | Path | None = None) -> dict[str, Any
             resolved.enabled
             and resolved.build_exe.is_file()
             and resolved.pvi_transfer_exe.is_file()
+            and resolved.expected_pvi_dll
+            and resolved.expected_pvi_dll.is_file()
         )
         items.append(item)
     return {
@@ -133,22 +141,3 @@ def list_toolchains(*, registry_path: str | Path | None = None) -> dict[str, Any
         "default_toolchain": registry.get("default_toolchain"),
         "toolchains": items,
     }
-
-
-def merge_toolchain_into_legacy_config(
-    config: dict[str, Any], toolchain: ResolvedToolchain
-) -> dict[str, Any]:
-    """Temporary adapter for legacy CLI modules while paths move out of target files."""
-    merged = copy.deepcopy(config)
-    merged["automation_studio"] = {
-        "version": toolchain.version,
-        "family": toolchain.family,
-        "bin_dir": str(toolchain.bin_dir),
-        "build_exe": str(toolchain.build_exe),
-        "library_roots": [str(path) for path in toolchain.library_roots],
-        "pvi_transfer_exe": str(toolchain.pvi_transfer_exe),
-    }
-    merged.setdefault("pvi", {})["pvi_dll_dir"] = (
-        str(toolchain.pvi_dll_dir) if toolchain.pvi_dll_dir else None
-    )
-    return merged

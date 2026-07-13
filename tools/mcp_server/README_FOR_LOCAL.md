@@ -30,7 +30,7 @@ tools\as_library_manager.py
 <!-- BEGIN GENERATED MCP TOOL CATALOG -->
 当前 stdio MCP 暴露以下工具：
 
-MCP server version: `0.12.0`. Full catalog: [../../skills/br-plc-toolchain/references/mcp-tools.md](../../skills/br-plc-toolchain/references/mcp-tools.md)
+MCP server version: `0.13.0`. Full catalog: [../../skills/br-plc-toolchain/references/mcp-tools.md](../../skills/br-plc-toolchain/references/mcp-tools.md)
 
 | MCP Tool | Risk | Backend | Confirmation | Description |
 | --- | --- | --- | --- | --- |

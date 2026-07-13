@@ -243,7 +243,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Com
 - `config/targets/default-safe.json` 中 `pvi.enabled=true` 控制是否启用 PVI 读取。
 - `pvi.verify_after_download=false` 默认不在下载后自动运行 PVI；当前下载后默认仍优先运行 OPC UA。
 - `pvi.validation_variables` 使用白名单变量，不做“读取全部变量”的默认行为。
-- 如需指定 PVI DLL 目录，可设置 `pvi.pvi_dll_dir`，脚本会传入 `PVIPY_PVIDLLPATH`。
+- PVI DLL 目录由全局 `toolchains.<id>.pvi.dll_dir` 指定，脚本会传入 `PVIPY_PVIDLLPATH`；targets 文件不再保存本机 DLL 路径。
 
 当前已验证的 PVI 读取：
 

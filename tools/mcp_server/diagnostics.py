@@ -230,6 +230,18 @@ def run_doctor(options: dict[str, str]) -> dict[str, Any]:
             path=path,
         )
 
+    expected_dll = pvi.get("expected_dll")
+    dll_path = Path(str(expected_dll)) if expected_dll else None
+    add_check(
+        checks,
+        "pvi_dll",
+        bool(dll_path and dll_path.is_file()),
+        "PVI communication DLL exists."
+        if dll_path and dll_path.is_file()
+        else "PVI communication DLL is missing or pvi.dll_dir points to the wrong directory.",
+        path=dll_path,
+    )
+
     pvi_available = importlib.util.find_spec("pvi") is not None
     add_check(
         checks,

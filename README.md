@@ -50,10 +50,13 @@ docs/
   PVI_RUNTIME_ARCHITECTURE.md
   CONFIGURATION.md
   OFFICE_TEST_QUICKSTART.md
+  TOOLCHAINS.md
+  AS4_AS6_TOOLCHAIN_TEST_REPORT.md
 
 config/
   defaults/             # 内置运行默认值
   profiles/             # production/office-test/ARsim/readonly 策略
+  toolchains/           # 全局 AS4/AS6、Library 与 PVI 路径
   targets/              # 团队默认目标
   environments/         # 命名环境
   examples/             # 机器与目标模板
@@ -201,7 +204,7 @@ python tools\mcp_server\server.py
 <!-- BEGIN GENERATED MCP TOOL CATALOG -->
 当前 MCP 工具清单：
 
-MCP server version: `0.12.0`. Full catalog: [skills/br-plc-toolchain/references/mcp-tools.md](skills/br-plc-toolchain/references/mcp-tools.md)
+MCP server version: `0.13.0`. Full catalog: [skills/br-plc-toolchain/references/mcp-tools.md](skills/br-plc-toolchain/references/mcp-tools.md)
 
 | MCP Tool | Risk | Backend | Confirmation | Description |
 | --- | --- | --- | --- | --- |
@@ -321,21 +324,26 @@ plc_run_verification_suite(target="arsim")
 
 ## 配置
 
-目标和工具路径配置在：
+全局 AS4/AS6 与 PVI 工具路径配置在：
 
 ```text
-config/targets/default-safe.json
+config/toolchains/toolchains.json
+config/local/toolchains.json       # 可选本机覆盖，Git 忽略
 ```
 
-当前包含：
+PLC 目标和安全策略配置在 `config/targets/default-safe.json`。命名环境在 `config/environments/environments.json` 中通过 `toolchain` 明确选择 AS4 或 AS6。
 
-- `automation_studio.build_exe`
-- `automation_studio.pvi_transfer_exe`
+- `toolchains.<id>.automation_studio.build_exe`
+- `toolchains.<id>.automation_studio.library_roots`
+- `toolchains.<id>.pvi.transfer_exe`
+- `toolchains.<id>.pvi.dll_dir`
 - `targets.arsim`
 - `targets.test_plc`
 - `targets.test_plc_233`
 - `opcua.validation_node_ids`
 - `pvi.validation_variables`
+
+详细说明见 [docs/TOOLCHAINS.md](docs/TOOLCHAINS.md)。
 
 ## Skill
 

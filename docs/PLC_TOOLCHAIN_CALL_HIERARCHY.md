@@ -225,7 +225,8 @@ Logger 读取只返回摘要和报告路径，不把大段 HTML/CSV 内容直接
 
 ### 环境配置
 
-- `config/targets/default-safe.json`：当前本地目标、工具路径、OPC UA/PVI/Logger 白名单。
+- `config/toolchains/toolchains.json`：全局 AS4/AS6、Library、PVITransfer 和 PVI DLL 路径。
+- `config/targets/default-safe.json`：当前 PLC 目标、安全角色和 OPC UA/PVI/Logger 白名单。
 - `config/examples/machines/cwj-as6-x3687x.example.json`：另一个本地 AS6 + `x3687x` 环境目标配置。
 - `config/environments/environments.json`：MCP 环境映射，支持通过 `environment` 一键切换默认 `project_path`、`config`、`target`、`targets_path`。
 

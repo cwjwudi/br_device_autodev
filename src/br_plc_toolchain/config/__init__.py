@@ -14,7 +14,6 @@ from .toolchains import (
     ResolvedToolchain,
     list_toolchains,
     load_toolchain_registry,
-    merge_toolchain_into_legacy_config,
     resolve_toolchain,
 )
 
@@ -30,6 +29,5 @@ __all__ = [
     "ResolvedToolchain",
     "list_toolchains",
     "load_toolchain_registry",
-    "merge_toolchain_into_legacy_config",
     "resolve_toolchain",
 ]

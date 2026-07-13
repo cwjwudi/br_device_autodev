@@ -79,7 +79,7 @@ def test_runtime_discovery_bootstraps_without_policy_file() -> None:
     assert result["isError"] is False
     assert result["structuredContent"]["tasks"] == ["Main"]
     assert fake.registered
-    assert fake.registration_kwargs["pvi_dll_path"].endswith("PVI6\\PVI")
+    assert fake.registration_kwargs["pvi_dll_path"].endswith("PVI6\\Bin")
 
 
 def test_runtime_variable_tools_use_online_reference() -> None:

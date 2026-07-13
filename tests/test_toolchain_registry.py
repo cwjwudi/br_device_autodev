@@ -15,6 +15,7 @@ def write_registry(tmp_path):
     transfer.parent.mkdir(parents=True)
     build.touch()
     transfer.touch()
+    (root / "PVI" / "PviCom64.dll").touch()
     path = tmp_path / "toolchains.json"
     path.write_text(
         json.dumps(

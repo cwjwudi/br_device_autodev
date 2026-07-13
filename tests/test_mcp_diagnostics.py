@@ -118,6 +118,7 @@ class McpDiagnosticsTests(unittest.TestCase):
                 "powershell",
                 "build_exe",
                 "pvi_transfer_exe",
+                "pvi_dll",
                 "pvi_python",
                 "arsim_loader",
                 "generated_write",
