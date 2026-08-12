@@ -2,8 +2,6 @@
   "default_safe": {
     "description": "Conservative default using the legacy checked-in target configuration.",
     "toolchain": "as6_default",
-    "project_path": "PrintDemo\\Huitong_FrontEval.apj",
-    "config": "x1685",
     "target": "arsim",
     "targets_path": "config\\targets\\default-safe.json",
     "access_profile": "readonly-discovery"
@@ -25,10 +23,8 @@
     "access_profile": "arsim-development"
   },
   "development_example": {
-    "description": "Agent-directed development example. Copy into config/local before adding machine paths.",
+    "description": "Agent-directed development example. Copy into config/local before adding machine paths and project.",
     "toolchain": "as6_default",
-    "project_path": "PrintDemo\\Huitong_FrontEval.apj",
-    "config": "x1685",
     "target": "arsim",
     "targets_path": "config\\examples\\targets\\development.example.json",
     "access_profile": "arsim-development"
@@ -36,8 +32,6 @@
   "office_test_example": {
     "description": "Conservative physical test PLC example with downloads disabled.",
     "toolchain": "as6_default",
-    "project_path": "PrintDemo\\Huitong_FrontEval.apj",
-    "config": "x1685",
     "target": "test_plc",
     "targets_path": "config\\examples\\targets\\office-test.example.json",
     "access_profile": "office-test"

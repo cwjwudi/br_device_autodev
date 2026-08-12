@@ -18,8 +18,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 LOCK_DIR = REPO_ROOT / "var" / "locks"
 DEFAULT_ENVIRONMENTS_PATH = REPO_ROOT / "config" / "environments" / "environments.json"
 DEFAULT_TARGETS_PATH = "config\\targets\\default-safe.json"
-DEFAULT_PROJECT_PATH = "PrintDemo\\Huitong_FrontEval.apj"
-DEFAULT_CONFIG = "x1685"
+DEFAULT_PROJECT_PATH = ""
+DEFAULT_CONFIG = ""
 
 TARGET_SCOPED_TOOLS = {
     name for name, risk in TOOL_RISK_LEVELS.items() if risk == "target_change"

@@ -78,8 +78,7 @@ MCP server version: `0.13.0`. Full catalog: [../../skills/br-plc-toolchain/refer
 ## 默认配置
 
 - 默认目标：`arsim`
-- 默认工程：`PrintDemo\Huitong_FrontEval.apj`
-- 默认配置：`x1685`
+- 工程路径和 config 由调用方通过 `environment` 或显式 `project_path`/`config` 参数提供
 - 配置文件：`config\targets\default-safe.json`
 
 ## 环境切换

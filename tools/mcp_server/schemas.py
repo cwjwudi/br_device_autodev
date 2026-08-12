@@ -16,12 +16,10 @@ COMMON_PROPERTIES: dict[str, Any] = {
     "project_path": {
         "type": "string",
         "description": "Automation Studio project path, relative to the repository root unless absolute.",
-        "default": "PrintDemo\\Huitong_FrontEval.apj",
     },
     "config": {
         "type": "string",
         "description": "Automation Studio configuration name.",
-        "default": "x1685",
     },
     "targets_path": {
         "type": "string",
@@ -302,7 +300,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             {
                 "package_path": {
                     "type": "string",
-                    "description": "Optional path to the RUC package zip. Defaults to PrintDemo/Binaries/x1685/X20CP1685/RUCPackage/RUCPackage.zip.",
+                    "description": "Optional path to the RUC package zip. Defaults to <project>/Binaries/<config>/<CPU>/RUCPackage/RUCPackage.zip.",
                 },
             },
         ),

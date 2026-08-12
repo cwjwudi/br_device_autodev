@@ -886,7 +886,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Index and safely add Automation Studio libraries.")
     parser.add_argument("command", choices=("find", "plan", "add", "rollback"))
     parser.add_argument("--repo-root", default=str(Path(__file__).resolve().parents[1]))
-    parser.add_argument("--project-path", default="PrintDemo\\Huitong_FrontEval.apj")
+    parser.add_argument("--project-path", default="")
     parser.add_argument("--targets-file", default="config\\targets\\default-safe.json")
     parser.add_argument("--toolchains-file", default="config\\toolchains\\toolchains.json")
     parser.add_argument("--toolchain")

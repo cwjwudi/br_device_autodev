@@ -22,7 +22,7 @@ from pvi_read import load_json_file
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_PROJECT_ROOT = REPO_ROOT / "PrintDemo"
+DEFAULT_PROJECT_ROOT = REPO_ROOT
 VAR_DECL_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.+?);")
 GENERATED_DECL_RE = re.compile(
     r"^\s*(?P<storage>_BUR_LOCAL|_LOCAL|_GLOBAL|_GLOBAL_CONST)\s+"

@@ -2,8 +2,8 @@ param(
     [ValidateSet("Help", "Build", "StartArsim", "Probe", "DescribePackage", "CheckDownload", "Download", "VerifyOpcUa", "ReadPvi", "ReadLogger", "WritePvi", "RunIoTestCase", "RunTestSuite", "ResetTestHarness", "RunArsimClosedLoop", "RunVerificationSuite", "GetTargetConfig", "ListTargets")]
     [string]$Command = "Help",
 
-    [string]$ProjectPath = "PrintDemo\Huitong_FrontEval.apj",
-    [string]$Config = "x1685",
+    [string]$ProjectPath = "",
+    [string]$Config = "",
     [string]$Target = "arsim",
     [string]$TargetsPath = "config\targets\default-safe.json",
     [string]$Toolchain = "",
@@ -45,7 +45,13 @@ function Resolve-RucPackagePath {
         return Resolve-RepoPath $PackagePath
     }
 
-    $binariesDir = Resolve-RepoPath (Join-Path "PrintDemo\Binaries" $Config)
+    if (-not $ProjectPath) {
+        return Resolve-RepoPath (Join-Path "Binaries" (Join-Path $Config "RUCPackage\RUCPackage.zip"))
+    }
+
+    $projectDir = Split-Path -Parent $ProjectPath
+    if (-not $projectDir) { $projectDir = "." }
+    $binariesDir = Resolve-RepoPath (Join-Path $projectDir (Join-Path "Binaries" $Config))
     $matches = @()
     if (Test-Path -LiteralPath $binariesDir) {
         $matches = @(Get-ChildItem -LiteralPath $binariesDir -Recurse -Filter "RUCPackage.zip" -File |
@@ -55,7 +61,7 @@ function Resolve-RucPackagePath {
         return $matches[0].FullName
     }
 
-    return Resolve-RepoPath (Join-Path "PrintDemo\Binaries" (Join-Path $Config "RUCPackage\RUCPackage.zip"))
+    return Resolve-RepoPath (Join-Path $projectDir (Join-Path "Binaries" (Join-Path $Config "RUCPackage\RUCPackage.zip")))
 }
 
 function Resolve-TransferPilPath {
