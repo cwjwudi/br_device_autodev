@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import threading
 import uuid
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +32,10 @@ DEFAULT_TOOLCHAINS_PATH = "config\\toolchains\\toolchains.json"
 
 _RUNTIME_SERVICE = None
 _RUNTIME_SERVICE_LOCK = threading.Lock()
+_ACTIVE_PROCESSES: dict[str, int] = {}
+_CANCELLED_OPERATIONS: set[str] = set()
+_PROCESS_LOCK = threading.RLock()
+_CURRENT_OPERATION_ID: ContextVar[str | None] = ContextVar("br_plc_operation_id", default=None)
 
 
 def runtime_pvi_service():
@@ -52,12 +58,92 @@ def close_runtime_pvi_service() -> None:
         service.close()
 
 
+def set_operation_id(operation_id: str):
+    return _CURRENT_OPERATION_ID.set(operation_id)
+
+
+def reset_operation_id(token: object) -> None:
+    _CURRENT_OPERATION_ID.reset(token)  # type: ignore[arg-type]
+
+
+def cancel_operation(operation_id: str) -> dict[str, Any]:
+    with _PROCESS_LOCK:
+        _CANCELLED_OPERATIONS.add(operation_id)
+        process_id = _ACTIVE_PROCESSES.get(operation_id)
+    if process_id is None:
+        return {"attempted": True, "succeeded": True, "process_id": None}
+    cleanup = terminate_process_tree(process_id)
+    cleanup["process_id"] = process_id
+    return cleanup
+
+
+def is_operation_cancelled(operation_id: str) -> bool:
+    with _PROCESS_LOCK:
+        return operation_id in _CANCELLED_OPERATIONS
+
+
 class ToolchainError(RuntimeError):
-    def __init__(self, message: str, *, stdout: str = "", stderr: str = "", exit_code: int | None = None):
+    def __init__(
+        self,
+        message: str,
+        *,
+        stdout: str = "",
+        stderr: str = "",
+        exit_code: int | None = None,
+        error_code: str = "TOOLCHAIN_ERROR",
+        retryable: bool = False,
+        stage: str = "execution",
+        target: str | None = None,
+        command: str | None = None,
+        details: dict[str, Any] | None = None,
+        remediation: list[str] | None = None,
+        attempt_id: str | None = None,
+        process_id: int | None = None,
+        cleanup: dict[str, Any] | None = None,
+    ):
         super().__init__(message)
         self.stdout = stdout
         self.stderr = stderr
         self.exit_code = exit_code
+        self.error_code = error_code
+        self.retryable = retryable
+        self.stage = stage
+        self.target = target
+        self.command = command
+        self.details = details or {}
+        self.remediation = remediation or []
+        self.attempt_id = attempt_id
+        self.process_id = process_id
+        self.cleanup = cleanup or {}
+
+
+def terminate_process_tree(process_id: int) -> dict[str, Any]:
+    """Terminate only the process tree created for one toolchain invocation."""
+    if process_id <= 0:
+        return {"attempted": False, "succeeded": False, "cleanup_attempted": False, "cleanup_succeeded": False, "remaining_process_ids": []}
+    if os.name == "nt":
+        completed = subprocess.run(
+            ["taskkill", "/PID", str(process_id), "/T", "/F"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        succeeded = completed.returncode == 0
+        return {
+            "attempted": True,
+            "succeeded": succeeded,
+            "cleanup_attempted": True,
+            "cleanup_succeeded": succeeded,
+            "remaining_process_ids": [],
+            "output": (completed.stdout or completed.stderr or "").strip()[-2000:],
+        }
+    try:
+        os.kill(process_id, 9)
+        return {"attempted": True, "succeeded": True, "cleanup_attempted": True, "cleanup_succeeded": True, "remaining_process_ids": []}
+    except ProcessLookupError:
+        return {"attempted": True, "succeeded": True, "remaining_process_ids": []}
+    except OSError as exc:
+        return {"attempted": True, "succeeded": False, "cleanup_attempted": True, "cleanup_succeeded": False, "remaining_process_ids": [process_id], "error": str(exc)}
 
 
 def write_json_argument_file(prefix: str, payload: Any) -> str:
@@ -149,7 +235,19 @@ def run_plc_toolchain(
     settle_ms: int | None = None,
     start_wait_seconds: int | None = None,
     timeout_seconds: int = 60,
+    operation_id: str | None = None,
 ) -> dict[str, Any]:
+    operation_id = operation_id or _CURRENT_OPERATION_ID.get() or uuid.uuid4().hex
+    if command in {"Build", "RunArsimClosedLoop"} and (not project_path or not config):
+        raise ToolchainError(
+            "Project path and Automation Studio config are required for this command.",
+            error_code="PROJECT_CONFIG_REQUIRED",
+            stage="configuration",
+            target=target,
+            command=command,
+            attempt_id=operation_id,
+            remediation=["Select an environment with explicit project_path and config, or pass both arguments."],
+        )
     args = [
         "powershell",
         "-NoProfile",
@@ -169,6 +267,8 @@ def run_plc_toolchain(
         targets_path,
         "-ToolchainsPath",
         toolchains_path,
+        "-OperationId",
+        operation_id,
     ]
     if toolchain:
         args.extend(["-Toolchain", toolchain])
@@ -206,25 +306,109 @@ def run_plc_toolchain(
     if settle_ms is not None:
         args.extend(["-SettleMs", str(settle_ms)])
 
-    completed = subprocess.run(
-        args,
-        cwd=REPO_ROOT,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        capture_output=True,
-        timeout=timeout_seconds,
-        check=False,
-    )
+    try:
+        process = subprocess.Popen(
+            args,
+            cwd=REPO_ROOT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except OSError as exc:
+        raise ToolchainError(
+            f"Could not start PLC toolchain: {exc}",
+            error_code="TOOLCHAIN_NOT_FOUND",
+            stage="startup",
+            target=target,
+            command=command,
+            attempt_id=operation_id,
+            remediation=["Run plc_doctor and verify PowerShell and the selected toolchain."],
+        ) from exc
 
-    stdout = (completed.stdout or "").strip()
-    stderr = (completed.stderr or "").strip()
+    with _PROCESS_LOCK:
+        if operation_id in _CANCELLED_OPERATIONS:
+            cleanup = terminate_process_tree(process.pid)
+            raise ToolchainError(
+                f"PLC toolchain command '{command}' was cancelled before execution.",
+                error_code="OPERATION_CANCELLED",
+                stage="cancelled",
+                target=target,
+                command=command,
+                attempt_id=operation_id,
+                process_id=process.pid,
+                cleanup=cleanup,
+            )
+        _ACTIVE_PROCESSES[operation_id] = process.pid
+    cancelled = False
+    try:
+        stdout, stderr = process.communicate(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired as exc:
+        cleanup = terminate_process_tree(process.pid)
+        try:
+            stdout, stderr = process.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            # taskkill should normally reap the wrapper and its descendants. If
+            # a child still owns a pipe, force-close the wrapper and preserve
+            # the unknown-state semantics instead of masking the timeout with a
+            # second exception.
+            process.kill()
+            stdout, stderr = process.communicate()
+        error_code = "TRANSFER_TIMEOUT" if command == "Download" else "TOOLCHAIN_TIMEOUT"
+        cleanup = {
+            **cleanup,
+            "last_log_lines": ((stdout or "") + "\n" + (stderr or "")).splitlines()[-40:],
+        }
+        raise ToolchainError(
+            f"PLC toolchain command '{command}' timed out after {timeout_seconds}s.",
+            stdout=stdout or str(exc.stdout or ""),
+            stderr=stderr or str(exc.stderr or ""),
+            error_code=error_code,
+            retryable=command in {"Probe", "ReadPvi", "VerifyOpcUa"},
+            stage="transfer" if command == "Download" else "execution",
+            target=target,
+            command=command,
+            attempt_id=operation_id,
+            process_id=process.pid,
+            cleanup=cleanup,
+            remediation=[
+                "Re-probe the target before attempting another state-changing operation.",
+                "Treat the deployment state as unknown if the target cannot be reached.",
+            ],
+        ) from exc
+    finally:
+        with _PROCESS_LOCK:
+            _ACTIVE_PROCESSES.pop(operation_id, None)
+            cancelled = operation_id in _CANCELLED_OPERATIONS
+            _CANCELLED_OPERATIONS.discard(operation_id)
+
+    stdout = (stdout or "").strip()
+    stderr = (stderr or "").strip()
+    if cancelled or is_operation_cancelled(operation_id):
+        raise ToolchainError(
+            f"PLC toolchain command '{command}' was cancelled.",
+            stdout=stdout,
+            stderr=stderr,
+            exit_code=process.returncode,
+            error_code="OPERATION_CANCELLED",
+            stage="cancelled",
+            target=target,
+            command=command,
+            attempt_id=operation_id,
+            remediation=["Re-probe the target before starting another state-changing operation."],
+        )
+
     if not stdout:
         raise ToolchainError(
             "PLC toolchain returned no JSON output.",
             stdout=stdout,
             stderr=stderr,
-            exit_code=completed.returncode,
+            exit_code=process.returncode,
+            error_code="TOOLCHAIN_NO_OUTPUT",
+            target=target,
+            command=command,
+            attempt_id=operation_id,
         )
 
     try:
@@ -234,12 +418,18 @@ def run_plc_toolchain(
             f"PLC toolchain returned invalid JSON: {exc}",
             stdout=stdout,
             stderr=stderr,
-            exit_code=completed.returncode,
+            exit_code=process.returncode,
+            error_code="TOOLCHAIN_INVALID_JSON",
+            target=target,
+            command=command,
+            attempt_id=operation_id,
         ) from exc
 
     if stderr:
         data.setdefault("stderr", stderr)
-    data.setdefault("process_exit_code", completed.returncode)
+    data.setdefault("process_exit_code", process.returncode)
+    data.setdefault("attempt_id", operation_id)
+    data.setdefault("process_id", process.pid)
     return data
 
 
@@ -452,6 +642,8 @@ def next_actions(tool: str, data: dict[str, Any]) -> list[str]:
     if tool == "plc_check_download" and data.get("ok"):
         return ["A download may be attempted only with an explicit execute=true download tool."]
     if tool == "plc_check_download" and not data.get("ok"):
+        if data.get("decision") in {"manual_intervention", "unknown"}:
+            return ["Do not retry automatically. Rebuild a matching ARsim medium, use Automation Studio incremental Transfer manually, or retain the RUC without downloading."]
         return ["Do not download. Fix the reported package/target mismatch first."]
     if tool == "plc_read_pvi" and not data.get("ok"):
         return ["Check PVI Manager, target reachability, and variable whitelist names."]
@@ -473,11 +665,15 @@ def next_actions(tool: str, data: dict[str, Any]) -> list[str]:
         return ["Review the build error lines and fix the project before rebuilding."]
     if tool == "plc_start_arsim" and data.get("ok"):
         return ["Run plc_probe_target to verify the ARsim is ready."]
+    if tool == "plc_start_arsim" and data.get("error_code") == "APPLICATION_NOT_READY":
+        return ["Do not run tests. Confirm PLC status, bAlive, interface version, and stage marker first."]
     if tool == "plc_describe_ruc_package" and data.get("ok"):
         return ["Run plc_check_download to verify compatibility before downloading."]
     if tool == "plc_download_ruc" and data.get("ok"):
         return ["Run plc_verify_opcua or plc_read_pvi to confirm the download was successful."]
     if tool == "plc_download_ruc" and not data.get("ok"):
+        if data.get("deployment_state") == "unknown" or data.get("error_code") == "TRANSFER_STATE_UNKNOWN":
+            return ["Do not retry automatically. Re-probe the target and inspect the transfer/Logger logs first."]
         safety = data.get("safety_check") or {}
         if safety.get("ok") is False:
             return ["Fix the reported safety check issues before retrying the download."]
@@ -495,15 +691,28 @@ def next_actions(tool: str, data: dict[str, Any]) -> list[str]:
 
 
 def wrap_result(tool: str, command: str, data: dict[str, Any], target: str) -> dict[str, Any]:
+    error_codes = data.get("error_codes") if isinstance(data.get("error_codes"), list) else []
+    error_code = data.get("error_code") or (error_codes[0] if error_codes else None)
+    retryable = bool(data.get("retryable", error_code in {"TARGET_PROBE_INVALID", "LOCK_CONFLICT"}))
+    stage = data.get("stage") or data.get("deployment_state")
+    if not stage and error_code:
+        stage = "configuration" if error_code in {"PROJECT_CONFIG_REQUIRED", "ARSIM_LOADER_REQUIRED", "TOOLCHAIN_NOT_CONFIGURED", "CONFIGURATION_ERROR"} else "validation"
+    actions = next_actions(tool, data)
     return {
         "ok": bool(data.get("ok")),
         "tool": tool,
+        "command": command,
         "target": target,
+        "error_code": error_code,
+        "retryable": retryable,
+        "stage": stage,
+        "attempt_id": data.get("attempt_id"),
         "summary": summarize(command, data),
         "data": data,
         "logs": collect_logs(data),
         "warnings": collect_warnings(data),
-        "next_actions": next_actions(tool, data),
+        "remediation": actions,
+        "next_actions": actions,
     }
 
 
@@ -796,6 +1005,9 @@ def plc_start_arsim(arguments: dict[str, Any]) -> dict[str, Any]:
         arguments, default_target="arsim", require_explicit_target=True
     )
     target = options["target"]
+    readiness = str(arguments.get("readiness") or "process")
+    if readiness not in {"process", "runtime", "application"}:
+        raise ValueError("readiness must be one of: process, runtime, application")
     if arguments.get("execute") is not True:
         data = {
             "command": "StartArsim",
@@ -816,6 +1028,46 @@ def plc_start_arsim(arguments: dict[str, Any]) -> dict[str, Any]:
         timeout_seconds=int(arguments.get("timeout_seconds") or 30),
     )
     data["executed"] = True
+    data["readiness_requested"] = readiness
+    data["deployment_state"] = "process_started" if data.get("ok") else "failed"
+    if data.get("ok") and readiness in {"runtime", "application"}:
+        probe = run_plc_toolchain(
+            "Probe",
+            target=target,
+            project_path=options["project_path"],
+            config=options["config"],
+            targets_path=options["targets_path"],
+            toolchain=options["toolchain"],
+            toolchains_path=options["toolchains_path"],
+            timeout_seconds=int(arguments.get("timeout_seconds") or 30),
+        )
+        data["probe"] = probe
+        if not probe.get("ok"):
+            data["ok"] = False
+            data["deployment_state"] = "failed"
+            data["error_code"] = "TARGET_PROBE_INVALID"
+            data["next_action"] = "Wait for ARsim to reconnect, then run plc_probe_target again."
+        else:
+            data["deployment_state"] = "runtime_reachable"
+            if readiness == "application":
+                application_readiness = run_plc_toolchain(
+                    "CheckApplicationReadiness",
+                    target=target,
+                    project_path=options["project_path"],
+                    config=options["config"],
+                    targets_path=options["targets_path"],
+                    toolchain=options["toolchain"],
+                    toolchains_path=options["toolchains_path"],
+                    timeout_seconds=int(arguments.get("timeout_seconds") or 60),
+                )
+                data["application_readiness"] = application_readiness
+                if application_readiness.get("ok"):
+                    data["deployment_state"] = "application_ready"
+                else:
+                    data["ok"] = False
+                    data["deployment_state"] = "failed"
+                    data["error_code"] = "APPLICATION_NOT_READY"
+                    data["next_action"] = "Confirm PLC status, bAlive, interface version, and stage marker before testing."
     return wrap_result("plc_start_arsim", "StartArsim", data, target)
 
 

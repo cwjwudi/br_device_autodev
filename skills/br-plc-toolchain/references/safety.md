@@ -130,6 +130,6 @@ PVI 写入能力默认只能用于输入输出测试 harness。若用户手动�
 
 1. 每次构建日志自动保存到 `var/`
 2. 每次探针日志保存到 `var/probe_<target>.log`
-3. 下载日志在 `PrintDemo/Binaries/` 下对应目录
+3. 下载日志在所选工程的 `Binaries/` 下对应目录，或在 `var/` 报告中记录的 `log_path`
 4. OPC UA 读取的节点文件保存在 `var/opcua_nodes_<target>.json`
 5. PVI 读取的变量文件保存在 `var/pvi_variables_<target>.json`

@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("Help", "Build", "StartArsim", "Probe", "DescribePackage", "CheckDownload", "Download", "VerifyOpcUa", "ReadPvi", "ReadLogger", "WritePvi", "RunIoTestCase", "RunTestSuite", "ResetTestHarness", "RunArsimClosedLoop", "RunVerificationSuite", "GetTargetConfig", "ListTargets")]
+    [ValidateSet("Help", "Build", "StartArsim", "Probe", "DescribePackage", "CheckDownload", "Download", "VerifyOpcUa", "ReadPvi", "ReadLogger", "WritePvi", "RunIoTestCase", "RunTestSuite", "ResetTestHarness", "RunArsimClosedLoop", "RunVerificationSuite", "CheckApplicationReadiness", "GetTargetConfig", "ListTargets")]
     [string]$Command = "Help",
 
     [string]$ProjectPath = "",
@@ -19,6 +19,7 @@ param(
     [string]$WritesPath,
     [string]$SuitePath = "tests\plc\lqr_io_tests.json",
     [string]$CaseName,
+    [string]$OperationId = "",
     [int]$SettleMs = 100,
     [switch]$BuildRucPackage,
     [int]$StartWaitSeconds = 3,
@@ -29,6 +30,9 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = (Resolve-Path -LiteralPath ".").Path
 $GeneratedDir = Join-Path $RepoRoot "var"
+if (-not $OperationId) {
+    $OperationId = [guid]::NewGuid().ToString("N")
+}
 
 function Resolve-RepoPath {
     param([Parameter(Mandatory = $true)][string]$Path)
@@ -247,6 +251,133 @@ function Get-OutputTail {
     return @($Lines | Select-Object -Last $Count)
 }
 
+function Get-TransferStage {
+    param([string[]]$Lines)
+
+    $text = ($Lines -join "`n")
+    if ($text -match "(?i)connect|connection") { $stage = "Connected" }
+    else { $stage = "PackageValidated" }
+    if ($text -match "(?i)service") { $stage = "TargetEnteringService" }
+    if ($text -match "(?i)install|download") { $stage = "Installing" }
+    if ($text -match "(?i)restart|reboot") { $stage = "Restarting" }
+    if ($text -match "(?i)reconnect|waiting") { $stage = "WaitingForReconnection" }
+    if ($text -match "(?i)successful") { $stage = "RunVerified" }
+    if ($text -match "(?i)error|failed|failure") { $stage = "Failed" }
+    return $stage
+}
+
+function Get-ReadValue {
+    param(
+        [Parameter(Mandatory = $true)]$Report,
+        [Parameter(Mandatory = $true)][string]$Variable
+    )
+
+    $items = @($Report.variables | Where-Object {
+        ([string]$_.raw -eq $Variable) -or ([string]$_.name -eq $Variable)
+    })
+    if ($items.Count -eq 0) {
+        return $null
+    }
+    return $items[0]
+}
+
+function Invoke-ApplicationReadiness {
+    param(
+        [switch]$Quiet,
+        $Probe
+    )
+
+    $cfg = Read-ToolchainConfig
+    $targetConfig = Get-TargetConfig $cfg
+    $readiness = $targetConfig.application_readiness
+    $requiredFields = @(
+        "b_alive_variable",
+        "interface_version_variable",
+        "stage_variable",
+        "expected_interface_version",
+        "expected_stage"
+    )
+    $missing = @($requiredFields | Where-Object {
+        $value = $readiness.$_
+        ($null -eq $value) -or ([string]$value).Trim().Length -eq 0 -or ([string]$value) -match '^<.*>$'
+    })
+    if ($missing.Count -gt 0) {
+        $report = [ordered]@{
+            command = "CheckApplicationReadiness"
+            ok = $false
+            target = $Target
+            deployment_state = "runtime_reachable"
+            error_code = "APPLICATION_READINESS_UNCONFIGURED"
+            retryable = $false
+            missing = @($missing)
+            checks = @{}
+            next_action = "Configure targets.$Target.application_readiness with b_alive_variable, interface_version_variable, stage_variable, expected_interface_version, and expected_stage."
+        }
+        if ($Quiet) { return [pscustomobject]$report }
+        Write-ObjectJson $report
+        exit 1
+    }
+
+    $variables = @(
+        [string]$readiness.b_alive_variable,
+        [string]$readiness.interface_version_variable,
+        [string]$readiness.stage_variable
+    ) | Select-Object -Unique
+    $pvi = Invoke-ReadPvi -Quiet -Variables $variables
+    $acceptedStatuses = if ($readiness.accepted_plc_status) {
+        @($readiness.accepted_plc_status | ForEach-Object { ([string]$_).ToLowerInvariant() })
+    }
+    else {
+        @("run", "warmstart", "coldstart")
+    }
+    $actualStatus = ([string]$Probe.plc_status).ToLowerInvariant()
+    $alive = Get-ReadValue -Report $pvi -Variable ([string]$readiness.b_alive_variable)
+    $interface = Get-ReadValue -Report $pvi -Variable ([string]$readiness.interface_version_variable)
+    $stageMarker = Get-ReadValue -Report $pvi -Variable ([string]$readiness.stage_variable)
+    $aliveValue = if ($alive) { [bool]$alive.value } else { $false }
+    $checks = [ordered]@{
+        plc_status = [ordered]@{
+            ok = $acceptedStatuses -contains $actualStatus
+            expected = $acceptedStatuses
+            actual = $Probe.plc_status
+        }
+        b_alive = [ordered]@{
+            ok = [bool]($alive -and $alive.ok -and $aliveValue)
+            variable = $readiness.b_alive_variable
+            expected = $true
+            actual = if ($alive) { $alive.value } else { $null }
+        }
+        interface_version = [ordered]@{
+            ok = [bool]($interface -and $interface.ok -and ([string]$interface.value -eq [string]$readiness.expected_interface_version))
+            variable = $readiness.interface_version_variable
+            expected = $readiness.expected_interface_version
+            actual = if ($interface) { $interface.value } else { $null }
+        }
+        stage_marker = [ordered]@{
+            ok = [bool]($stageMarker -and $stageMarker.ok -and ([string]$stageMarker.value -eq [string]$readiness.expected_stage))
+            variable = $readiness.stage_variable
+            expected = $readiness.expected_stage
+            actual = if ($stageMarker) { $stageMarker.value } else { $null }
+        }
+    }
+    $ok = [bool]($pvi.ok -and ($checks.Values | Where-Object { -not $_.ok }).Count -eq 0)
+    $report = [ordered]@{
+        command = "CheckApplicationReadiness"
+        ok = $ok
+        target = $Target
+        deployment_state = if ($ok) { "application_ready" } else { "failed" }
+        stage = if ($ok) { "ApplicationReady" } else { "Failed" }
+        error_code = if ($ok) { $null } else { "APPLICATION_NOT_READY" }
+        retryable = $false
+        checks = $checks
+        pvi = $pvi
+        next_action = if ($ok) { "Application is ready for testing." } else { "Do not run tests. Fix the failed application readiness checks and re-probe." }
+    }
+    if ($Quiet) { return [pscustomobject]$report }
+    Write-ObjectJson $report
+    if (-not $ok) { exit 1 }
+}
+
 function Convert-JsonProcessOutput {
     param(
         [Parameter(Mandatory = $true)][string]$CommandName,
@@ -294,8 +425,8 @@ function Invoke-StartArsim {
     if ($targetConfig.role -notmatch "arsim") {
         throw "Target '$Target' is not marked as an ARsim target."
     }
-    if (-not $targetConfig.arsim_loader_exe) {
-        throw "Target '$Target' does not define arsim_loader_exe."
+    if (-not $targetConfig.arsim_loader_exe -or [string]$targetConfig.arsim_loader_exe -like '<*') {
+        throw "ARSIM_LOADER_REQUIRED: target '$Target' does not define a real arsim_loader_exe path."
     }
 
     $loader = Resolve-RepoPath $targetConfig.arsim_loader_exe
@@ -325,6 +456,7 @@ function Invoke-StartArsim {
     $report = [ordered]@{
         command = "StartArsim"
         ok = $true
+        deployment_state = "process_started"
         target = $Target
         ip = $targetConfig.ip
         started_new_process = $started
@@ -476,26 +608,35 @@ function Invoke-Probe {
         $lines = @($output | ForEach-Object { $_.ToString() })
         $cpuType = Get-PviCommandValue $lines "CPUType"
         $arVersion = Get-PviCommandValue $lines "SSWVersion"
+        $probeOk = [bool]($exitCode -eq 0 -and $cpuType -and $arVersion)
         $report = [ordered]@{
             command = "Probe"
-            ok = (($exitCode -eq 0) -or ($cpuType -and $arVersion))
+            ok = $probeOk
+            error_code = if ($probeOk) { $null } else { "TARGET_PROBE_INVALID" }
             process_exit_code = $exitCode
             target = $Target
             ip = $targetConfig.ip
             role = $targetConfig.role
             cpu_type = $cpuType
+            order_number = if ($targetConfig.order_number) { [string]$targetConfig.order_number } else { $null }
+            runtime_type = if ($targetConfig.runtime_type) { [string]$targetConfig.runtime_type } elseif ($targetConfig.role -match "arsim") { "AR Simulation" } else { $null }
+            configuration_id = if ($targetConfig.configuration_id) { [string]$targetConfig.configuration_id } else { $Config }
+            config_version = if ($targetConfig.config_version) { [string]$targetConfig.config_version } else { $null }
+            partition_layout = if ($targetConfig.partition_layout) { [string]$targetConfig.partition_layout } else { $null }
+            installation_mode = if ($targetConfig.installation_mode) { [string]$targetConfig.installation_mode } else { $null }
             ar_version = $arVersion
             plc_status = Get-PviCommandValue $lines "PLCStatus"
             log_path = $log
             pil_path = $pil
             output_tail = Get-OutputTail $lines
+            attempt = $attempt
         }
 
         if ($report.ok -and $report.cpu_type) {
             break
         }
         if ($attempt -lt 3) {
-            Start-Sleep -Seconds 2
+            Start-Sleep -Seconds 3
         }
     }
 
@@ -554,6 +695,11 @@ function Get-PackageInfo {
         ar_version = [string]$info.ARVersion
         br_module_system = [string]$info.BRModuleSystem
         additional_zip_file_name_prefix = [string]$info.AdditionalZipFileNamePrefix
+        partition_layout = [string]$info.PartitionLayout
+        partition_requirements = [string]$info.PartitionRequirements
+        minimum_partition_layout = [string]$info.MinimumPartitionLayout
+        installation_mode = [string]$info.InstallationMode
+        required_installation_mode = [string]$info.RequiredInstallationMode
     }
 }
 
@@ -581,36 +727,129 @@ function Test-DownloadSafety {
 
     $reasons = New-Object System.Collections.Generic.List[string]
     $warnings = New-Object System.Collections.Generic.List[string]
+    $errorCodes = New-Object System.Collections.Generic.List[string]
     $isArsimPackage = ($packageInfo.cpu_type -eq "AR000" -or $packageInfo.runtime_type -match "AR Simulation")
     $isArsimTarget = ($targetConfig.role -match "arsim")
-    $packageCpuMatchesTarget = $false
-    if ($probe.cpu_type) {
-        $packageCpuMatchesTarget = (($packageInfo.cpu_type -eq $probe.cpu_type) -or ($packageInfo.order_number -eq $probe.cpu_type))
+    $targetPartitionLayout = [string]$targetConfig.partition_layout
+    $packagePartitionLayout = if ($packageInfo.partition_layout) {
+        [string]$packageInfo.partition_layout
     }
+    elseif ($packageInfo.partition_requirements) {
+        [string]$packageInfo.partition_requirements
+    }
+    else {
+        [string]$packageInfo.minimum_partition_layout
+    }
+    $targetOrderNumber = if ($probe.order_number) { [string]$probe.order_number } else { [string]$targetConfig.order_number }
+    $targetRuntimeType = if ($probe.runtime_type) { [string]$probe.runtime_type } elseif ($targetConfig.runtime_type) { [string]$targetConfig.runtime_type } elseif ($isArsimTarget) { "AR Simulation" } else { $null }
+    $targetConfigurationId = if ($probe.configuration_id) { [string]$probe.configuration_id } elseif ($targetConfig.configuration_id) { [string]$targetConfig.configuration_id } else { [string]$Config }
+    $targetConfigVersion = if ($probe.config_version) { [string]$probe.config_version } else { [string]$targetConfig.config_version }
+    $targetInstallationMode = if ($probe.installation_mode) { [string]$probe.installation_mode } else { [string]$targetConfig.installation_mode }
+    $cpuMismatch = [bool]($packageInfo.cpu_type -and $probe.cpu_type -and $packageInfo.cpu_type -ne $probe.cpu_type)
+    $orderMismatch = [bool]($packageInfo.order_number -and $targetOrderNumber -and $packageInfo.order_number -ne $targetOrderNumber)
 
     if (-not $targetConfig.allow_auto_download) {
+        if ($targetConfig.role -match "production") {
+            $errorCodes.Add("PRODUCTION_DOWNLOAD_BLOCKED")
+        }
+        else {
+            $errorCodes.Add("TARGET_ROLE_MISMATCH")
+        }
         $reasons.Add("Target '$Target' does not allow automatic download.")
     }
     if ($targetConfig.role -match "production") {
+        $errorCodes.Add("PRODUCTION_DOWNLOAD_BLOCKED")
         $reasons.Add("Target '$Target' is marked as production.")
     }
     if (-not $probe.ok -or -not $probe.cpu_type) {
+        $errorCodes.Add("TARGET_PROBE_INVALID")
         $reasons.Add("Target probe did not return a valid CPU type.")
     }
     if ($isArsimPackage -and -not $isArsimTarget) {
+        $errorCodes.Add("TARGET_ROLE_MISMATCH")
         $reasons.Add("RUC package is for ARsim, but target '$Target' is not marked as ARsim.")
     }
-    if ((-not $isArsimPackage) -and $probe.cpu_type -and $packageInfo.cpu_type -and (-not $packageCpuMatchesTarget)) {
-        $mismatchReason = "RUC package CPU '$($packageInfo.cpu_type)' / order '$($packageInfo.order_number)' does not match target CPU '$($probe.cpu_type)'."
+    if ((-not $isArsimPackage) -and $isArsimTarget) {
+        $errorCodes.Add("TARGET_ROLE_MISMATCH")
+        $reasons.Add("A physical PLC RUC package cannot be downloaded to ARsim.")
+    }
+    if ($cpuMismatch -or $orderMismatch) {
+        $mismatchReason = "RUC package CPU '$($packageInfo.cpu_type)' / order '$($packageInfo.order_number)' does not match target CPU '$($probe.cpu_type)' / order '$targetOrderNumber'."
         if ($ForceArsimMismatch -and $isArsimTarget) {
             $warnings.Add("FORCED ARsim download: $mismatchReason")
         }
         else {
+            $errorCodes.Add("PACKAGE_TARGET_MISMATCH")
             $reasons.Add($mismatchReason)
         }
     }
+    elseif (-not $packageInfo.cpu_type -or -not $packageInfo.order_number) {
+        $errorCodes.Add("PACKAGE_METADATA_INCOMPLETE")
+        $reasons.Add("RUC package must provide CPU and OrderNumber metadata.")
+    }
+    elseif (-not $probe.cpu_type -or -not $targetOrderNumber) {
+        $errorCodes.Add("TARGET_PROBE_INVALID")
+        $reasons.Add("Target probe/configuration must provide CPU and OrderNumber metadata.")
+    }
+
+    if (-not $packageInfo.runtime_type -or -not $targetRuntimeType) {
+        $errorCodes.Add("TARGET_PROBE_INVALID")
+        $reasons.Add("Target and RUC package must provide RuntimeType metadata.")
+    }
+    elseif ([string]$packageInfo.runtime_type -ne [string]$targetRuntimeType) {
+        $errorCodes.Add("PACKAGE_TARGET_MISMATCH")
+        $reasons.Add("RUC RuntimeType '$($packageInfo.runtime_type)' does not match target RuntimeType '$targetRuntimeType'.")
+    }
+
+    if (-not $packageInfo.configuration_id -or -not $targetConfigurationId) {
+        $errorCodes.Add("PACKAGE_METADATA_INCOMPLETE")
+        $reasons.Add("Target and RUC package must provide configuration identifiers.")
+    }
+    elseif ([string]$packageInfo.configuration_id -ne [string]$targetConfigurationId) {
+        $errorCodes.Add("PACKAGE_TARGET_MISMATCH")
+        $reasons.Add("RUC configuration '$($packageInfo.configuration_id)' does not match target configuration '$targetConfigurationId'.")
+    }
+    if (-not $packageInfo.config_version -or -not $targetConfigVersion) {
+        $errorCodes.Add("TARGET_PROBE_INVALID")
+        $reasons.Add("Target and RUC package must provide configuration version metadata.")
+    }
+    elseif ([string]$packageInfo.config_version -ne [string]$targetConfigVersion) {
+        $errorCodes.Add("PACKAGE_TARGET_MISMATCH")
+        $reasons.Add("RUC configuration version '$($packageInfo.config_version)' does not match target version '$targetConfigVersion'.")
+    }
+
+    if ($packageInfo.ar_version -and $probe.ar_version) {
+        if ([string]$packageInfo.ar_version -ne [string]$probe.ar_version) {
+            $errorCodes.Add("AR_VERSION_MISMATCH")
+            $reasons.Add("RUC AR version '$($packageInfo.ar_version)' does not match target AR version '$($probe.ar_version)'.")
+        }
+    }
+    else {
+        $errorCodes.Add("PACKAGE_METADATA_INCOMPLETE")
+        $reasons.Add("RUC package and target probe must both provide AR version metadata.")
+    }
+
+    if (-not $targetPartitionLayout -or -not $packagePartitionLayout) {
+        $errorCodes.Add("PARTITION_LAYOUT_UNKNOWN")
+        $reasons.Add("RUC package and target configuration must provide partition layout metadata.")
+    }
+    elseif ($targetPartitionLayout -ne $packagePartitionLayout) {
+        $errorCodes.Add("PARTITION_LAYOUT_INCOMPATIBLE")
+        $reasons.Add("RUC partition layout '$packagePartitionLayout' does not match target layout '$targetPartitionLayout'.")
+    }
+
+    $packageInstallationMode = if ($packageInfo.installation_mode) { [string]$packageInfo.installation_mode } else { [string]$packageInfo.required_installation_mode }
+    if (-not $packageInstallationMode -or -not $targetInstallationMode) {
+        $errorCodes.Add("INSTALLATION_MODE_UNKNOWN")
+        $reasons.Add("RUC package and target configuration must provide installation mode metadata.")
+    }
+    elseif ($packageInstallationMode -ne $targetInstallationMode) {
+        $errorCodes.Add("INSTALLATION_MODE_MISMATCH")
+        $reasons.Add("RUC installation mode '$packageInstallationMode' does not match target mode '$targetInstallationMode'.")
+    }
 
     $ok = ($reasons.Count -eq 0)
+    $decision = if ($ok) { "allow" } elseif (@($errorCodes | Where-Object { $_ -match "_UNKNOWN$" }).Count -gt 0) { "unknown" } elseif ($errorCodes -contains "PARTITION_LAYOUT_INCOMPATIBLE" -or $errorCodes -contains "INSTALLATION_MODE_MISMATCH") { "manual_intervention" } else { "block" }
     $report = [ordered]@{
         command = "CheckDownload"
         ok = $ok
@@ -618,11 +857,27 @@ function Test-DownloadSafety {
         target_ip = $targetConfig.ip
         target_role = $targetConfig.role
         target_allow_auto_download = [bool]$targetConfig.allow_auto_download
+        decision = $decision
         package = $packageInfo
         probe = $probe
+        compatibility = [ordered]@{
+            cpu_type = [ordered]@{ package = $packageInfo.cpu_type; target = $probe.cpu_type; matches = -not $cpuMismatch }
+            order_number = [ordered]@{ package = $packageInfo.order_number; target = $targetOrderNumber; matches = -not $orderMismatch }
+            runtime_type = [ordered]@{ package = $packageInfo.runtime_type; target = $targetRuntimeType; matches = [bool]($packageInfo.runtime_type -and $targetRuntimeType -and $packageInfo.runtime_type -eq $targetRuntimeType) }
+            ar_version = [ordered]@{ package = $packageInfo.ar_version; target = $probe.ar_version; matches = [bool]($packageInfo.ar_version -and $probe.ar_version -and $packageInfo.ar_version -eq $probe.ar_version) }
+            configuration_id = [ordered]@{ package = $packageInfo.configuration_id; target = $targetConfigurationId; matches = [bool]($packageInfo.configuration_id -and $targetConfigurationId -and $packageInfo.configuration_id -eq $targetConfigurationId) }
+            config_version = [ordered]@{ package = $packageInfo.config_version; target = $targetConfigVersion; matches = [bool]($packageInfo.config_version -and $targetConfigVersion -and $packageInfo.config_version -eq $targetConfigVersion) }
+            installation_mode = [ordered]@{ package = $packageInstallationMode; target = $targetInstallationMode; matches = [bool]($packageInstallationMode -and $targetInstallationMode -and $packageInstallationMode -eq $targetInstallationMode) }
+        }
+        partition_layout = [ordered]@{
+            package = $packagePartitionLayout
+            target = $targetPartitionLayout
+        }
         force_arsim_download = [bool]($ForceArsimMismatch -and $isArsimTarget)
+        error_codes = @($errorCodes | Select-Object -Unique)
         reasons = @($reasons)
         warnings = @($warnings)
+        next_action = if ($ok) { "A single explicit download may be attempted." } elseif ($errorCodes -contains "PARTITION_LAYOUT_INCOMPATIBLE" -or $errorCodes -contains "PARTITION_LAYOUT_UNKNOWN" -or $errorCodes -contains "INSTALLATION_MODE_MISMATCH") { "Rebuild a matching ARsim virtual medium, use Automation Studio incremental Transfer manually, or retain the RUC without downloading." } else { "Fix the reported target/package mismatch; do not retry by rotating installation modes." }
     }
 
     if ($Quiet) {
@@ -648,6 +903,7 @@ function Invoke-Download {
             ok = $false
             target = $Target
             executed = $false
+            attempt_id = $OperationId
             safety_check = $check
             reasons = @($check.reasons)
             error = "Download safety check failed. Refusing to download."
@@ -682,15 +938,6 @@ function Invoke-Download {
     $wrapper = Resolve-RepoPath "scripts\windows\invoke-pvitransfer-silent.ps1"
     $pviTransfer = Resolve-RepoPath $toolchainConfig.pvi.transfer_exe
     $pil = Resolve-TransferPilPath
-    $forcePilPath = $null
-    if ($ForceArsimDownload -and $targetConfig.role -match "arsim") {
-        $pilDir = Split-Path -Parent $pil
-        $forcePilPath = Join-Path $pilDir ("Transfer_force_arsim_{0}.pil" -f ([guid]::NewGuid().ToString("N")))
-        $pilText = Get-Content -Raw -Encoding UTF8 -LiteralPath $pil
-        $pilText = $pilText -replace "InstallRestriction=AllowUpdatesWithoutDataLoss", "InstallRestriction=AllowInitialInstallation"
-        Set-Content -LiteralPath $forcePilPath -Encoding ASCII -Value $pilText
-        $pil = $forcePilPath
-    }
     $log = Join-Path (Split-Path -Parent $pil) "pvi_download_$Target.log"
     $conn = "'/IF=tcpip', '/IP=$($targetConfig.ip) /COMT=2500 /AM=* /PT=11169', 'WT=60', 'IGNORE'"
 
@@ -698,24 +945,28 @@ function Invoke-Download {
     $downloadExitCode = 1
     $lines = @()
     $downloadOk = $false
-    for ($attempt = 1; $attempt -le 2; $attempt++) {
-        if ($attempt -gt 1) {
-            Start-Sleep -Seconds 5
-        }
-        $output = & powershell -NoProfile -ExecutionPolicy Bypass `
-            -File $wrapper `
-            -PilPath $pil `
-            -LogPath $log `
-            -PviTransferPath $pviTransfer `
-            -Conn $conn 2>&1
-        $downloadExitCode = $LASTEXITCODE
-        $lines = Get-OutputLines $output
-        $downloadOk = (($downloadExitCode -eq 0) -and (($lines -join "`n") -match "Transfer .* SUCCESSFUL"))
-        if ($downloadOk) {
-            break
+    $output = & powershell -NoProfile -ExecutionPolicy Bypass `
+        -File $wrapper `
+        -PilPath $pil `
+        -LogPath $log `
+        -PviTransferPath $pviTransfer `
+        -Conn $conn 2>&1
+    $downloadExitCode = $LASTEXITCODE
+    $lines = Get-OutputLines $output
+    $downloadOk = (($downloadExitCode -eq 0) -and (($lines -join "`n") -match "Transfer .* SUCCESSFUL"))
+    $verification = $null
+    $probeAfter = $null
+    $applicationReadiness = $null
+    try {
+        $probeAfter = Invoke-Probe -Quiet
+    }
+    catch {
+        $probeAfter = [ordered]@{
+            ok = $false
+            error_code = "TARGET_PROBE_INVALID"
+            error = $_.Exception.Message
         }
     }
-    $verification = $null
 
     if ($downloadOk -and $cfg.opcua.verify_after_download -eq $true) {
         $verification = Invoke-VerifyOpcUa -Quiet
@@ -723,9 +974,28 @@ function Invoke-Download {
     elseif ($downloadOk -and $cfg.pvi.verify_after_download -eq $true) {
         $verification = Invoke-ReadPvi -Quiet
     }
+    if ($downloadOk -and $probeAfter -and $probeAfter.ok) {
+        $applicationReadiness = Invoke-ApplicationReadiness -Quiet -Probe $probeAfter
+    }
 
     $ok = $downloadOk
     if ($verification -and $verification.ok -eq $false) {
+        $ok = $false
+    }
+    $transferStage = Get-TransferStage $lines
+    $deploymentState = if (-not $downloadOk) {
+        "failed"
+    }
+    elseif (-not $probeAfter -or -not $probeAfter.ok) {
+        "unknown"
+    }
+    elseif ($applicationReadiness -and $applicationReadiness.ok) {
+        "application_ready"
+    }
+    else {
+        "runtime_reachable"
+    }
+    if ($deploymentState -eq "unknown") {
         $ok = $false
     }
 
@@ -735,14 +1005,22 @@ function Invoke-Download {
         target = $Target
         target_ip = $targetConfig.ip
         executed = $true
+        attempt_id = $OperationId
+        deployment_state = $deploymentState
+        stage = if ($deploymentState -eq "unknown") { "WaitingForReconnection" } elseif ($applicationReadiness -and $applicationReadiness.ok) { "ApplicationReady" } elseif ($downloadOk) { "RuntimeReachable" } else { $transferStage }
         safety_check = $check
         download_ok = $downloadOk
         download_process_exit_code = $downloadExitCode
         log_path = $log
         pil_path = $pil
-        generated_force_pil_path = $forcePilPath
+        generated_force_pil_path = $null
+        probe_after = $probeAfter
         output_tail = Get-OutputTail $lines
+        log_tail = if (Test-Path -LiteralPath $log) { @(Get-Content -LiteralPath $log -Tail 40 -ErrorAction SilentlyContinue) } else { @() }
+        error_code = if ($deploymentState -eq "unknown") { "TRANSFER_STATE_UNKNOWN" } elseif (-not $downloadOk) { "TRANSFER_FAILED" } elseif ($applicationReadiness -and -not $applicationReadiness.ok) { $applicationReadiness.error_code } elseif ($verification -and -not $verification.ok) { "APPLICATION_NOT_READY" } else { $null }
+        next_action = if ($deploymentState -eq "unknown") { "Re-probe the target and inspect the PVITransfer and Logger output before retrying." } elseif (-not $downloadOk) { "Inspect the transfer log; do not automatically retry with another installation mode." } elseif ($deploymentState -eq "runtime_reachable") { "Verify application readiness before running tests." } else { "Review the deployment report." }
         verification = $verification
+        application_readiness = $applicationReadiness
     }
 
     if ($Quiet) {
@@ -806,6 +1084,7 @@ function Invoke-RunArsimClosedLoop {
     $check = $null
     $download = $null
     $verification = $null
+    $applicationReadiness = $null
 
     if ($build.ok) {
         $start = Invoke-StartArsim -Quiet
@@ -819,15 +1098,34 @@ function Invoke-RunArsimClosedLoop {
     }
     if ($check -and $check.ok) {
         $download = Invoke-Download -Quiet
+        if ($download.executed) {
+            $applicationReadiness = $download.application_readiness
+        }
         if ($download.executed -and $download.ok) {
             $verification = $download.verification
             if (-not $verification) {
                 $verification = Invoke-RunVerificationSuite -Quiet
             }
+            if (-not $applicationReadiness) {
+                $applicationReadiness = Invoke-ApplicationReadiness -Quiet -Probe $download.probe_after
+            }
         }
     }
 
-    $ok = [bool]($build.ok -and $start.ok -and $probe.ok -and $package.ok -and $check.ok -and $download.ok)
+    $applicationReady = [bool](
+        $download -and $download.executed -and $download.deployment_state -eq "application_ready" -and
+        $applicationReadiness -and $applicationReadiness.ok -and $verification -and $verification.ok
+    )
+    $applicationReadiness = [ordered]@{
+        state = if ($applicationReady) { "application_ready" } else { "not_ready" }
+        process_started = [bool]($start -and $start.ok)
+        runtime_reachable = [bool]($download -and $download.probe_after -and $download.probe_after.ok)
+        verification_ok = [bool]($verification -and $verification.ok)
+        readiness_checks = if ($applicationReadiness) { $applicationReadiness.checks } else { @{} }
+        readiness_error_code = if ($applicationReadiness) { $applicationReadiness.error_code } else { "APPLICATION_READINESS_UNCONFIGURED" }
+        next_action = if ($applicationReady) { "Application is ready for the configured verification suite." } else { "Confirm PLC status, bAlive, interface version, and stage marker before testing." }
+    }
+    $ok = [bool]($build.ok -and $start.ok -and $probe.ok -and $package.ok -and $check.ok -and $download.ok -and $applicationReady)
     if ($download -and $download.executed -and $verification) {
         $ok = [bool]($ok -and $verification.ok)
     }
@@ -843,6 +1141,7 @@ function Invoke-RunArsimClosedLoop {
         package = $package
         download_check = $check
         download = $download
+        application_readiness = $applicationReadiness
         verification = $verification
     })
 
@@ -971,7 +1270,10 @@ function Invoke-VerifyOpcUa {
 }
 
 function Invoke-ReadPvi {
-    param([switch]$Quiet)
+    param(
+        [switch]$Quiet,
+        [object[]]$Variables
+    )
 
     $cfg = Read-ToolchainConfig
     $toolchainConfig = Get-SelectedToolchain
@@ -983,7 +1285,11 @@ function Invoke-ReadPvi {
 
     $variables = @()
     $explicitVariables = $false
-    if ($PviVariable -and $PviVariable.Count -gt 0) {
+    if ($PSBoundParameters.ContainsKey("Variables")) {
+        $variables = @($Variables)
+        $explicitVariables = $true
+    }
+    elseif ($PviVariable -and $PviVariable.Count -gt 0) {
         $variables = @(
             foreach ($item in $PviVariable) {
                 $item -split "," | Where-Object { $_.Trim().Length -gt 0 } | ForEach-Object { $_.Trim() }
@@ -1261,6 +1567,7 @@ Usage:
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command RunIoTestCase -Target test_plc -SuitePath tests\plc\lqr_io_tests.json -CaseName zero_state_zero_output -Execute
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command RunTestSuite -Target test_plc -SuitePath tests\plc\lqr_io_tests.json -Execute
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command RunVerificationSuite -Target arsim
+  powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command CheckApplicationReadiness -Target arsim
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command RunArsimClosedLoop -Target arsim -Execute
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command ListTargets
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command GetTargetConfig -Target test_plc
@@ -1281,15 +1588,36 @@ Usage:
     "ResetTestHarness" { Invoke-IoTestRunner -RunnerCommand "ResetTestHarness" }
     "RunArsimClosedLoop" { Invoke-RunArsimClosedLoop }
     "RunVerificationSuite" { Invoke-RunVerificationSuite }
+    "CheckApplicationReadiness" { Invoke-ApplicationReadiness -Probe (Invoke-Probe -Quiet) }
     "GetTargetConfig" { Invoke-GetTargetConfig }
     "ListTargets" { Invoke-ListTargets }
 }
 }
 catch {
+    $message = $_.Exception.Message
+    $errorCode = if ($message -match "^([A-Z][A-Z0-9_]+):") {
+        $Matches[1]
+    }
+    elseif ($message -match "Project was not found|Project path") {
+        "PROJECT_CONFIG_REQUIRED"
+    }
+    elseif ($message -match "config|Hardware\.hw") {
+        "TOOLCHAIN_CONFIG_REQUIRED"
+    }
+    elseif ($message -match "ARsim loader") {
+        "ARSIM_LOADER_REQUIRED"
+    }
+    else {
+        "TOOLCHAIN_ERROR"
+    }
     $report = [ordered]@{
         command = $Command
         ok = $false
-        error = $_.Exception.Message
+        error = $message
+        error_code = $errorCode
+        retryable = $false
+        stage = "execution"
+        attempt_id = $OperationId
         category = $_.CategoryInfo.Category.ToString()
         target = $Target
     }

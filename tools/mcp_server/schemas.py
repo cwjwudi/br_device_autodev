@@ -96,6 +96,7 @@ RUNTIME_TARGET_PROPERTIES: dict[str, Any] = {
         "type": "string",
         "description": "Runtime target name created during online discovery.",
         "minLength": 1,
+        "pattern": r"^[A-Za-z0-9][A-Za-z0-9._-]*$",
     },
     "toolchain": {
         "type": "string",
@@ -275,7 +276,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "plc_start_arsim",
-        "description": "Start or reuse an existing ARsim simulation instance for the specified target.",
+        "description": "Start or reuse an existing ARsim simulation instance. readiness=application requires configured PLC status, bAlive, interface-version, and stage-marker checks.",
         "inputSchema": build_schema(
             {
                 "start_wait_seconds": {
@@ -283,6 +284,12 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                     "description": "Seconds to wait after starting the ARsim loader before returning.",
                     "default": 3,
                     "minimum": 0,
+                },
+                "readiness": {
+                    "type": "string",
+                    "enum": ["process", "runtime", "application"],
+                    "description": "Readiness level required before returning. Defaults to process.",
+                    "default": "process",
                 },
             },
             require_execute=True,
@@ -320,7 +327,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 },
                 "force_arsim_download": {
                     "type": "boolean",
-                    "description": "If true, allow an explicit ARsim target download even when the RUC package CPU/order does not match the probed ARsim CPU. Never applies to physical or production targets.",
+                    "description": "If true, allow only the explicit ARsim CPU/OrderNumber mismatch boundary. It never overrides role, production, reachability, AR version, RuntimeType, configuration, partition, or unknown-state failures.",
                     "default": False,
                 },
             }

@@ -9,7 +9,7 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 
 当任务涉及以下任一操作时，必须使用此 Skill：
 
-- 修改 `PrintDemo/` 下的 ST、C、C++ 或 mappView 代码
+- 修改已选 Automation Studio 工程目录下的 ST、C、C++ 或 mappView 代码
 - 构建 B&R Automation Studio 工程
 - 下载 RUC 包到 ARsim 或测试 PLC
 - 通过 OPC UA 或 PVI 读取 PLC 反馈变量
@@ -56,9 +56,9 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 ### ARsim config 和仿真文件规则
 
 - Automation Studio 的 config 名必须按项目实际读取和传入，例如 `x1685`、`x3687x`；不要写死 `Config1`。
-- 开启某个 config 的仿真模式时，检查 `PrintDemo/Physical/<config>/Hardware.hw` 中 CPU 模块下的 `Simulation` 参数，按需设置为 `Value="1"`。
-- 修改仿真设置后必须重新构建该 config。构建成功后，Automation Studio 会在 `PrintDemo/Temp/Simulation/<config>/<CPU>/` 下生成仿真文件。
-- 启动 ARsim 时使用实际生成的 loader：`PrintDemo/Temp/Simulation/<config>/<CPU>/ar000loader.exe`。示例：`PrintDemo/Temp/Simulation/x3687x/X20CP3687X/ar000loader.exe`。
+- 开启某个 config 的仿真模式时，检查 `<project-root>/Physical/<config>/Hardware.hw` 中 CPU 模块下的 `Simulation` 参数，按需设置为 `Value="1"`。
+- 修改仿真设置后必须重新构建该 config。构建成功后，Automation Studio 会在 `<project-root>/Temp/Simulation/<config>/<CPU>/` 下生成仿真文件。
+- 启动 ARsim 时使用实际生成的 loader：`<project-root>/Temp/Simulation/<config>/<CPU>/ar000loader.exe`；不得提交机器相关的默认路径。
 - `config/targets/default-safe.json` 中 `targets.arsim.arsim_loader_exe` 必须指向实际生成的 `ar000loader.exe`，config 名和 CPU 目录都要与当前构建目标一致。
 
 ### 当前配置确认

@@ -29,9 +29,13 @@ class PviSessionManager:
             if requested_dll:
                 self._pvi_dll_path = requested_dll
             worker = self._workers.get(target.key)
-            if worker is None or not worker.running:
+            if worker is None or not worker.running or bool(getattr(worker, "dirty", False)):
                 if worker is not None:
                     worker.close()
+                    if worker.running:
+                        raise RuntimeError(
+                            "PVI_WORKER_DIRTY: previous operation is still running; target state is unknown"
+                        )
                 worker = self._worker_factory(target)
                 worker.start()
                 self._workers[target.key] = worker
@@ -57,6 +61,14 @@ class PviSessionManager:
     def active_targets(self) -> list[str]:
         with self._lock:
             return sorted(worker.target.name for worker in self._workers.values() if worker.running)
+
+    def worker_state(self, target: PviTarget) -> dict[str, Any]:
+        with self._lock:
+            worker = self._workers.get(target.key)
+            return {
+                "active": bool(worker and worker.running),
+                "dirty": bool(worker and getattr(worker, "dirty", False)),
+            }
 
     def __enter__(self) -> "PviSessionManager":
         return self

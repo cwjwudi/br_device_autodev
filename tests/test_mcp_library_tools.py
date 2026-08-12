@@ -54,7 +54,7 @@ class McpLibraryToolTests(unittest.TestCase):
             {
                 "library": "AsTCP",
                 "execute": True,
-                "project_path": "PrintDemo\\Huitong_FrontEval.apj",
+                "project_path": "C:\\workspace\\Demo.apj",
                 "targets_path": "config\\targets\\default-safe.json",
             }
         )

@@ -17,6 +17,15 @@ from .models import PviTarget, Scope, VariableRef
 from .values import coerce_write_value, json_safe, values_equal
 
 LOG = logging.getLogger(__name__)
+_GENERATION_LOCK = threading.Lock()
+_GENERATION_COUNTER = 0
+
+
+def _next_connection_generation() -> int:
+    global _GENERATION_COUNTER
+    with _GENERATION_LOCK:
+        _GENERATION_COUNTER += 1
+        return _GENERATION_COUNTER
 
 
 @dataclass(slots=True)
@@ -47,10 +56,15 @@ class PviWorker:
         self._last_cpu_error: int | None = None
         self._last_event_error: str | None = None
         self._generation = 0
+        self._dirty = False
 
     @property
     def running(self) -> bool:
         return bool(self._thread and self._thread.is_alive())
+
+    @property
+    def dirty(self) -> bool:
+        return self._dirty
 
     def start(self) -> None:
         if self.running:
@@ -71,6 +85,8 @@ class PviWorker:
             self._thread.join(timeout=5)
 
     def call(self, operation: str, **arguments: Any) -> Any:
+        if self._dirty:
+            raise RuntimeError("PVI_WORKER_DIRTY: the previous operation timed out; reconnect is required")
         if not self.running:
             raise RuntimeError(f"PVI worker for {self.target.name} is not running")
         future: Future[Any] = Future()
@@ -78,8 +94,10 @@ class PviWorker:
         try:
             return future.result(timeout=self.target.request_timeout_s)
         except FutureTimeoutError as exc:
+            self._dirty = True
+            self._stop.set()
             future.cancel()
-            raise TimeoutError(f"PVI operation {operation!r} timed out") from exc
+            raise TimeoutError(f"PVI_OPERATION_TIMEOUT: operation {operation!r} timed out; target state is unknown") from exc
 
     def _run(self) -> None:
         try:
@@ -138,7 +156,7 @@ class PviWorker:
         )
         self._cpu = Cpu(self._device, self.target.pvi_object_name, CD=descriptor)
         self._cpu.errorChanged = self._on_cpu_error
-        self._generation += 1
+        self._generation = _next_connection_generation()
 
     def _on_manager_connection(self, connected: bool) -> None:
         self._manager_connected = bool(connected)
@@ -148,6 +166,8 @@ class PviWorker:
             self._variables.clear()
 
     def _on_cpu_error(self, error: int) -> None:
+        if error == 0 and not self._cpu_connected:
+            self._generation = _next_connection_generation()
         self._last_cpu_error = int(error)
         self._cpu_connected = error == 0
         if error != 0:
@@ -189,6 +209,13 @@ class PviWorker:
             "last_cpu_error": self._last_cpu_error,
             "last_event_error": self._last_event_error,
             "license": self._safe_get(lambda: self._connection.license),
+            "cpu_type": self._safe_get(
+                lambda: getattr(self._cpu, "type", None) or getattr(self._cpu, "cpuType", None)
+            ),
+            "order_number": self._safe_get(
+                lambda: getattr(self._cpu, "orderNumber", None) or getattr(self._cpu, "order_number", None)
+            ),
+            "ar_version": self._safe_get(lambda: self._cpu.version),
             "cpu_status": self._safe_get(lambda: self._cpu.status),
             "cpu_version": self._safe_get(lambda: self._cpu.version),
             "cpu_time": self._safe_get(lambda: self._cpu.time),

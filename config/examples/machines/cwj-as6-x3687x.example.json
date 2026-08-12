@@ -244,7 +244,7 @@
       "ip": "127.0.0.1",
       "role": "arsim",
       "allow_auto_download": true,
-      "arsim_loader_exe": "C:\\Users\\CWJ\\codex_ws\\br_device_autodev\\PrintDemo\\Temp\\Simulation\\x3687x\\X20CP3687X\\ar000loader.exe"
+      "arsim_loader_exe": "<path-to-ar000loader.exe>"
     },
     "test_plc": {
       "ip": "192.168.50.222",

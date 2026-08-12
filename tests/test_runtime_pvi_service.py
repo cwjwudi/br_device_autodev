@@ -12,6 +12,7 @@ from br_plc_toolchain.config import loader
 class FakeManager:
     def __init__(self):
         self.value = False
+        self.generation = 1
         self.calls: list[tuple[str, dict[str, Any]]] = []
 
     def call(self, target, operation: str, **arguments):
@@ -19,8 +20,11 @@ class FakeManager:
         if operation == "health":
             return {
                 "ok": True,
-                "generation": 1,
+                "generation": self.generation,
                 "cpu_version": {"ok": True, "value": "J4.93"},
+                "cpu_type": {"ok": True, "value": "X20CP1586"},
+                "order_number": {"ok": True, "value": "X20CP1586"},
+                "ar_version": {"ok": True, "value": "J4.93"},
                 "cpu_status": {"ok": True, "value": {"RunState": "RUN"}},
             }
         if operation == "list_tasks":
@@ -106,3 +110,51 @@ def test_save_target_is_explicit_and_uses_ignored_local_config(tmp_path, monkeyp
     result = service.save_target("plc", filename="office-plc.json", execute=True)
     assert result["ok"] is True
     assert (tmp_path / "local" / "office-plc.json").is_file()
+
+
+def test_changed_write_rejects_target_identity_change(tmp_path) -> None:
+    manager = FakeManager()
+    service = RuntimePviService(manager=manager, discovery_root=tmp_path)
+    service.register_ephemeral_target(ip="192.168.50.233", name="plc", declared_role="test")
+    opened = service.open_test_session("plc", execute=True)
+    manager.generation = 2
+    with pytest.raises(PermissionError, match="PVI_SESSION_FINGERPRINT_MISMATCH"):
+        service.write(
+            "plc",
+            VariableRef(name="bEnable", task="Main"),
+            True,
+            execute=True,
+            session_id=opened["session"]["session_id"],
+        )
+
+
+def test_changed_write_rejects_incomplete_target_identity(tmp_path) -> None:
+    manager = FakeManager()
+    service = RuntimePviService(manager=manager, discovery_root=tmp_path)
+    service.register_ephemeral_target(ip="192.168.50.233", name="plc", declared_role="test")
+    opened = service.open_test_session("plc", execute=True)
+    original_call = manager.call
+
+    def incomplete_health(target, operation: str, **arguments):
+        result = original_call(target, operation, **arguments)
+        if operation == "health":
+            result["order_number"] = {"ok": False, "error": "unavailable"}
+        return result
+
+    manager.call = incomplete_health  # type: ignore[method-assign]
+    with pytest.raises(PermissionError, match="PVI_SESSION_FINGERPRINT_MISMATCH"):
+        service.write(
+            "plc",
+            VariableRef(name="bEnable", task="Main"),
+            True,
+            execute=True,
+            session_id=opened["session"]["session_id"],
+        )
+
+
+def test_runtime_target_name_cannot_escape_discovery_root(tmp_path) -> None:
+    service = build_service(tmp_path)
+    with pytest.raises(ValueError, match="INVALID_TARGET_NAME"):
+        service.register_ephemeral_target(
+            ip="192.168.50.233", name="../escaped", declared_role="test"
+        )

@@ -13,6 +13,8 @@ from locks import resolve_scope_context
 REPO_ROOT = Path(__file__).resolve().parents[2]
 AUDIT_DIR = REPO_ROOT / "var" / "audit"
 SENSITIVE_KEY_PARTS = ("password", "secret", "token", "credential")
+AUDIT_RETENTION_DAYS = 30
+AUDIT_MAX_BYTES = 100 * 1024 * 1024
 
 
 def _safe_value(key: str, value: Any) -> Any:
@@ -56,6 +58,26 @@ def summarize_result(result: dict[str, Any] | None) -> dict[str, Any] | None:
     }
 
 
+def prune_audit(directory: Path = AUDIT_DIR) -> None:
+    """Keep generated audit state bounded without touching non-audit files."""
+    if not directory.exists():
+        return
+    now = datetime.now(timezone.utc).timestamp()
+    files = [path for path in directory.glob("*/*.json") if path.is_file()]
+    total_bytes = sum(path.stat().st_size for path in files)
+    cutoff = now - AUDIT_RETENTION_DAYS * 86400
+    for path in sorted(files, key=lambda item: item.stat().st_mtime):
+        remove = path.stat().st_mtime < cutoff or total_bytes > AUDIT_MAX_BYTES
+        if not remove:
+            continue
+        size = path.stat().st_size
+        path.unlink(missing_ok=True)
+        total_bytes = max(0, total_bytes - size)
+    for day_dir in directory.iterdir():
+        if day_dir.is_dir() and not any(day_dir.iterdir()):
+            day_dir.rmdir()
+
+
 def write_audit_event(
     *,
     tool: str,
@@ -97,4 +119,5 @@ def write_audit_event(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
     temporary.replace(path)
+    prune_audit(directory)
     return str(path)

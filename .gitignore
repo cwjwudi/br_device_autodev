@@ -4,6 +4,7 @@ PrintDemo/Binaries/**/pvi_download_*.log
 config/local/*
 !config/local/.gitkeep
 var/
+Temp/
 
 # Python
 __pycache__/

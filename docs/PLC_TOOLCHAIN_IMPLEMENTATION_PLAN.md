@@ -10,23 +10,17 @@
 4. 通过 OPC UA 优先、PVI 其次读取 PLC 反馈。
 5. 输出机器可读和人工可读的验证报告。
 
-## 已验证事实
+## 已验证事实（路径脱敏）
 
-- 项目入口：
-  - `PrintDemo/Huitong_FrontEval.apj`
+- 项目入口：由调用方或 environment 显式提供的 `<project-root>/<project>.apj`；仓库不内置机器相关工程路径。
   - AS 工程版本：`6.5.0.306`
   - 构建配置：`Config1`
-- Automation Studio 构建工具存在：
-  - `D:\BRAutomation\AS65\AS6\bin-en\BR.AS.Build.exe`
-- AS6.5 对应 PVITransfer 存在：
-  - `D:\BRAutomation\AS65\PVI6\PVI\Tools\PVITransfer\PVITransfer.exe`
+- Automation Studio 构建工具和 PVITransfer：通过 `config/toolchains/toolchains.json` 或未跟踪的 `config/local/toolchains.json` 显式配置。
 - 构建命令已验证：
-  - `BR.AS.Build.exe <apj> -c Config1 -buildRUCPackage`
+  - `BR.AS.Build.exe <apj> -c <config> -buildRUCPackage`
   - 日志结果：`Build: 0 error(s), 2 warning(s)`
   - 注意：进程 exit code 曾返回 `1`，因此构建结果必须解析日志中的 error 数。
-- 生成 RUC 包：
-  - `PrintDemo/Binaries/Config1/X20CP3687X/RUCPackage/RUCPackage.zip`
-  - `PrintDemo/Binaries/Config1/X20CP3687X/RUCPackage/Transfer.pil`
+- 生成 RUC 包：`<project-root>/Binaries/<config>/<CPU>/RUCPackage/` 下的 `RUCPackage.zip` 和 `Transfer.pil`。
 - PVITransfer 静默调用方式已验证：
   - 使用 `-silent`
   - 使用日志文件作为输出来源
@@ -131,6 +125,12 @@ MCP 只做结构化参数、调用 CLI、返回 JSON；核心逻辑仍放在本�
 6. 根据检查结果决定下一步：
    - 若目标为 ARsim，则继续完善 ARsim 下载与 OPC UA 验证。
    - 若目标为测试 PLC，则先生成匹配 `X20CP1586 / J4.93` 的工程配置和 RUC 包。
+7. M9：把 ARsim 下载从“命令成功”提升为可诊断、可恢复的部署闭环：
+   - 下载前比较 RUC 与目标的 CPU、OrderNumber、RuntimeType、ARVersion、分区布局和安装模式。
+   - 对不兼容目标停止自动下载，并明确建议增量 Transfer、重建 ARsim 介质或仅生成 RUC。
+   - 对超时、取消和异常清理 PVITransfer 进程树，保留最后一段传输日志。
+   - 将 `process_started`、`runtime_reachable` 和 `application_ready` 分开验证。
+   - 补充下载阶段事件、应用 readiness、Logger 和工作树产物的结构化证据。
 
 ## 当前状态
 
@@ -141,7 +141,7 @@ MCP 只做结构化参数、调用 CLI、返回 JSON；核心逻辑仍放在本�
 - PVITransfer 静默隐藏执行验证。
 - 测试 PLC 只读探针验证。
 - 当前 RUC 包与测试 PLC 不匹配的风险识别。
-- ARsim 目标启动、探针、安全检查和 RUC 下载闭环验证。
+- ARsim 目标启动、探针、安全检查和一条兼容 RUC 下载路径已验证；分区不兼容、超时残留和应用未就绪等失败路径仍待 M9 完成。
 - OPC UA 白名单读取验证。
 - PVI 协议读取 ARsim 变量验证。
 - M1：`plc_toolchain.ps1` 核心命令已统一为 MCP 友好的 JSON 输出和退出码。
@@ -157,6 +157,7 @@ MCP 只做结构化参数、调用 CLI、返回 JSON；核心逻辑仍放在本�
 - M7 已完成：PVITransfer Logger 读取已实现并完成实机验证。
 - M8 已完成第一版：无源码 PVI 发现、持久多目标连接、运行时读取、测试 profile、临时会话写入和写后回读。
 - 下一阶段是把旧 PVI CLI 缩减为新运行时服务的兼容适配器，并扩展连接恢复与兼容性测试。
+- M9 尚未完成：需要补齐 ARsim 分区兼容性、下载进程生命周期、实时进度、应用 readiness 和增量 Transfer 策略。
 
 ## ARsim 下载闭环
 
@@ -165,7 +166,7 @@ ARsim 目标配置：
 - 目标名：`arsim`
 - IP：`127.0.0.1`
 - Loader：
-  - `PrintDemo/Temp/Simulation/Config1/X20CP3687X/ar000loader.exe`
+  - 必须由本地环境配置提供实际 `ar000loader.exe` 路径，不再使用已删除项目的硬编码默认值。
 
 已实现命令：
 
@@ -176,7 +177,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Com
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Command Download -Target arsim -Execute
 ```
 
-最新验证结果：
+兼容目标上的历史验证结果：
 
 - `StartArsim`：复用已运行的 `ar000loader.exe`。
 - `Probe`：
@@ -186,6 +187,85 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Com
 - `CheckDownload`：通过。
 - `Download`：`Transfer "RUCPackage.zip" ... SUCCESSFUL`。
 - 下载后再次 `Probe`：仍为 `X20CP3687X / 6.5.1 / WarmStart`。
+
+这条成功记录不能代表所有 ARsim 都可直接安装 RUC。近期实际部署记录表明：
+
+- RUC 构建为 `0 error` 不等于当前 ARsim 的分区布局满足安装要求。
+- `Minimum requirements of partition layout failed` 会导致下载被拒绝或长时间等待；反复切换安装限制还可能把 ARsim 留在 `Service`。
+- `PVITransfer.exe` 在 MCP 超时后可能继续运行，调用方看到失败时目标状态仍可能被后台进程改变。
+- ARsim 进程启动不等于应用已进入 RUN；必须继续验证 PLC 状态、`bAlive`、接口版本和阶段标识。
+
+因此，后续验收必须区分以下三个状态：
+
+1. `process_started`：Loader 进程已经启动或被复用；
+2. `runtime_reachable`：PVI/Probe 能连接并返回 CPU、AR 版本和运行状态；
+3. `application_ready`：应用处于可测试状态，`bAlive=true`，接口版本和阶段标识与本次构建一致。
+
+## M9 ARsim 下载可靠性与部署闭环（新增）
+
+### 目标
+
+把“Build 成功、Download 命令返回成功”改成可验证的部署状态机。工具链必须能够区分：
+
+- 包本身构建失败；
+- 包与目标 CPU/Runtime/分区不兼容；
+- 传输正在进行或等待目标重启；
+- 传输超时但后台进程仍在修改目标；
+- ARsim 已启动但应用尚未进入可测试状态；
+- 已完成部署并且应用身份与本次构建一致。
+
+### P0：阻止错误下载和不确定状态
+
+1. **完整下载前置检查**
+   - 比较 RUC 的 `CPUType`、`OrderNumber`、`RuntimeType`、`ARVersion` 与目标 Probe 结果。
+   - 增加分区布局和安装模式检查；不能因为目标是 ARsim 就跳过 CPU/版本兼容性检查。
+   - 对 `Minimum requirements of partition layout failed` 建立明确的结构化错误分类。
+   - 不兼容时不得自动轮换多个安装限制反复尝试；只返回可执行选项：重建 ARsim 介质、使用增量 Transfer 或仅保留 RUC。
+
+2. **超时、取消和异常清理**
+   - 为每次 PVITransfer 建立独立进程组，记录 PID、命令、包路径和目标。
+   - MCP 超时、取消或异常时终止对应进程树，而不是只取消等待 Future。
+   - 返回 `cleanup_attempted`、`cleanup_succeeded`、残留 PID 和最后一段传输日志。
+   - 清理后重新 Probe；若结果不确定，标记为 `deployment_state=unknown`，禁止直接进入测试。
+
+3. **部署后 readiness 验证**
+   - `plc_start_arsim` 不得仅以 Loader 启动作为成功。
+   - 按顺序验证 `process_started`、`runtime_reachable`、`application_ready`。
+   - `application_ready` 至少要求 PLC 状态可接受、`bAlive=true`、接口版本正确、阶段标识与本次构建一致。
+
+### P1：提高诊断能力和自动恢复边界
+
+1. **下载阶段事件和日志尾部**
+   - 统一输出 `Connected`、`PackageValidated`、`TargetEnteringService`、`Installing`、`Restarting`、`WaitingForReconnection`、`RunVerified`、`Failed` 等阶段。
+   - 轮询或读取 PVITransfer 日志时返回阶段、时间戳和最后 N 行，避免 180 秒无反馈后才一次性超时。
+
+2. **增量 Transfer 能力**
+   - 当前 RUC Download 不能替代 Automation Studio `Transfer to Target` 的依赖分析、依赖排序和应用任务安全替换。
+   - 优先评估生成/下载 `artransfer.br`、调用受控 Transfer 接口，或根据 `TransferModuleContent` 生成依赖感知更新包。
+   - 在该能力完成前，直接下载单个 `.br` 模块不作为默认恢复路径；遇到 PVI 11156 时补充目标任务状态、模块依赖和替换限制诊断。
+
+3. **输入和输出诊断**
+   - 工程路径不存在时，在仓库根目录搜索 `.apj`；唯一候选只给出建议，多候选不得自动选择。
+   - PVI 白名单拒绝时返回最多三个相似变量候选，但不得自动放宽白名单。
+   - PVI/Reset 默认返回紧凑摘要，完整变量级结果写入报告文件。
+   - 修正 CSVX 的 `Severity`、`Time`、`ASCII Data`、`TaskName` 和 `ErrorCode` 解析，并支持按测试时间窗统计 Error/Fatal。
+
+### P2：提高可重复性和仓库卫生
+
+1. 所有生成的 `.pil` 固定使用 CRLF、明确编码、逐条命令校验，并在执行前报告脚本路径。
+2. 构建、下载、Simulation 和 Logger 产物统一写入 `var/` 或明确的忽略目录；执行前后返回 `generated_artifacts`、新增文件和修改文件清单。
+3. 不因下载自动改写无关 Physical、Diagnosis 或用户文件；报告中记录实际修改范围。
+4. 下载错误、目标状态、清理结果和 readiness 证据全部写入统一报告，供 MCP、CI 和人工复核使用。
+
+### M9 验收标准
+
+- 构建成功但分区布局不兼容时，工具在下载前明确阻止或要求用户选择策略，不进入盲目重试。
+- 下载超时或取消后，对应 PVITransfer 进程树不残留；若无法确认清理，返回 `unknown` 并阻止后续测试。
+- 下载过程至少能区分连接、校验、安装、重启、重连和失败阶段。
+- Loader 启动、Runtime 可达和应用就绪分别返回，不把 `Service` 或 `bAlive=false` 报告为应用成功。
+- 成功部署后能验证 CPU/Runtime/接口版本/阶段标识与本次构建一致。
+- 失败报告包含目标 Probe、包描述、安装策略、PVITransfer 日志、Logger 摘要和下一步建议。
+- 整个流程不误修改或提交无关的 Physical、Diagnosis 和用户文件。
 
 ## OPC UA 反馈验证
 

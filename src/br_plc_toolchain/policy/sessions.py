@@ -69,7 +69,13 @@ class TestSessionManager:
             self._sessions[session.session_id] = session
         return session
 
-    def require(self, session_id: str | None, *, target_key: str) -> TestSession:
+    def require(
+        self,
+        session_id: str | None,
+        *,
+        target_key: str,
+        fingerprint: dict[str, Any] | None = None,
+    ) -> TestSession:
         if not session_id:
             raise PermissionError("Changed-value writes require an active test session")
         with self._lock:
@@ -81,6 +87,9 @@ class TestSessionManager:
                 raise PermissionError("Test session has expired")
             if session.target_key != target_key:
                 raise PermissionError("Test session belongs to a different target")
+            if fingerprint is not None and session.fingerprint != fingerprint:
+                self._sessions.pop(session_id, None)
+                raise PermissionError("PVI_SESSION_FINGERPRINT_MISMATCH: target identity changed")
             return session
 
     def close(self, session_id: str) -> bool:

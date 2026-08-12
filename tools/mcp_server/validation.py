@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 
@@ -157,6 +158,16 @@ def validate_json_schema(value: Any, schema: dict[str, Any], path: str = "$") ->
                     f"String must contain at most {schema['maxLength']} character(s).",
                     maximum=schema["maxLength"],
                     actual=len(value),
+                )
+            )
+        if "pattern" in schema and not re.search(str(schema["pattern"]), value):
+            errors.append(
+                _error(
+                    path,
+                    "pattern",
+                    f"String does not match pattern {schema['pattern']!r}.",
+                    pattern=schema["pattern"],
+                    actual=value,
                 )
             )
 

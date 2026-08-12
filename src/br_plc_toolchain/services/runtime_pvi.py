@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
@@ -15,6 +16,37 @@ from br_plc_toolchain.config.loader import (
     save_local_target,
 )
 from br_plc_toolchain.policy import RuntimePolicy, TestSessionManager
+
+
+TARGET_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
+def validate_target_name(name: str) -> str:
+    if not TARGET_NAME_PATTERN.fullmatch(name):
+        raise ValueError("INVALID_TARGET_NAME: target name must match ^[A-Za-z0-9][A-Za-z0-9._-]*$")
+    return name
+
+
+def target_fingerprint(target: PviTarget, health: dict[str, Any]) -> dict[str, Any]:
+    def value(name: str) -> Any:
+        item = health.get(name)
+        return item.get("value") if isinstance(item, dict) else item
+
+    return {
+        "ip": target.ip,
+        "cpu_type": value("cpu_type"),
+        "order_number": value("order_number"),
+        "ar_version": value("ar_version") or value("cpu_version"),
+        "generation": health.get("generation"),
+    }
+
+
+def missing_fingerprint_fields(fingerprint: dict[str, Any]) -> list[str]:
+    return [
+        name
+        for name in ("ip", "cpu_type", "order_number", "ar_version", "generation")
+        if fingerprint.get(name) in (None, "")
+    ]
 
 
 class RuntimePviService:
@@ -42,6 +74,8 @@ class RuntimePviService:
         declared_role: str | None = None,
         pvi_dll_path: str | None = None,
     ) -> dict[str, Any]:
+        if name:
+            validate_target_name(name)
         config = create_ephemeral_target_config(ip=ip, name=name, declared_role=declared_role)
         target_data = config["target"]
         target = PviTarget(
@@ -102,8 +136,19 @@ class RuntimePviService:
         return self.manager.call(target, "list_tasks")
 
     def health(self, target_name: str) -> dict[str, Any]:
-        target, _ = self._resolve(target_name)
-        return self.manager.call(target, "health")
+        target, config = self._resolve(target_name)
+        result = self.manager.call(target, "health")
+        result["worker"] = self.manager.worker_state(target)
+        result["configuration"] = {
+            "target": config.get("target"),
+            "profile": config.get("profile"),
+            "access": config.get("access"),
+        }
+        result["active_sessions"] = [
+            session for session in self.sessions.list_active() if session.get("target_name") == target.name
+        ]
+        result["recent_error"] = result.get("last_event_error") or result.get("last_cpu_error")
+        return result
 
     def list_variables(
         self,
@@ -155,12 +200,13 @@ class RuntimePviService:
         health = self.manager.call(target, "health")
         if not health.get("ok"):
             raise RuntimeError("Target must be connected before opening a test session")
-        fingerprint = {
-            "ip": target.ip,
-            "cpu_version": (health.get("cpu_version") or {}).get("value"),
-            "cpu_status": (health.get("cpu_status") or {}).get("value"),
-            "generation": health.get("generation"),
-        }
+        fingerprint = target_fingerprint(target, health)
+        missing = missing_fingerprint_fields(fingerprint)
+        if missing:
+            raise PermissionError(
+                "PVI_SESSION_FINGERPRINT_MISMATCH: complete target identity is unavailable "
+                f"({', '.join(missing)})"
+            )
         ttl = ttl_minutes or int((config.get("access") or {}).get("session_ttl_minutes", 60))
         session = self.sessions.open(
             target_key=target.key,
@@ -190,7 +236,21 @@ class RuntimePviService:
         before = self.manager.call(target, "read", ref=ref)
         session_valid = False
         if session_id:
-            self.sessions.require(session_id, target_key=target.key)
+            current_health = self.manager.call(target, "health")
+            if not current_health.get("ok"):
+                raise PermissionError("PVI_SESSION_FINGERPRINT_MISMATCH: target health is unavailable")
+            current_fingerprint = target_fingerprint(target, current_health)
+            missing = missing_fingerprint_fields(current_fingerprint)
+            if missing:
+                raise PermissionError(
+                    "PVI_SESSION_FINGERPRINT_MISMATCH: complete target identity is unavailable "
+                    f"({', '.join(missing)})"
+                )
+            self.sessions.require(
+                session_id,
+                target_key=target.key,
+                fingerprint=current_fingerprint,
+            )
             session_valid = True
         decision = self.policy.authorize_write(
             config=config,
@@ -208,8 +268,14 @@ class RuntimePviService:
         return result
 
     def _write_manifest(self, target_name: str, manifest: dict[str, Any]) -> None:
+        validate_target_name(target_name)
         self.discovery_root.mkdir(parents=True, exist_ok=True)
-        path = self.discovery_root / f"{target_name}.json"
+        root = self.discovery_root.resolve()
+        path = (root / f"{target_name}.json").resolve()
+        try:
+            path.relative_to(root)
+        except ValueError as exc:
+            raise ValueError("INVALID_TARGET_NAME: discovery manifest escaped its root") from exc
         path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     def close(self) -> None:

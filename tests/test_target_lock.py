@@ -75,7 +75,7 @@ class TargetLockTests(unittest.TestCase):
     def test_closed_loop_locks_project_and_target(self) -> None:
         keys = locks.lock_keys_for_tool(
             "plc_run_arsim_closed_loop",
-            {"target": "arsim", "project_path": "PrintDemo\\Huitong_FrontEval.apj"},
+            {"target": "arsim", "project_path": "C:\\workspace\\Demo.apj"},
         )
 
         self.assertEqual(2, len(keys))

@@ -132,7 +132,7 @@ plc_run_arsim_closed_loop(execute=true)
 
 注意：组合工具内部仍保留下载安全门。没有 `execute=true` 时只会完成构建、检查和报告，不会实际下载。
 
-如果 ARsim 探针 CPU/order 与 RUC 包元信息不一致，标准流程先检查 `PrintDemo/Physical/<config>/Hardware.hw` 中 `Simulation=1`，重新构建并确认包 runtime 为 AR Simulation。只有用户明确授权时，才对 `target=arsim` 使用：
+如果 ARsim 探针 CPU/order 与 RUC 包元信息不一致，标准流程先检查 `<project-root>/Physical/<config>/Hardware.hw` 中 `Simulation=1`，重新构建并确认包 runtime 为 AR Simulation。只有用户明确授权时，才对 `target=arsim` 使用：
 
 ```text
 plc_check_download(force_arsim_download=true)
@@ -282,14 +282,12 @@ Automation Studio config 必须按项目真实名称处理。本项目当前可�
 
 | 模块 | 路径 | 说明 |
 |---|---|---|
-| AS 工程入口 | `PrintDemo/Huitong_FrontEval.apj` | B&R Automation Studio 工程 |
-| 物理/仿真配置 | `PrintDemo/Physical/x1685`、`PrintDemo/Physical/x3687x` | 两套 CPU config，分别对应 X20CP1685 和 X20CP3687X |
-| SVG 逻辑 | `PrintDemo/Logical/SVG` | SVG/前端交互相关 PLC 逻辑 |
-| LQR 控制逻辑 | `PrintDemo/Logical/LQR` | LQR 测试和 IO 闭环重点模块 |
-| Middleware | `PrintDemo/Logical/Middleware` | 中间层、HmiBridge、MidTrans 等 |
-| mappView | `PrintDemo/Logical/mappView` 和 `PrintDemo/Physical/*/mappView` | B&R mappView 可视化配置 |
-| Web 资源 | `PrintDemo/CFCARD/WEBROOT` | HTML、ASP、JS 和前端数据服务资源 |
-| 全局变量/类型 | `PrintDemo/Logical/Global.var`、`Global.typ` | 工程级变量和类型 |
+| AS 工程入口 | `<project-root>/<project>.apj` | B&R Automation Studio 工程 |
+| 物理/仿真配置 | `<project-root>/Physical/<config>` | 由调用方提供的实际 CPU config |
+| 应用逻辑 | `<project-root>/Logical/<module>` | 工程应用逻辑和模块 |
+| mappView | `<project-root>/Logical` 和 `<project-root>/Physical` 下的实际目录 | B&R mappView 可视化配置 |
+| Web 资源 | `<project-root>/CFCARD/WEBROOT`（如工程存在） | HTML、ASP、JS 和前端数据服务资源 |
+| 全局变量/类型 | `<project-root>/Logical` 下的实际文件 | 工程级变量和类型 |
 
 ### 2. 自动化工具模块
 

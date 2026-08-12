@@ -7,9 +7,9 @@
 ### config 和 Simulation 前置检查
 
 - 先确认本次使用的 Automation Studio config 名，例如 `x1685` 或 `x3687x`；这些名字必须来自项目实际配置，不要写死 `Config1`。
-- 若该 config 需要以 ARsim 方式运行，检查 `PrintDemo/Physical/<config>/Hardware.hw`，确保 CPU 模块下存在 `<Parameter ID="Simulation" Value="1" />`。
-- 修改 Simulation 设置后必须重新构建该 config；构建成功后，仿真文件应生成到 `PrintDemo/Temp/Simulation/<config>/<CPU>/`。
-- `plc_start_arsim` 使用的 loader 必须是实际生成的 `PrintDemo/Temp/Simulation/<config>/<CPU>/ar000loader.exe`。示例：`PrintDemo/Temp/Simulation/x3687x/X20CP3687X/ar000loader.exe`。
+- 若该 config 需要以 ARsim 方式运行，检查 `<project-root>/Physical/<config>/Hardware.hw`，确保 CPU 模块下存在 `<Parameter ID="Simulation" Value="1" />`。
+- 修改 Simulation 设置后必须重新构建该 config；构建成功后，仿真文件应生成到 `<project-root>/Temp/Simulation/<config>/<CPU>/`。
+- `plc_start_arsim` 使用的 loader 必须是实际生成的 `<project-root>/Temp/Simulation/<config>/<CPU>/ar000loader.exe`，并通过本地 target 配置显式提供。
 - 如果 `plc_start_arsim` 报 loader 不存在，先核对 config 名、CPU 目录、Simulation 设置和 `config/targets/default-safe.json` 中的 `targets.arsim.arsim_loader_exe`。
 
 快捷工具：
@@ -95,7 +95,7 @@ plc_run_arsim_closed_loop(arguments: { "config": "<actual_config>", "target": "a
 流程：
 
 1. 阅读 `docs/PLC_AUTOMATION_TOOLCHAIN_CONTEXT.md`
-2. 阅读 `PrintDemo/` 下相关现有 ST/C 源码
+2. 阅读所选工程目录下相关现有 ST/C 源码
 3. 修改代码（只修改功能相关文件，不触碰 Safety）
 4. 执行流程 1（标准 ARsim 闭环）
 5. 验证新增变量的值是否符合预期

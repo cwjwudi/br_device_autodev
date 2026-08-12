@@ -28,6 +28,16 @@ def repo_path(value: str) -> Path:
     return path if path.is_absolute() else REPO_ROOT / path
 
 
+def project_candidates() -> list[Path]:
+    excluded = {".git", ".pytest_cache", "var", "Temp", "tools"}
+    candidates = {
+        path.resolve()
+        for path in REPO_ROOT.rglob("*.apj")
+        if path.is_file() and not any(part in excluded for part in path.parts)
+    }
+    return sorted(candidates)
+
+
 def add_check(
     checks: list[dict[str, Any]],
     name: str,
@@ -61,7 +71,8 @@ def load_targets(path: Path) -> tuple[dict[str, Any] | None, str | None]:
 def validate_environment(options: dict[str, str]) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
     targets_path = repo_path(options["targets_path"]).resolve()
-    project_path = repo_path(options["project_path"]).resolve()
+    project_raw = str(options.get("project_path") or "").strip()
+    project_path = repo_path(project_raw).resolve() if project_raw else None
     config_name = options["config"]
     target_name = options["target"]
     toolchain = None
@@ -104,20 +115,32 @@ def validate_environment(options: dict[str, str]) -> dict[str, Any]:
         else f"Target '{target_name}' is missing from the targets configuration.",
     )
 
-    project_ok = project_path.is_file() and project_path.suffix.lower() == ".apj"
+    candidates = project_candidates()
+    project_ok = bool(project_path and project_path.is_file() and project_path.suffix.lower() == ".apj")
+    if project_path is None:
+        if len(candidates) == 1:
+            project_message = "Project path is required; one .apj candidate was found and was not selected automatically."
+        elif candidates:
+            project_message = f"Project path is required; {len(candidates)} .apj candidates were found."
+        else:
+            project_message = "Project path is required and no .apj candidate was found."
+    else:
+        project_message = (
+            "Automation Studio project exists."
+            if project_ok
+            else "Automation Studio project file is missing or is not an .apj file."
+        )
     add_check(
         checks,
         "project",
         project_ok,
-        "Automation Studio project exists."
-        if project_ok
-        else "Automation Studio project file is missing or is not an .apj file.",
+        project_message,
         path=project_path,
     )
 
     project_as_family = None
     project_as_version = None
-    if project_ok:
+    if project_ok and project_path is not None:
         head = project_path.read_text(encoding="utf-8-sig", errors="replace")[:4096]
         match = re.search(r'<\?AutomationStudio\s+Version="([^"]+)"', head)
         if match:
@@ -143,16 +166,21 @@ def validate_environment(options: dict[str, str]) -> dict[str, Any]:
             severity="warning",
         )
 
-    physical_dir = project_path.parent / "Physical" / config_name
-    hardware_file = physical_dir / "Hardware.hw"
-    config_ok = physical_dir.is_dir() and hardware_file.is_file()
+    physical_dir = project_path.parent / "Physical" / config_name if project_path else None
+    hardware_file = physical_dir / "Hardware.hw" if physical_dir else None
+    config_ok = bool(config_name and physical_dir and physical_dir.is_dir() and hardware_file and hardware_file.is_file())
+    config_message = (
+        f"Automation Studio config '{config_name}' exists."
+        if config_ok
+        else "Configuration name is required."
+        if not config_name
+        else f"Automation Studio config '{config_name}' or Hardware.hw is missing."
+    )
     add_check(
         checks,
         "configuration",
         config_ok,
-        f"Automation Studio config '{config_name}' exists."
-        if config_ok
-        else f"Automation Studio config '{config_name}' or Hardware.hw is missing.",
+        config_message,
         path=physical_dir,
     )
 
@@ -174,13 +202,19 @@ def validate_environment(options: dict[str, str]) -> dict[str, Any]:
 
     errors = [item["message"] for item in checks if not item["ok"] and item["severity"] == "error"]
     warnings = [item["message"] for item in checks if item["severity"] == "warning"]
+    error_codes: list[str] = []
+    if not project_ok or not config_ok:
+        error_codes.append("PROJECT_CONFIG_REQUIRED")
+    if not error_codes and (toolchain is None or not toolchain.enabled):
+        error_codes.append("TOOLCHAIN_NOT_CONFIGURED")
     return {
         "command": "ValidateEnvironment",
         "ok": not errors,
         "environment": options.get("environment"),
         "target": target_name,
         "target_role": role or None,
-        "project_path": str(project_path),
+        "project_path": str(project_path) if project_path else None,
+        "project_candidates": [str(path) for path in candidates],
         "config": config_name,
         "targets_path": str(targets_path),
         "toolchain": toolchain.to_dict() if toolchain else None,
@@ -188,6 +222,7 @@ def validate_environment(options: dict[str, str]) -> dict[str, Any]:
         "project_as_version": project_as_version,
         "checks": checks,
         "errors": errors,
+        "error_codes": error_codes,
         "warnings": warnings,
     }
 
@@ -255,7 +290,8 @@ def run_doctor(options: dict[str, str]) -> dict[str, Any]:
     target_config = ((targets or {}).get("targets") or {}).get(options["target"])
     if isinstance(target_config, dict) and str(target_config.get("role") or "").lower() == "arsim":
         loader_raw = target_config.get("arsim_loader_exe")
-        loader = repo_path(str(loader_raw)) if loader_raw else None
+        loader_value = str(loader_raw or "").strip()
+        loader = repo_path(loader_value).resolve() if loader_value and not loader_value.startswith("<") else None
         add_check(
             checks,
             "arsim_loader",
@@ -287,6 +323,11 @@ def run_doctor(options: dict[str, str]) -> dict[str, Any]:
     )
 
     errors = [item["message"] for item in checks if not item["ok"] and item["severity"] == "error"]
+    error_codes = list(environment_result.get("error_codes") or [])
+    if any(item["name"] == "arsim_loader" and not item["ok"] for item in checks):
+        error_codes.append("ARSIM_LOADER_REQUIRED")
+    if not error_codes and errors:
+        error_codes.append("TOOLCHAIN_NOT_CONFIGURED")
     warnings = [item["message"] for item in checks if item["severity"] == "warning"]
     return {
         "command": "Doctor",
@@ -296,6 +337,7 @@ def run_doctor(options: dict[str, str]) -> dict[str, Any]:
         "target": options["target"],
         "checks": checks,
         "errors": errors,
+        "error_codes": sorted(set(error_codes)),
         "warnings": warnings,
     }
 

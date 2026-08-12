@@ -9,8 +9,14 @@ import os
 import sys
 from typing import Any
 
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SRC_ROOT = os.path.join(REPO_ROOT, "src")
+if SRC_ROOT not in sys.path:
+    sys.path.insert(0, SRC_ROOT)
+
 from plc_access_policy import canonical_variable, pvi_write_map, validate_pvi_write
 from pvi_read import load_json_file, normalize_value, parse_variable_spec
+from br_plc_toolchain.backends.pvi.values import values_equal
 
 
 def load_target_config(targets_file: str, target: str) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -45,7 +51,12 @@ def coerce_scalar(value: Any, declared_type: str | None) -> Any:
     dtype = (declared_type or "").upper()
     if dtype.startswith("BOOL"):
         if isinstance(value, str):
-            return value.strip().lower() in ("1", "true", "yes", "on")
+            normalized = value.strip().lower()
+            if normalized in ("1", "true", "yes", "on"):
+                return True
+            if normalized in ("0", "false", "no", "off"):
+                return False
+            raise ValueError(f"Cannot convert {value!r} to BOOL")
         return bool(value)
     if dtype.startswith(("REAL", "LREAL")):
         return float(value)
@@ -58,6 +69,42 @@ def coerce_value(value: Any, declared_type: str | None) -> Any:
     if isinstance(value, list):
         return [coerce_scalar(item, declared_type) for item in value]
     return coerce_scalar(value, declared_type)
+
+
+def verify_write_result(
+    requested: Any,
+    readback: Any,
+    status: Any,
+    *,
+    readable: bool = True,
+) -> dict[str, Any]:
+    status_value = getattr(status, "value", status)
+    status_ok = status_value in (0, "0")
+    try:
+        status_code = int(status_value)
+    except (TypeError, ValueError):
+        status_code = None
+    result = {
+        "status_ok": status_ok,
+        "status_code": status_code if status_code is not None else normalize_value(status_value),
+        "status_explanation": "PVI status indicates success." if status_ok else "PVI status indicates that the write was not accepted; readback is not trusted.",
+        "readback_verified": None,
+        "ok": False,
+    }
+    if not status_ok:
+        result["error_code"] = "PVI_STATUS_FAILURE"
+        result["error"] = f"PVI variable status indicates failure: {normalize_value(status)!r}"
+        return result
+    if not readable:
+        result["error_code"] = "PVI_READBACK_UNAVAILABLE"
+        result["error"] = "PVI readback is unavailable for this variable."
+        return result
+    result["readback_verified"] = values_equal(requested, readback)
+    result["ok"] = bool(result["readback_verified"])
+    if not result["ok"]:
+        result["error_code"] = "PVI_READBACK_MISMATCH"
+        result["error"] = "PVI readback does not match the requested value."
+    return result
 
 
 def validate_writes(
@@ -140,15 +187,29 @@ def write_variables(args: argparse.Namespace, writes: list[dict[str, Any]]) -> d
                 result["data_type"] = variable.dataType
                 result["before"] = normalize_value(variable.value)
                 declared_type = (allowed.get(item["variable"]) or {}).get("type")
-                variable.value = coerce_value(item["value"], declared_type)
+                coerced = coerce_value(item["value"], declared_type)
+                variable.value = coerced
                 connection.sleep(args.write_wait_ms)
                 result["readback"] = normalize_value(variable.value)
-                result["status"] = variable.status
-                result["ok"] = True
+                result["requested_value"] = normalize_value(coerced)
+                result["status"] = normalize_value(variable.status)
+                result.update(
+                    verify_write_result(
+                        coerced,
+                        result["readback"],
+                        variable.status,
+                        readable=bool(variable.readable),
+                    )
+                )
+            except ValueError as exc:
+                result["error"] = str(exc)
+                result["error_code"] = "PVI_INVALID_VALUE"
             except PviError as exc:
                 result["error"] = str(exc)
+                result["error_code"] = "PVI_OPERATION_FAILED"
             except Exception as exc:
                 result["error"] = repr(exc)
+                result["error_code"] = "PVI_OPERATION_FAILED"
             results.append(result)
     finally:
         if connection is not None:
