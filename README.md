@@ -1,14 +1,6 @@
 # B&R PLC 自动构建、下载、反馈验证工具链
 
-本项目是一个贝加莱 B&R Automation Studio 工程，同时在工程外侧建设一套自动化工具链，使人、Codex、CI 或 MCP Server 能够以可审计、可验证的方式完成 PLC 构建、下载和反馈验证。
-
-当前工程入口：
-
-- `PrintDemo/Huitong_FrontEval.apj`
-- 配置：`Config1`
-- 当前已验证 ARsim 目标：`127.0.0.1`
-- 当前配置测试 PLC 只读目标：`192.168.50.222`
-- 历史已验证测试 PLC 只读目标：`192.168.50.233`
+本项目是贝加莱 B&R Automation Studio PLC 自动化工具链，通过 MCP Server 提供 38 个工具，使 Agent 或 CI 能够以可审计、可验证的方式完成 PLC 构建、下载、变量读写、IO 测试和反馈验证。
 
 ## 项目目标
 
@@ -46,12 +38,11 @@
 docs/
   PLC_AUTOMATION_TOOLCHAIN_CONTEXT.md
   PLC_TOOLCHAIN_IMPLEMENTATION_PLAN.md
-  PLC_MCP_SKILL_PROMPT_ROADMAP.md
   PVI_RUNTIME_ARCHITECTURE.md
+  PVI_RUNTIME_LIVE_TEST_REPORT.md
   CONFIGURATION.md
   OFFICE_TEST_QUICKSTART.md
   TOOLCHAINS.md
-  AS4_AS6_TOOLCHAIN_TEST_REPORT.md
 
 config/
   defaults/             # 内置运行默认值
@@ -68,18 +59,20 @@ src/br_plc_toolchain/
   policy/               # 硬安全规则与临时测试会话
   services/             # 运行时发现和读写服务
 
-tools/                  # 旧 CLI 兼容入口，逐步缩减
-  plc_toolchain.ps1
-  mcp_server/
+tools/
+  plc_toolchain.ps1     # PowerShell 构建/下载/验证后端
+  mcp_server/           # MCP stdio JSON-RPC 服务（38 tools）
 
 scripts/
   windows/              # Windows/厂商工具包装器
   maintenance/          # 仓库维护与文档生成
 
-var/                    # 运行输出、审计、锁与发现清单（Git 忽略）
+skills/
+  br-plc-toolchain/     # Agent Skill 定义与参考文档
 
-PrintDemo/
-  Huitong_FrontEval.apj
+tests/                  # pytest 测试套件（21 个测试文件）
+
+var/                    # 运行输出、审计、锁与发现清单（Git 忽略）
 ```
 
 ## 当前进度
@@ -112,11 +105,6 @@ PrintDemo/
   - `skills/br-plc-toolchain/references/safety.md`
   - `skills/br-plc-toolchain/references/command-flow.md`
   - `skills/br-plc-toolchain/references/verification.md`
-- 完成 M4：创建标准 Prompt 模板：
-  - `prompts/plc_toolchain/build_and_verify_arsim.md`
-  - `prompts/plc_toolchain/safe_download_check.md`
-  - `prompts/plc_toolchain/add_plc_feature_with_feedback.md`
-  - `prompts/plc_toolchain/diagnose_download_failure.md`
 - 完成 M5：统一验证报告，输出到 `var/reports/*.json`。
 - 工具新增、风险分级和确认参数由 `tools/mcp_server/schemas.py` 统一维护。
 
@@ -249,7 +237,7 @@ MCP server version: `0.13.0`. Full catalog: [skills/br-plc-toolchain/references/
 | `plc_write_runtime_variable` | `target_change` | `persistent PVI runtime + policy` | `execute=true` | Write a discovered variable with before/readback verification. Changed values require a target-bound test session. |
 <!-- END GENERATED MCP TOOL CATALOG -->
 
-VSCode / Codex / Cursor 等 MCP 客户端配置示例：
+VSCode / WorkBuddy 等 MCP 客户端配置示例：
 
 ```json
 {
@@ -258,7 +246,7 @@ VSCode / Codex / Cursor 等 MCP 客户端配置示例：
       "type": "stdio",
       "command": "python",
       "args": ["tools/mcp_server/server.py"],
-      "cwd": "D:\\codex_ws\\motion_svg_test"
+      "cwd": "D:\\codex_ws\\br_device_autodev"
     }
   }
 }
@@ -351,7 +339,7 @@ PLC 目标和安全策略配置在 `config/targets/default-safe.json`。命名�
 
 - `SKILL.md` — 触发条件、工具速查、操作顺序、安全禁止项、失败处理
 - `references/safety.md` — 目标分类权限、下载检查清单、生产/Safety/OPC UA/PVI 规则
-- `references/command-flow.md` — 5 种标准流程：闭环验证、安全检查、功能修改、失败诊断、只读验证
+- `references/command-flow.md` — 7 种标准流程：闭环验证、安全检查、功能修改、失败诊断、只读验证、IO 测试闭环、动态 PVI 读写
 - `references/verification.md` — OPC UA/PVI 白名单节点、读取策略、报告格式
 
 ## 下一步
@@ -380,7 +368,6 @@ M7：Logger 日志读取（已实现，2026-05-26 验证）。
    - `logger.allowed_modules`
    - `logger.blocked_modules`
 5. 输出日志到 `var/logger/*`，MCP 只返回路径和摘要，不直接输出大段 HTML/CSV 内容。
-6. 测试报告归档在 `docs/PLC_LOGGER_READ_TEST_REPORT.md`。
 
 已验证命令：
 
@@ -405,4 +392,3 @@ M7 安全边界：
 详细计划见：
 
 - `docs/PLC_TOOLCHAIN_IMPLEMENTATION_PLAN.md`
-- `docs/PLC_MCP_SKILL_PROMPT_ROADMAP.md`

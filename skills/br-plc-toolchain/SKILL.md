@@ -93,7 +93,7 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 3. plc_check_download       → 兼容性判定
 ```
 
-### M6 输入输出测试流程（待实现）
+### M6 输入输出测试流程
 
 ```
 1. plc_build_project(build_ruc_package=true)       → 构建 + 生成包
