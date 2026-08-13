@@ -7,6 +7,7 @@ import pytest
 from br_plc_toolchain.backends.pvi.manager import PviSessionManager
 from br_plc_toolchain.backends.pvi.models import PviTarget, VariableRef
 from br_plc_toolchain.backends.pvi.values import coerce_write_value, json_safe, values_equal
+from br_plc_toolchain.backends.pvi.worker import PviWorker, is_pvi_transport_error
 
 
 class FakeWorker:
@@ -27,6 +28,22 @@ class FakeWorker:
 
     def call(self, operation: str, **arguments):
         return {"operation": operation, "target": self.target.name, **arguments}
+
+
+class ReconnectingFakeWorker(FakeWorker):
+    calls = 0
+
+    def call(self, operation: str, **arguments):
+        ReconnectingFakeWorker.calls += 1
+        if ReconnectingFakeWorker.calls == 1:
+            raise RuntimeError("Pvi-Error 12059 : Communication timeout")
+        return super().call(operation, **arguments)
+
+
+class StuckFakeWorker(ReconnectingFakeWorker):
+    def close(self) -> None:
+        self.closed = True
+        self.running = True
 
 
 def test_variable_ref_validation_and_canonical_name() -> None:
@@ -76,3 +93,64 @@ def test_session_manager_rejects_mixed_pvi_dll_families() -> None:
     manager.close_all()
     manager.get(PviTarget(name="as6", ip="127.0.0.2", pvi_dll_path="C:/PVI6"))
     manager.close_all()
+
+
+def test_session_manager_reconnects_once_for_read_transport_failure() -> None:
+    FakeWorker.created = 0
+    ReconnectingFakeWorker.calls = 0
+    target = PviTarget(name="plc", ip="192.168.50.233")
+    manager = PviSessionManager(worker_factory=ReconnectingFakeWorker)  # type: ignore[arg-type]
+    result = manager.call(target, "read", ref=VariableRef(name="bEnable", task="Main"))
+    assert result["operation"] == "read"
+    assert ReconnectingFakeWorker.calls == 2
+    assert FakeWorker.created == 2
+
+
+def test_session_manager_does_not_retry_write_transport_failure() -> None:
+    ReconnectingFakeWorker.calls = 0
+    target = PviTarget(name="plc", ip="192.168.50.233")
+    manager = PviSessionManager(worker_factory=ReconnectingFakeWorker)  # type: ignore[arg-type]
+    with pytest.raises(RuntimeError, match="12059"):
+        manager.call(target, "write", ref=VariableRef(name="bEnable", task="Main"), value=True)
+    assert ReconnectingFakeWorker.calls == 1
+
+
+def test_session_manager_does_not_overlap_a_stuck_native_operation() -> None:
+    FakeWorker.created = 0
+    ReconnectingFakeWorker.calls = 0
+    target = PviTarget(name="plc", ip="192.168.50.233")
+    manager = PviSessionManager(worker_factory=StuckFakeWorker)  # type: ignore[arg-type]
+    with pytest.raises(RuntimeError, match="PVI_WORKER_DIRTY"):
+        manager.call(target, "read", ref=VariableRef(name="bEnable", task="Main"))
+    assert FakeWorker.created == 1
+
+
+def test_worker_health_does_not_query_native_properties_while_disconnected() -> None:
+    worker = PviWorker(PviTarget(name="plc", ip="192.168.50.233"))
+    worker._connection = object()  # type: ignore[attr-defined]
+    worker._cpu = object()  # type: ignore[attr-defined]
+    result = worker._health()  # type: ignore[attr-defined]
+    assert result["ok"] is False
+    assert result["cpu_status"] == {"ok": False, "error": "PVI CPU is not connected"}
+
+
+def test_batch_timeout_scales_with_variable_link_budget() -> None:
+    worker = PviWorker(
+        PviTarget(
+            name="plc",
+            ip="192.168.50.233",
+            request_timeout_s=1,
+            manager_timeout_s=5,
+            startup_wait_s=5,
+            variable_link_wait_s=0.25,
+        )
+    )
+    timeout = worker._operation_timeout(  # type: ignore[attr-defined]
+        "read_many", {"refs": [VariableRef(name=f"v{i}", task="Main") for i in range(64)]}
+    )
+    assert timeout >= 34
+
+
+def test_transport_error_classifier_handles_manager_timeout() -> None:
+    assert is_pvi_transport_error(RuntimeError("Pvi-Error 12059 : Communication timeout"))
+    assert not is_pvi_transport_error(RuntimeError("Pvi-Error 11033 : Object not found"))

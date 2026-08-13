@@ -19,6 +19,19 @@ from .values import coerce_write_value, json_safe, values_equal
 LOG = logging.getLogger(__name__)
 _GENERATION_LOCK = threading.Lock()
 _GENERATION_COUNTER = 0
+_PVI_TRANSPORT_MARKERS = (
+    "Pvi-Error 12059",
+    "Pvi-Error 12060",
+    "Pvi-Error 11021",
+    "PVI_OPERATION_TIMEOUT",
+)
+
+
+def is_pvi_transport_error(exc: BaseException) -> bool:
+    """Return whether a failure makes the current PVI connection unreliable."""
+
+    message = str(exc)
+    return any(marker in message for marker in _PVI_TRANSPORT_MARKERS)
 
 
 def _next_connection_generation() -> int:
@@ -91,18 +104,35 @@ class PviWorker:
             raise RuntimeError(f"PVI worker for {self.target.name} is not running")
         future: Future[Any] = Future()
         self._commands.put(_Command(operation, arguments, future))
+        timeout_s = self._operation_timeout(operation, arguments)
         try:
-            return future.result(timeout=self.target.request_timeout_s)
+            return future.result(timeout=timeout_s)
         except FutureTimeoutError as exc:
             self._dirty = True
             self._stop.set()
-            future.cancel()
-            raise TimeoutError(f"PVI_OPERATION_TIMEOUT: operation {operation!r} timed out; target state is unknown") from exc
+            # The native PVI call cannot be cancelled safely once it has
+            # started.  Leave the Future intact so the owner thread can finish
+            # normally, then dispose of this dirty worker.
+            raise TimeoutError(
+                f"PVI_OPERATION_TIMEOUT: operation {operation!r} timed out after "
+                f"{timeout_s:.1f}s; target state is unknown"
+            ) from exc
+
+    def _operation_timeout(self, operation: str, arguments: dict[str, Any]) -> float:
+        timeout_s = float(self.target.request_timeout_s)
+        if operation == "read_many":
+            refs = arguments.get("refs") or []
+            link_budget = len(refs) * (self.target.variable_link_wait_s + 0.10)
+            timeout_s = max(
+                timeout_s,
+                self.target.manager_timeout_s + self.target.startup_wait_s + link_budget + 2.0,
+            )
+        return min(timeout_s, 60.0)
 
     def _run(self) -> None:
         try:
             self._initialize_pvi()
-            self._pump_for(self.target.startup_wait_s)
+            self._pump_until_cpu_ready(self.target.startup_wait_s)
         except BaseException as exc:
             self._startup_error = exc
             LOG.exception("PVI initialization failed for %s", self.target.name)
@@ -137,6 +167,9 @@ class PviWorker:
                     )
                 except BaseException as exc:
                     command.future.set_exception(exc)
+                    if is_pvi_transport_error(exc):
+                        self._dirty = True
+                        self._stop.set()
                 self._do_events()
         finally:
             self._cleanup()
@@ -189,15 +222,25 @@ class PviWorker:
             self._do_events()
             time.sleep(self.target.event_poll_s)
 
+    def _pump_until_cpu_ready(self, seconds: float) -> None:
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline and not self._stop.is_set():
+            self._do_events()
+            if self._manager_connected and self._cpu_connected:
+                return
+            time.sleep(self.target.event_poll_s)
+
     @staticmethod
     def _safe_get(getter: Callable[[], Any]) -> dict[str, Any]:
         try:
             return {"ok": True, "value": json_safe(getter())}
         except Exception as exc:
+            if is_pvi_transport_error(exc):
+                raise
             return {"ok": False, "error": str(exc)}
 
     def _health(self) -> dict[str, Any]:
-        return {
+        result = {
             "ok": self._cpu_connected and self._last_event_error is None,
             "target": self.target.name,
             "ip": self.target.ip,
@@ -208,20 +251,44 @@ class PviWorker:
             "cpu_connected": self._cpu_connected,
             "last_cpu_error": self._last_cpu_error,
             "last_event_error": self._last_event_error,
-            "license": self._safe_get(lambda: self._connection.license),
-            "cpu_type": self._safe_get(
-                lambda: getattr(self._cpu, "type", None) or getattr(self._cpu, "cpuType", None)
-            ),
-            "order_number": self._safe_get(
-                lambda: getattr(self._cpu, "orderNumber", None) or getattr(self._cpu, "order_number", None)
-            ),
-            "ar_version": self._safe_get(lambda: self._cpu.version),
-            "cpu_status": self._safe_get(lambda: self._cpu.status),
-            "cpu_version": self._safe_get(lambda: self._cpu.version),
-            "cpu_time": self._safe_get(lambda: self._cpu.time),
             "cached_tasks": len(self._tasks),
             "cached_variables": len(self._variables),
         }
+        if not self._manager_connected or not self._cpu_connected:
+            unavailable = {"ok": False, "error": "PVI CPU is not connected"}
+            result.update(
+                {
+                    name: dict(unavailable)
+                    for name in (
+                        "license",
+                        "cpu_type",
+                        "order_number",
+                        "ar_version",
+                        "cpu_status",
+                        "cpu_version",
+                        "cpu_time",
+                    )
+                }
+            )
+            return result
+        result.update(
+            {
+                "license": self._safe_get(lambda: self._connection.license),
+                "cpu_type": self._safe_get(
+                    lambda: getattr(self._cpu, "type", None)
+                    or getattr(self._cpu, "cpuType", None)
+                ),
+                "order_number": self._safe_get(
+                    lambda: getattr(self._cpu, "orderNumber", None)
+                    or getattr(self._cpu, "order_number", None)
+                ),
+                "ar_version": self._safe_get(lambda: self._cpu.version),
+                "cpu_status": self._safe_get(lambda: self._cpu.status),
+                "cpu_version": self._safe_get(lambda: self._cpu.version),
+                "cpu_time": self._safe_get(lambda: self._cpu.time),
+            }
+        )
+        return result
 
     def _list_tasks(self) -> dict[str, Any]:
         tasks = [item for item in self._cpu.tasks if item]
@@ -308,11 +375,23 @@ class PviWorker:
 
     def _read_many(self, refs: list[VariableRef]) -> dict[str, Any]:
         results: list[dict[str, Any]] = []
-        for ref in refs:
+        for index, ref in enumerate(refs):
             try:
                 results.append(self._read(ref))
             except Exception as exc:
                 results.append({"ok": False, **self._ref_dict(ref), "error": str(exc)})
+                if is_pvi_transport_error(exc):
+                    for remaining in refs[index + 1 :]:
+                        results.append(
+                            {
+                                "ok": False,
+                                **self._ref_dict(remaining),
+                                "error": "PVI connection became unavailable during batch read",
+                            }
+                        )
+                    raise RuntimeError(
+                        f"PVI_CONNECTION_LOST: batch read aborted after {ref.canonical}: {exc}"
+                    ) from exc
         return {"ok": all(item["ok"] for item in results), "results": results}
 
     def _write(self, ref: VariableRef, value: Any) -> dict[str, Any]:

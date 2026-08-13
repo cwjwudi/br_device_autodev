@@ -92,6 +92,10 @@ def build_schema(
 
 
 RUNTIME_TARGET_PROPERTIES: dict[str, Any] = {
+    "environment": {
+        "type": "string",
+        "description": "Optional named runtime environment used for first discovery.",
+    },
     "target": {
         "type": "string",
         "description": "Runtime target name created during online discovery.",
@@ -383,6 +387,23 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         ),
     },
     {
+        "name": "plc_read_pvi_batch",
+        "description": "Read up to 64 explicitly named PLC variables in one compact request. Runtime uses the persistent PVI worker; legacy is retained only for compatibility.",
+        "inputSchema": object_schema(
+            {
+                "backend": {"type": "string", "enum": ["runtime", "legacy"], "default": "runtime"},
+                "ip": {"type": "string", "minLength": 1},
+                "declared_role": {"type": "string", "enum": ["dedicated_test_plc", "production", "arsim"]},
+                "variables": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 64,
+                    "items": {"type": "string", "minLength": 1},
+                },
+            }
+        ),
+    },
+    {
         "name": "plc_read_logger",
         "description": "Read a whitelisted PLC/AR logger module through PVITransfer Logger. Returns report/log paths and a compact summary, never raw HTML/CSV content.",
         "inputSchema": object_schema(
@@ -569,7 +590,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "name": "plc_discover_runtime_target",
         "description": "Connect through persistent PVI without source code or a policy file. Unknown physical targets are read-only; test roles must be explicitly declared.",
-        "inputSchema": runtime_schema({}, "ip"),
+        "inputSchema": runtime_schema({}),
     },
     {
         "name": "plc_runtime_health",
@@ -634,6 +655,53 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         ),
     },
     {
+        "name": "plc_start_pvi_trace",
+        "description": "Start a read-only asynchronous Runtime PVI trace for explicitly named variables. Data is retained locally and queried by trace id.",
+        "inputSchema": runtime_schema(
+            {
+                "variables": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 32,
+                    "items": {"type": "string", "minLength": 1},
+                },
+                "duration_seconds": {"type": "integer", "minimum": 1, "maximum": 600, "default": 30},
+                "interval_ms": {"type": "integer", "minimum": 100, "default": 500},
+            },
+            "variables",
+        ),
+    },
+    {
+        "name": "plc_get_pvi_trace_status",
+        "description": "Return a compact status summary for a Runtime PVI trace.",
+        "inputSchema": runtime_schema(
+            {"trace_id": {"type": "string", "pattern": "^trace-[A-Za-z0-9-]+$"}},
+            "trace_id",
+        ),
+    },
+    {
+        "name": "plc_read_pvi_trace",
+        "description": "Read a bounded time range from a Runtime PVI trace as compact columnar rows.",
+        "inputSchema": runtime_schema(
+            {
+                "trace_id": {"type": "string", "pattern": "^trace-[A-Za-z0-9-]+$"},
+                "from_ms": {"type": "integer", "minimum": 0, "default": 0},
+                "to_ms": {"type": "integer", "minimum": 0},
+                "max_samples": {"type": "integer", "minimum": 1, "maximum": 10000, "default": 1000},
+                "downsample": {"type": "integer", "minimum": 1, "default": 1},
+            },
+            "trace_id",
+        ),
+    },
+    {
+        "name": "plc_stop_pvi_trace",
+        "description": "Stop a Runtime PVI trace and return its final compact summary. Idempotent for completed traces.",
+        "inputSchema": runtime_schema(
+            {"trace_id": {"type": "string", "pattern": "^trace-[A-Za-z0-9-]+$"}},
+            "trace_id",
+        ),
+    },
+    {
         "name": "plc_open_test_session",
         "description": "Open an expiring read-write session for ARsim or an explicitly declared dedicated test PLC.",
         "inputSchema": runtime_schema(
@@ -691,6 +759,7 @@ TOOL_RISK_LEVELS: dict[str, str] = {
     "plc_probe_target": "local_write",
     "plc_read_logger": "local_write",
     "plc_read_pvi": "local_write",
+    "plc_read_pvi_batch": "readonly",
     "plc_reset_test_harness": "target_change",
     "plc_run_arsim_closed_loop": "target_change",
     "plc_run_io_test_case": "target_change",
@@ -707,6 +776,10 @@ TOOL_RISK_LEVELS: dict[str, str] = {
     "plc_list_runtime_variables": "readonly",
     "plc_get_runtime_variable_info": "readonly",
     "plc_read_runtime_variable": "readonly",
+    "plc_start_pvi_trace": "local_write",
+    "plc_get_pvi_trace_status": "readonly",
+    "plc_read_pvi_trace": "readonly",
+    "plc_stop_pvi_trace": "local_write",
     "plc_open_test_session": "target_change",
     "plc_close_test_session": "local_write",
     "plc_write_runtime_variable": "target_change",
@@ -733,6 +806,7 @@ TOOL_BACKENDS: dict[str, str] = {
     "plc_probe_target": "Probe",
     "plc_read_logger": "ReadLogger",
     "plc_read_pvi": "ReadPvi",
+    "plc_read_pvi_batch": "persistent PVI runtime or legacy ReadPvi adapter",
     "plc_reset_test_harness": "ResetTestHarness",
     "plc_run_arsim_closed_loop": "RunArsimClosedLoop",
     "plc_run_io_test_case": "RunIoTestCase",
@@ -749,6 +823,10 @@ TOOL_BACKENDS: dict[str, str] = {
     "plc_list_runtime_variables": "persistent PVI runtime",
     "plc_get_runtime_variable_info": "persistent PVI runtime",
     "plc_read_runtime_variable": "persistent PVI runtime",
+    "plc_start_pvi_trace": "Runtime PVI TraceManager",
+    "plc_get_pvi_trace_status": "Runtime PVI TraceManager",
+    "plc_read_pvi_trace": "Runtime PVI TraceManager",
+    "plc_stop_pvi_trace": "Runtime PVI TraceManager",
     "plc_open_test_session": "runtime test-session policy",
     "plc_close_test_session": "runtime test-session policy",
     "plc_write_runtime_variable": "persistent PVI runtime + policy",

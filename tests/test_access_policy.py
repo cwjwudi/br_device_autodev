@@ -166,8 +166,9 @@ class AccessPolicyTests(unittest.TestCase):
 
         self.assertEqual(1, completed.returncode)
         payload = json.loads(completed.stdout)
-        self.assertEqual("whitelist", payload["access_policy"]["mode"])
         self.assertIn("blocked_name_patterns", " ".join(payload["errors"]))
+        self.assertNotIn("access_policy", payload)
+        self.assertNotIn("requested_variables", payload)
 
     def test_powershell_has_no_duplicate_policy_engine(self) -> None:
         script = (TOOLS_DIR / "plc_toolchain.ps1").read_text(encoding="utf-8-sig")

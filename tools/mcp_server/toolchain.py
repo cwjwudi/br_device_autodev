@@ -32,6 +32,7 @@ DEFAULT_TOOLCHAINS_PATH = "config\\toolchains\\toolchains.json"
 
 _RUNTIME_SERVICE = None
 _RUNTIME_SERVICE_LOCK = threading.Lock()
+_TRACE_MANAGER = None
 _ACTIVE_PROCESSES: dict[str, int] = {}
 _CANCELLED_OPERATIONS: set[str] = set()
 _PROCESS_LOCK = threading.RLock()
@@ -50,12 +51,28 @@ def runtime_pvi_service():
 
 
 def close_runtime_pvi_service() -> None:
-    global _RUNTIME_SERVICE
+    global _RUNTIME_SERVICE, _TRACE_MANAGER
     with _RUNTIME_SERVICE_LOCK:
         service = _RUNTIME_SERVICE
+        trace_manager = _TRACE_MANAGER
         _RUNTIME_SERVICE = None
+        _TRACE_MANAGER = None
+    if trace_manager is not None:
+        trace_manager.close()
     if service is not None:
         service.close()
+
+
+def pvi_trace_manager():
+    global _TRACE_MANAGER
+    if _TRACE_MANAGER is None:
+        service = runtime_pvi_service()
+        with _RUNTIME_SERVICE_LOCK:
+            if _TRACE_MANAGER is None:
+                from br_plc_toolchain.services.pvi_trace import TraceManager
+
+                _TRACE_MANAGER = TraceManager(service)
+    return _TRACE_MANAGER
 
 
 def set_operation_id(operation_id: str):
@@ -484,7 +501,7 @@ def summarize(command: str, data: dict[str, Any]) -> str:
         return "; ".join(str(r) for r in reasons) or "download check failed"
     if command == "ReadPvi":
         variables = data.get("variables") or []
-        ok_count = sum(1 for item in variables if item.get("ok"))
+        ok_count = sum(1 for item in variables if "error" not in item)
         return f"read {ok_count}/{len(variables)} PVI variables"
     if command == "ReadLogger":
         if data.get("ok"):
@@ -733,11 +750,25 @@ def plc_probe_target(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def plc_read_pvi(arguments: dict[str, Any]) -> dict[str, Any]:
+    """Compatibility wrapper for the legacy PVI CLI read shape."""
     options = resolve_call_options(arguments, default_target="arsim")
     target = options["target"]
     pvi_variables = arguments.get("pvi_variables")
     if pvi_variables is not None and not isinstance(pvi_variables, list):
         raise ValueError("pvi_variables must be an array of strings.")
+    if pvi_variables:
+        batch = _legacy_read_batch({**arguments, "variables": pvi_variables}, target=target)
+        compact_variables = [
+            {"name": name, **item} for name, item in batch["values"].items()
+        ] + [
+            {"name": name, "error": error} for name, error in batch["errors"].items()
+        ]
+        data = {
+            "command": "ReadPvi",
+            "ok": batch["ok"],
+            "variables": compact_variables,
+        }
+        return wrap_result("plc_read_pvi", "ReadPvi", data, target)
     data = run_plc_toolchain(
         "ReadPvi",
         target=target,
@@ -750,6 +781,174 @@ def plc_read_pvi(arguments: dict[str, Any]) -> dict[str, Any]:
         timeout_seconds=int(arguments.get("timeout_seconds") or 60),
     )
     return wrap_result("plc_read_pvi", "ReadPvi", data, target)
+
+
+def _parse_variable_specs(specs: Any, *, limit: int) -> list[Any]:
+    from br_plc_toolchain.backends.pvi import parse_variable_ref
+
+    if not isinstance(specs, list) or not specs:
+        raise ValueError("variables must be a non-empty array of strings.")
+    if len(specs) > limit:
+        raise ValueError(f"variables may contain at most {limit} items.")
+    refs = []
+    seen: set[str] = set()
+    for item in specs:
+        if not isinstance(item, str):
+            raise ValueError("variables must contain only strings.")
+        ref = parse_variable_ref(item)
+        if ref.canonical not in seen:
+            seen.add(ref.canonical)
+            refs.append(ref)
+    return refs
+
+
+def _dedupe_variable_strings(specs: Any, *, limit: int) -> list[str]:
+    if not isinstance(specs, list) or not specs:
+        raise ValueError("variables must be a non-empty array of strings.")
+    if len(specs) > limit:
+        raise ValueError(f"variables may contain at most {limit} items.")
+    result: list[str] = []
+    seen: set[str] = set()
+    for item in specs:
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError("variables must contain only non-empty strings.")
+        value = item.strip()
+        if value not in seen:
+            seen.add(value)
+            result.append(value)
+    return result
+
+
+def _legacy_read_batch(arguments: dict[str, Any], *, target: str) -> dict[str, Any]:
+    options = resolve_call_options(arguments, default_target="arsim")
+    pvi_variables = arguments.get("variables")
+    if pvi_variables is None:
+        pvi_variables = arguments.get("pvi_variables")
+    if not isinstance(pvi_variables, list) or not pvi_variables:
+        raise ValueError("variables must be a non-empty array of strings for the legacy backend.")
+    environment = load_environment(arguments.get("environment"))
+    ip = str(arguments.get("ip") or environment.get("ip") or "").strip()
+    if ip:
+        # The compatibility backend intentionally reuses the small legacy
+        # reader without routing through PowerShell's project whitelist. MCP
+        # already has an explicit variable list and the runtime profile is the
+        # authoritative read policy for dynamically discovered targets.
+        from br_plc_toolchain.config import resolve_toolchain
+        from br_plc_toolchain.config.loader import create_ephemeral_target_config
+        from br_plc_toolchain.policy import RuntimePolicy
+
+        role = arguments.get("declared_role") or environment.get("declared_role")
+        config = create_ephemeral_target_config(ip=ip, name=target, declared_role=role)
+        policy = RuntimePolicy()
+        denied: dict[str, str] = {}
+        allowed: list[str] = []
+        for item in pvi_variables:
+            name = str(item)
+            decision = policy.authorize_read(config=config, variable=name)
+            if decision.allowed:
+                allowed.append(name)
+            else:
+                denied[name] = "; ".join(decision.reasons)
+
+        data: dict[str, Any] = {"ok": False, "variables": []}
+        if allowed:
+            selected = resolve_toolchain(
+                options["toolchain"] or None,
+                registry_path=options["toolchains_path"],
+            )
+            command = [
+                sys.executable,
+                str(REPO_ROOT / "tools" / "pvi_read.py"),
+                "--ip",
+                ip,
+                "--cpu-name",
+                target,
+                "--connect-wait-ms",
+                "3000",
+                "--variable-wait-ms",
+                "300",
+            ]
+            if selected.pvi_dll_dir:
+                command.extend(["--pvi-dll-dir", str(selected.pvi_dll_dir)])
+            for name in allowed:
+                command.extend(["--variable", name])
+            completed = subprocess.run(
+                command,
+                cwd=REPO_ROOT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                timeout=int(arguments.get("timeout_seconds") or 60),
+                check=False,
+            )
+            try:
+                data = json.loads((completed.stdout or "").strip())
+            except json.JSONDecodeError as exc:
+                raise ToolchainError(
+                    f"Legacy PVI reader returned invalid JSON: {exc}",
+                    stdout=completed.stdout,
+                    stderr=completed.stderr,
+                    exit_code=completed.returncode,
+                ) from exc
+        data.setdefault("variables", [])
+        data["variables"].extend(
+            {"name": name, "error": error} for name, error in denied.items()
+        )
+        data["ok"] = bool(data["variables"]) and all(
+            not item.get("error") for item in data["variables"]
+        )
+    else:
+        data = run_plc_toolchain(
+            "ReadPvi",
+            target=target,
+            project_path=options["project_path"],
+            config=options["config"],
+            targets_path=options["targets_path"],
+            toolchain=options["toolchain"],
+            toolchains_path=options["toolchains_path"],
+            pvi_variables=[str(item) for item in pvi_variables],
+            timeout_seconds=int(arguments.get("timeout_seconds") or 60),
+        )
+    values: dict[str, dict[str, Any]] = {}
+    errors: dict[str, str] = {}
+    for item in data.get("variables") or []:
+        name = str(item.get("name") or item.get("variable") or "")
+        if not name:
+            continue
+        if item.get("error"):
+            errors[name] = str(item["error"])
+        else:
+            values[name] = {
+                "value": item.get("value"),
+                "type": item.get("type") or "unknown",
+            }
+    for index, error in enumerate(data.get("errors") or []):
+        errors[f"request[{index}]"] = str(error)
+    return {
+        "ok": bool(data.get("ok")) and not errors,
+        "target": target,
+        "count": len(values) + len(errors),
+        "values": values,
+        "errors": errors,
+    }
+
+
+def plc_read_pvi_batch(arguments: dict[str, Any]) -> dict[str, Any]:
+    backend = str(arguments.get("backend") or "runtime").lower()
+    if backend not in {"runtime", "legacy"}:
+        raise ValueError("backend must be 'runtime' or 'legacy'.")
+    specs = arguments.get("variables")
+    if backend == "runtime":
+        refs = _parse_variable_specs(specs, limit=64)
+        service, target = _ensure_runtime_target(arguments)
+        return service.read_many(target, refs)
+    variable_specs = _dedupe_variable_strings(specs, limit=64)
+    options = resolve_call_options(arguments, default_target="arsim")
+    return _legacy_read_batch(
+        {**arguments, "variables": variable_specs},
+        target=options["target"],
+    )
 
 
 def plc_read_logger(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -1440,19 +1639,24 @@ def plc_search_variables(arguments: dict[str, Any]) -> dict[str, Any]:
 
 def _ensure_runtime_target(arguments: dict[str, Any]) -> tuple[Any, str]:
     service = runtime_pvi_service()
-    target = str(arguments.get("target") or "").strip()
-    ip = arguments.get("ip")
+    environment = load_environment(arguments.get("environment"))
+    target = str(arguments.get("target") or environment.get("target") or "").strip()
+    ip = arguments.get("ip") or environment.get("ip")
+    declared_role = arguments.get("declared_role") or environment.get("declared_role")
+    selected_toolchain_id = str(arguments.get("toolchain") or environment.get("toolchain") or "")
     if ip:
         from br_plc_toolchain.config import resolve_toolchain
 
         selected_toolchain = resolve_toolchain(
-            str(arguments.get("toolchain") or "") or None,
-            registry_path=arguments.get("toolchains_path") or DEFAULT_TOOLCHAINS_PATH,
+            selected_toolchain_id or None,
+            registry_path=arguments.get("toolchains_path")
+            or environment.get("toolchains_path")
+            or DEFAULT_TOOLCHAINS_PATH,
         )
         registration = service.register_ephemeral_target(
             ip=str(ip),
             name=target or None,
-            declared_role=arguments.get("declared_role"),
+            declared_role=declared_role,
             pvi_dll_path=(
                 str(selected_toolchain.pvi_dll_dir)
                 if selected_toolchain.pvi_dll_dir
@@ -1521,6 +1725,36 @@ def plc_read_runtime_variable(arguments: dict[str, Any]) -> dict[str, Any]:
     return service.read(target, _runtime_ref(arguments))
 
 
+def plc_start_pvi_trace(arguments: dict[str, Any]) -> dict[str, Any]:
+    refs = _parse_variable_specs(arguments.get("variables"), limit=32)
+    service, target = _ensure_runtime_target(arguments)
+    del service  # TraceManager owns the service reference and its worker lifecycle.
+    return pvi_trace_manager().start(
+        target,
+        refs,
+        duration_seconds=int(arguments.get("duration_seconds") or 30),
+        interval_ms=int(arguments.get("interval_ms") or 500),
+    )
+
+
+def plc_get_pvi_trace_status(arguments: dict[str, Any]) -> dict[str, Any]:
+    return pvi_trace_manager().status(str(arguments.get("trace_id") or ""))
+
+
+def plc_read_pvi_trace(arguments: dict[str, Any]) -> dict[str, Any]:
+    return pvi_trace_manager().read(
+        str(arguments.get("trace_id") or ""),
+        from_ms=int(arguments.get("from_ms") or 0),
+        to_ms=(int(arguments["to_ms"]) if arguments.get("to_ms") is not None else None),
+        max_samples=int(arguments.get("max_samples") or 1000),
+        downsample=int(arguments.get("downsample") or 1),
+    )
+
+
+def plc_stop_pvi_trace(arguments: dict[str, Any]) -> dict[str, Any]:
+    return pvi_trace_manager().stop(str(arguments.get("trace_id") or ""))
+
+
 def plc_open_test_session(arguments: dict[str, Any]) -> dict[str, Any]:
     service, target = _ensure_runtime_target(arguments)
     return service.open_test_session(
@@ -1561,6 +1795,7 @@ TOOLS = {
     "plc_download_ruc": plc_download_ruc,
     "plc_verify_opcua": plc_verify_opcua,
     "plc_read_pvi": plc_read_pvi,
+    "plc_read_pvi_batch": plc_read_pvi_batch,
     "plc_read_logger": plc_read_logger,
     "plc_write_pvi": plc_write_pvi,
     "plc_run_arsim_closed_loop": plc_run_arsim_closed_loop,
@@ -1582,6 +1817,10 @@ TOOLS = {
     "plc_list_runtime_variables": plc_list_runtime_variables,
     "plc_get_runtime_variable_info": plc_get_runtime_variable_info,
     "plc_read_runtime_variable": plc_read_runtime_variable,
+    "plc_start_pvi_trace": plc_start_pvi_trace,
+    "plc_get_pvi_trace_status": plc_get_pvi_trace_status,
+    "plc_read_pvi_trace": plc_read_pvi_trace,
+    "plc_stop_pvi_trace": plc_stop_pvi_trace,
     "plc_open_test_session": plc_open_test_session,
     "plc_close_test_session": plc_close_test_session,
     "plc_write_runtime_variable": plc_write_runtime_variable,

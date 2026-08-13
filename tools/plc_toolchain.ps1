@@ -78,6 +78,140 @@ function Resolve-TransferPilPath {
     return Join-Path $packageDir "Transfer.pil"
 }
 
+function Get-ProjectConfigurationMetadata {
+    $report = [ordered]@{
+        automation_studio_config = $Config
+        configuration_id = $null
+        configuration_id_source = "unavailable"
+        hardware_path = $null
+    }
+    if (-not $ProjectPath -or -not $Config) {
+        return [pscustomobject]$report
+    }
+
+    $resolvedProject = Resolve-RepoPath $ProjectPath
+    $projectDir = if (Test-Path -LiteralPath $resolvedProject -PathType Container) {
+        $resolvedProject
+    }
+    else {
+        Split-Path -Parent $resolvedProject
+    }
+    $hardwarePath = Join-Path $projectDir (Join-Path "Physical" (Join-Path $Config "Hardware.hw"))
+    $report.hardware_path = $hardwarePath
+    if (-not (Test-Path -LiteralPath $hardwarePath -PathType Leaf)) {
+        return [pscustomobject]$report
+    }
+
+    [xml]$hardware = Get-Content -LiteralPath $hardwarePath -Encoding UTF8
+    $configurationNode = $hardware.SelectSingleNode("//*[local-name()='Parameter' and @ID='ConfigurationID']")
+    if ($configurationNode -and $configurationNode.Value) {
+        $report.configuration_id = [string]$configurationNode.Value
+        $report.configuration_id_source = "project_hardware"
+    }
+    return [pscustomobject]$report
+}
+
+function Test-ArsimProjectBinding {
+    param(
+        [Parameter(Mandatory = $true)]$TargetConfig,
+        [Parameter(Mandatory = $true)]$ProjectMetadata
+    )
+
+    if ($TargetConfig.role -notmatch "arsim" -or -not $TargetConfig.arsim_loader_exe -or -not $ProjectPath -or -not $Config) {
+        return $false
+    }
+    if (-not $ProjectMetadata.configuration_id) {
+        return $false
+    }
+
+    $resolvedProject = Resolve-RepoPath $ProjectPath
+    $projectDir = if (Test-Path -LiteralPath $resolvedProject -PathType Container) {
+        $resolvedProject
+    }
+    else {
+        Split-Path -Parent $resolvedProject
+    }
+    $simulationDir = [System.IO.Path]::GetFullPath((Join-Path $projectDir (Join-Path "Temp\Simulation" $Config))).TrimEnd('\') + '\'
+    $loaderPath = [System.IO.Path]::GetFullPath((Resolve-RepoPath ([string]$TargetConfig.arsim_loader_exe)))
+    return $loaderPath.StartsWith($simulationDir, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+function Get-BoundArsimMediaMetadata {
+    param(
+        [Parameter(Mandatory = $true)]$TargetConfig,
+        [Parameter(Mandatory = $true)]$ProjectMetadata
+    )
+
+    $report = [ordered]@{
+        bound = $false
+        media_root = $null
+        config_version = $null
+        config_version_source = "unavailable"
+        partition_layout = $null
+        partition_layout_source = "unavailable"
+        partition_layout_path = $null
+    }
+    if (-not (Test-ArsimProjectBinding -TargetConfig $TargetConfig -ProjectMetadata $ProjectMetadata)) {
+        return [pscustomobject]$report
+    }
+
+    $loaderPath = [System.IO.Path]::GetFullPath((Resolve-RepoPath ([string]$TargetConfig.arsim_loader_exe)))
+    $mediaRoot = Split-Path -Parent $loaderPath
+    $report.bound = $true
+    $report.media_root = $mediaRoot
+
+    $versionPath = Join-Path $mediaRoot "RPSHD\SYSROM\prjver.sys"
+    if (Test-Path -LiteralPath $versionPath -PathType Leaf) {
+        $versionBytes = [System.IO.File]::ReadAllBytes($versionPath)
+        $versionText = [System.Text.Encoding]::ASCII.GetString($versionBytes).Split([char]0)[0].Trim()
+        if ($versionText) {
+            $report.config_version = $versionText
+            $report.config_version_source = "bound_arsim_media"
+        }
+    }
+
+    $partitionPath = Join-Path $mediaRoot "SYSTEM\TOC\fscfg.xml"
+    if (Test-Path -LiteralPath $partitionPath -PathType Leaf) {
+        $report.partition_layout = (Get-FileHash -LiteralPath $partitionPath -Algorithm SHA256).Hash
+        $report.partition_layout_source = "bound_arsim_media_sha256"
+        $report.partition_layout_path = $partitionPath
+    }
+    return [pscustomobject]$report
+}
+
+function Get-TransferPolicy {
+    $pilPath = Resolve-TransferPilPath
+    $report = [ordered]@{
+        path = $pilPath
+        available = $false
+        install_mode = $null
+        install_restriction = $null
+        ignore_version = $null
+    }
+    if (-not (Test-Path -LiteralPath $pilPath -PathType Leaf)) {
+        return [pscustomobject]$report
+    }
+
+    $content = Get-Content -LiteralPath $pilPath -Raw -Encoding UTF8
+    $transferMatch = [regex]::Match($content, 'Transfer\s+"[^"]+"\s*,\s*"([^"]*)"', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    if (-not $transferMatch.Success) {
+        return [pscustomobject]$report
+    }
+
+    $options = $transferMatch.Groups[1].Value
+    foreach ($optionMatch in [regex]::Matches($options, '(?<name>[A-Za-z][A-Za-z0-9]*)=(?<value>[^\s"]+)')) {
+        $name = $optionMatch.Groups['name'].Value
+        $value = $optionMatch.Groups['value'].Value
+        switch -Regex ($name) {
+            '^InstallMode$' { $report.install_mode = $value }
+            '^InstallRestriction$' { $report.install_restriction = $value }
+            '^IgnoreVersion$' { $report.ignore_version = ($value -eq '1' -or $value -ieq 'true') }
+        }
+    }
+    $report.available = [bool]$report.install_mode
+    return [pscustomobject]$report
+}
+
 function Read-ToolchainConfig {
     $path = Resolve-RepoPath $TargetsPath
     return Get-Content -LiteralPath $path -Encoding UTF8 | ConvertFrom-Json
@@ -342,19 +476,19 @@ function Invoke-ApplicationReadiness {
             actual = $Probe.plc_status
         }
         b_alive = [ordered]@{
-            ok = [bool]($alive -and $alive.ok -and $aliveValue)
+            ok = [bool]($alive -and -not $alive.error -and $aliveValue)
             variable = $readiness.b_alive_variable
             expected = $true
             actual = if ($alive) { $alive.value } else { $null }
         }
         interface_version = [ordered]@{
-            ok = [bool]($interface -and $interface.ok -and ([string]$interface.value -eq [string]$readiness.expected_interface_version))
+            ok = [bool]($interface -and -not $interface.error -and ([string]$interface.value -eq [string]$readiness.expected_interface_version))
             variable = $readiness.interface_version_variable
             expected = $readiness.expected_interface_version
             actual = if ($interface) { $interface.value } else { $null }
         }
         stage_marker = [ordered]@{
-            ok = [bool]($stageMarker -and $stageMarker.ok -and ([string]$stageMarker.value -eq [string]$readiness.expected_stage))
+            ok = [bool]($stageMarker -and -not $stageMarker.error -and ([string]$stageMarker.value -eq [string]$readiness.expected_stage))
             variable = $readiness.stage_variable
             expected = $readiness.expected_stage
             actual = if ($stageMarker) { $stageMarker.value } else { $null }
@@ -591,6 +725,9 @@ function Invoke-Probe {
     $cfg = Read-ToolchainConfig
     $toolchainConfig = Get-SelectedToolchain
     $targetConfig = Get-TargetConfig $cfg
+    $projectMetadata = Get-ProjectConfigurationMetadata
+    $isBoundArsimProject = Test-ArsimProjectBinding -TargetConfig $targetConfig -ProjectMetadata $projectMetadata
+    $arsimMediaMetadata = Get-BoundArsimMediaMetadata -TargetConfig $targetConfig -ProjectMetadata $projectMetadata
     $wrapper = Resolve-RepoPath "scripts\windows\invoke-pvitransfer-silent.ps1"
     $pviTransfer = Resolve-RepoPath $toolchainConfig.pvi.transfer_exe
     $pil = New-ProbePil $targetConfig.ip
@@ -617,12 +754,19 @@ function Invoke-Probe {
             target = $Target
             ip = $targetConfig.ip
             role = $targetConfig.role
+            automation_studio_config = if ($Config) { $Config } else { $null }
             cpu_type = $cpuType
             order_number = if ($targetConfig.order_number) { [string]$targetConfig.order_number } else { $null }
             runtime_type = if ($targetConfig.runtime_type) { [string]$targetConfig.runtime_type } elseif ($targetConfig.role -match "arsim") { "AR Simulation" } else { $null }
-            configuration_id = if ($targetConfig.configuration_id) { [string]$targetConfig.configuration_id } else { $Config }
-            config_version = if ($targetConfig.config_version) { [string]$targetConfig.config_version } else { $null }
-            partition_layout = if ($targetConfig.partition_layout) { [string]$targetConfig.partition_layout } else { $null }
+            configuration_id = if ($targetConfig.configuration_id) { [string]$targetConfig.configuration_id } else { $null }
+            configuration_id_source = if ($targetConfig.configuration_id) { "target_config" } else { "unavailable" }
+            expected_configuration_id = if ($isBoundArsimProject) { [string]$projectMetadata.configuration_id } else { $null }
+            expected_configuration_id_source = if ($isBoundArsimProject) { [string]$projectMetadata.configuration_id_source } else { "unavailable" }
+            config_version = if ($targetConfig.config_version) { [string]$targetConfig.config_version } elseif ($arsimMediaMetadata.config_version) { [string]$arsimMediaMetadata.config_version } else { $null }
+            config_version_source = if ($targetConfig.config_version) { "target_config" } else { [string]$arsimMediaMetadata.config_version_source }
+            partition_layout = if ($targetConfig.partition_layout) { [string]$targetConfig.partition_layout } elseif ($arsimMediaMetadata.partition_layout) { [string]$arsimMediaMetadata.partition_layout } else { $null }
+            partition_layout_source = if ($targetConfig.partition_layout) { "target_config" } else { [string]$arsimMediaMetadata.partition_layout_source }
+            partition_layout_path = [string]$arsimMediaMetadata.partition_layout_path
             installation_mode = if ($targetConfig.installation_mode) { [string]$targetConfig.installation_mode } else { $null }
             ar_version = $arVersion
             plc_status = Get-PviCommandValue $lines "PLCStatus"
@@ -681,6 +825,21 @@ function Get-PackageInfo {
     }
 
     $info = $xml.ProjectInformation
+    $transferPolicy = Get-TransferPolicy
+    $packagePartitionLayout = [string]$info.PartitionLayout
+    $packagePartitionLayoutSource = if ($packagePartitionLayout) { "project_information" } else { "unavailable" }
+    $packagePartitionLayoutPath = $null
+    if (-not $packagePartitionLayout -and $ProjectPath -and $Config) {
+        $resolvedProject = Resolve-RepoPath $ProjectPath
+        $projectDir = if (Test-Path -LiteralPath $resolvedProject -PathType Container) { $resolvedProject } else { Split-Path -Parent $resolvedProject }
+        $cpuDirectory = Split-Path -Leaf (Split-Path -Parent (Split-Path -Parent $package))
+        $transferPartitionPath = Join-Path $projectDir (Join-Path "Temp\Transfer" (Join-Path $Config (Join-Path $cpuDirectory "FDATA\SYSTEM\TOC\fscfg.xml")))
+        if (Test-Path -LiteralPath $transferPartitionPath -PathType Leaf) {
+            $packagePartitionLayout = (Get-FileHash -LiteralPath $transferPartitionPath -Algorithm SHA256).Hash
+            $packagePartitionLayoutSource = "transfer_payload_sha256"
+            $packagePartitionLayoutPath = $transferPartitionPath
+        }
+    }
     return [pscustomobject][ordered]@{
         command = "DescribePackage"
         ok = $true
@@ -695,11 +854,15 @@ function Get-PackageInfo {
         ar_version = [string]$info.ARVersion
         br_module_system = [string]$info.BRModuleSystem
         additional_zip_file_name_prefix = [string]$info.AdditionalZipFileNamePrefix
-        partition_layout = [string]$info.PartitionLayout
+        partition_layout = $packagePartitionLayout
+        partition_layout_source = $packagePartitionLayoutSource
+        partition_layout_path = $packagePartitionLayoutPath
         partition_requirements = [string]$info.PartitionRequirements
         minimum_partition_layout = [string]$info.MinimumPartitionLayout
-        installation_mode = [string]$info.InstallationMode
+        installation_mode = if ($info.InstallationMode) { [string]$info.InstallationMode } else { [string]$transferPolicy.install_mode }
+        installation_mode_source = if ($info.InstallationMode) { "project_information" } elseif ($transferPolicy.install_mode) { "transfer_pil" } else { "unavailable" }
         required_installation_mode = [string]$info.RequiredInstallationMode
+        transfer_policy = $transferPolicy
     }
 }
 
@@ -730,7 +893,7 @@ function Test-DownloadSafety {
     $errorCodes = New-Object System.Collections.Generic.List[string]
     $isArsimPackage = ($packageInfo.cpu_type -eq "AR000" -or $packageInfo.runtime_type -match "AR Simulation")
     $isArsimTarget = ($targetConfig.role -match "arsim")
-    $targetPartitionLayout = [string]$targetConfig.partition_layout
+    $targetPartitionLayout = if ($probe.partition_layout) { [string]$probe.partition_layout } else { [string]$targetConfig.partition_layout }
     $packagePartitionLayout = if ($packageInfo.partition_layout) {
         [string]$packageInfo.partition_layout
     }
@@ -742,9 +905,11 @@ function Test-DownloadSafety {
     }
     $targetOrderNumber = if ($probe.order_number) { [string]$probe.order_number } else { [string]$targetConfig.order_number }
     $targetRuntimeType = if ($probe.runtime_type) { [string]$probe.runtime_type } elseif ($targetConfig.runtime_type) { [string]$targetConfig.runtime_type } elseif ($isArsimTarget) { "AR Simulation" } else { $null }
-    $targetConfigurationId = if ($probe.configuration_id) { [string]$probe.configuration_id } elseif ($targetConfig.configuration_id) { [string]$targetConfig.configuration_id } else { [string]$Config }
+    $targetConfigurationId = if ($probe.configuration_id) { [string]$probe.configuration_id } elseif ($targetConfig.configuration_id) { [string]$targetConfig.configuration_id } elseif ($probe.expected_configuration_id) { [string]$probe.expected_configuration_id } else { $null }
+    $targetConfigurationIdSource = if ($probe.configuration_id) { [string]$probe.configuration_id_source } elseif ($targetConfig.configuration_id) { "target_config" } elseif ($probe.expected_configuration_id) { [string]$probe.expected_configuration_id_source } else { "unavailable" }
     $targetConfigVersion = if ($probe.config_version) { [string]$probe.config_version } else { [string]$targetConfig.config_version }
     $targetInstallationMode = if ($probe.installation_mode) { [string]$probe.installation_mode } else { [string]$targetConfig.installation_mode }
+    $transferPolicy = $packageInfo.transfer_policy
     $cpuMismatch = [bool]($packageInfo.cpu_type -and $probe.cpu_type -and $packageInfo.cpu_type -ne $probe.cpu_type)
     $orderMismatch = [bool]($packageInfo.order_number -and $targetOrderNumber -and $packageInfo.order_number -ne $targetOrderNumber)
 
@@ -801,9 +966,13 @@ function Test-DownloadSafety {
         $reasons.Add("RUC RuntimeType '$($packageInfo.runtime_type)' does not match target RuntimeType '$targetRuntimeType'.")
     }
 
-    if (-not $packageInfo.configuration_id -or -not $targetConfigurationId) {
+    if (-not $packageInfo.configuration_id) {
         $errorCodes.Add("PACKAGE_METADATA_INCOMPLETE")
-        $reasons.Add("Target and RUC package must provide configuration identifiers.")
+        $reasons.Add("RUC package must provide a configuration identifier.")
+    }
+    elseif (-not $targetConfigurationId) {
+        $errorCodes.Add("TARGET_METADATA_UNKNOWN")
+        $reasons.Add("Target configuration ID is unavailable; it was not inferred from the Automation Studio config name '$Config'.")
     }
     elseif ([string]$packageInfo.configuration_id -ne [string]$targetConfigurationId) {
         $errorCodes.Add("PACKAGE_TARGET_MISMATCH")
@@ -839,9 +1008,23 @@ function Test-DownloadSafety {
     }
 
     $packageInstallationMode = if ($packageInfo.installation_mode) { [string]$packageInfo.installation_mode } else { [string]$packageInfo.required_installation_mode }
-    if (-not $packageInstallationMode -or -not $targetInstallationMode) {
+    $safeTransferPolicy = [bool](
+        $isArsimTarget -and
+        $transferPolicy.available -and
+        $transferPolicy.install_mode -eq "Consistent" -and
+        $transferPolicy.install_restriction -eq "AllowUpdatesWithoutDataLoss"
+    )
+    if (-not $packageInstallationMode) {
         $errorCodes.Add("INSTALLATION_MODE_UNKNOWN")
-        $reasons.Add("RUC package and target configuration must provide installation mode metadata.")
+        $reasons.Add("RUC package or Transfer.pil must provide installation mode metadata.")
+    }
+    elseif ($safeTransferPolicy) {
+        $targetInstallationMode = [string]$transferPolicy.install_mode
+        $warnings.Add("Transfer.pil restricts this ARsim update to Consistent / AllowUpdatesWithoutDataLoss; PVITransfer must reject any update that requires data loss.")
+    }
+    elseif (-not $targetInstallationMode) {
+        $errorCodes.Add("INSTALLATION_MODE_UNKNOWN")
+        $reasons.Add("Target installation mode is unavailable and Transfer.pil does not declare the safe ARsim update policy.")
     }
     elseif ($packageInstallationMode -ne $targetInstallationMode) {
         $errorCodes.Add("INSTALLATION_MODE_MISMATCH")
@@ -865,14 +1048,18 @@ function Test-DownloadSafety {
             order_number = [ordered]@{ package = $packageInfo.order_number; target = $targetOrderNumber; matches = -not $orderMismatch }
             runtime_type = [ordered]@{ package = $packageInfo.runtime_type; target = $targetRuntimeType; matches = [bool]($packageInfo.runtime_type -and $targetRuntimeType -and $packageInfo.runtime_type -eq $targetRuntimeType) }
             ar_version = [ordered]@{ package = $packageInfo.ar_version; target = $probe.ar_version; matches = [bool]($packageInfo.ar_version -and $probe.ar_version -and $packageInfo.ar_version -eq $probe.ar_version) }
-            configuration_id = [ordered]@{ package = $packageInfo.configuration_id; target = $targetConfigurationId; matches = [bool]($packageInfo.configuration_id -and $targetConfigurationId -and $packageInfo.configuration_id -eq $targetConfigurationId) }
-            config_version = [ordered]@{ package = $packageInfo.config_version; target = $targetConfigVersion; matches = [bool]($packageInfo.config_version -and $targetConfigVersion -and $packageInfo.config_version -eq $targetConfigVersion) }
-            installation_mode = [ordered]@{ package = $packageInstallationMode; target = $targetInstallationMode; matches = [bool]($packageInstallationMode -and $targetInstallationMode -and $packageInstallationMode -eq $targetInstallationMode) }
+            configuration_id = [ordered]@{ package = $packageInfo.configuration_id; target = $targetConfigurationId; source = $targetConfigurationIdSource; matches = [bool]($packageInfo.configuration_id -and $targetConfigurationId -and $packageInfo.configuration_id -eq $targetConfigurationId) }
+            config_version = [ordered]@{ package = $packageInfo.config_version; target = $targetConfigVersion; source = if ($probe.config_version_source) { $probe.config_version_source } else { "target_config" }; matches = [bool]($packageInfo.config_version -and $targetConfigVersion -and $packageInfo.config_version -eq $targetConfigVersion) }
+            installation_mode = [ordered]@{ package = $packageInstallationMode; target = $targetInstallationMode; source = if ($safeTransferPolicy) { "transfer_pil" } else { "target_metadata" }; matches = [bool]($packageInstallationMode -and $targetInstallationMode -and $packageInstallationMode -eq $targetInstallationMode) }
         }
         partition_layout = [ordered]@{
             package = $packagePartitionLayout
             target = $targetPartitionLayout
+            package_source = $packageInfo.partition_layout_source
+            target_source = if ($probe.partition_layout_source) { $probe.partition_layout_source } else { "target_config" }
+            matches = [bool]($packagePartitionLayout -and $targetPartitionLayout -and $packagePartitionLayout -eq $targetPartitionLayout)
         }
+        transfer_policy = $transferPolicy
         force_arsim_download = [bool]($ForceArsimMismatch -and $isArsimTarget)
         error_codes = @($errorCodes | Select-Object -Unique)
         reasons = @($reasons)
@@ -1313,11 +1500,7 @@ function Invoke-ReadPvi {
         $report = [ordered]@{
             command = "ReadPvi"
             ok = $false
-            target = $Target
-            executed = $false
-            access_policy = (Get-AuthoritativeAccessPolicy)
             errors = @($accessErrors)
-            requested_variables = @($variables)
         }
         if ($Quiet) {
             return $report
@@ -1352,10 +1535,9 @@ function Invoke-ReadPvi {
     }
     $lines = Get-OutputLines $output
     $report = Convert-JsonProcessOutput -CommandName "ReadPvi" -Lines $lines -ExitCode $exitCode
-    $report | Add-Member -NotePropertyName target -NotePropertyValue $Target -Force
-    $report | Add-Member -NotePropertyName variables_file -NotePropertyValue $variablesFile -Force
-    $report | Add-Member -NotePropertyName access_policy -NotePropertyValue (Get-AuthoritativeAccessPolicy) -Force
-    $report | Add-Member -NotePropertyName dynamic_request -NotePropertyValue $explicitVariables -Force
+    # ReadPvi intentionally returns only compact user-facing values. The
+    # generated variable file and access-policy details stay implementation
+    # details and are not part of the MCP response.
 
     if ($Quiet) {
         return $report

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -41,7 +42,18 @@ class FakeRuntimeService:
         return {"ok": True, "target": target, "variable": ref.canonical, "writable": True}
 
     def read(self, target, ref):
-        return {"ok": True, "target": target, "variable": ref.canonical, "value": False}
+        return {"ok": True, "name": ref.canonical, "value": False, "type": "boolean"}
+
+    def read_many(self, target, refs):
+        return {
+            "ok": True,
+            "target": target,
+            "count": len(refs),
+            "values": {
+                ref.canonical: {"value": False, "type": "boolean"} for ref in refs
+            },
+            "errors": {},
+        }
 
     def open_test_session(self, target, **kwargs):
         return {"ok": True, "session": {"session_id": "test-session", "target": target}}
@@ -82,15 +94,76 @@ def test_runtime_discovery_bootstraps_without_policy_file() -> None:
     assert fake.registration_kwargs["pvi_dll_path"].endswith("PVI6\\Bin")
 
 
+def test_runtime_discovery_accepts_named_environment_without_explicit_ip() -> None:
+    fake = FakeRuntimeService()
+    with patch.object(toolchain, "_RUNTIME_SERVICE", fake):
+        result = call("plc_discover_runtime_target", {"environment": "local_arsim"})
+    assert result["isError"] is False
+    assert fake.registration_kwargs["ip"] == "127.0.0.1"
+    assert fake.registration_kwargs["name"] == "arsim"
+
+
 def test_runtime_variable_tools_use_online_reference() -> None:
     fake = FakeRuntimeService()
     with patch.object(toolchain, "_RUNTIME_SERVICE", fake):
         result = call(
             "plc_read_runtime_variable",
             {"target": "plc", "scope": "task", "task": "Main", "name": "bEnable"},
+    )
+    assert result["isError"] is False
+    assert result["structuredContent"] == {
+        "ok": True,
+        "name": "Main:bEnable",
+        "value": False,
+        "type": "boolean",
+    }
+
+
+def test_runtime_batch_read_returns_compact_map() -> None:
+    fake = FakeRuntimeService()
+    with patch.object(toolchain, "_RUNTIME_SERVICE", fake):
+        result = call(
+            "plc_read_pvi_batch",
+            {
+                "target": "plc",
+                "variables": ["Main:bEnable", "Main:bEnable", "gstAtStatus.stApplication.bAlive"],
+            },
         )
     assert result["isError"] is False
-    assert result["structuredContent"]["variable"] == "Main:bEnable"
+    data = result["structuredContent"]
+    assert data["count"] == 2
+    assert set(data["values"]) == {"Main:bEnable", "gstAtStatus.stApplication.bAlive"}
+    assert data["errors"] == {}
+
+
+def test_legacy_batch_uses_explicit_environment_reader_and_keeps_errors() -> None:
+    payload = {
+        "command": "ReadPvi",
+        "ok": False,
+        "variables": [
+            {"name": "DataSQLBat:bSimEnable", "value": True, "type": "boolean"},
+            {"name": "DataSQLBat:Missing", "error": "Pvi-Error 11033"},
+        ],
+    }
+    completed = type(
+        "Completed",
+        (),
+        {"stdout": json.dumps(payload), "stderr": "", "returncode": 1},
+    )()
+    with patch.object(toolchain.subprocess, "run", return_value=completed) as run:
+        result = call(
+            "plc_read_pvi_batch",
+            {
+                "backend": "legacy",
+                "environment": "office_test_233",
+                "variables": ["DataSQLBat:bSimEnable", "DataSQLBat:Missing"],
+            },
+        )
+    data = result["structuredContent"]
+    assert data["values"]["DataSQLBat:bSimEnable"] == {"value": True, "type": "boolean"}
+    assert data["errors"] == {"DataSQLBat:Missing": "Pvi-Error 11033"}
+    command = run.call_args.args[0]
+    assert command.count("--variable") == 2
 
 
 def test_runtime_write_requires_explicit_execute_at_schema_layer() -> None:

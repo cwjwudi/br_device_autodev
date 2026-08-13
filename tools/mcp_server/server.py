@@ -91,6 +91,14 @@ def write_exception_log(operation_id: str, exc: BaseException) -> str | None:
 
 def classify_exception(exc: BaseException) -> tuple[str, bool, str, list[str]]:
     message = str(exc)
+    error_code = getattr(exc, "error_code", None)
+    if error_code:
+        return (
+            str(error_code),
+            bool(getattr(exc, "retryable", False)),
+            "trace" if str(error_code).startswith("TRACE_") else "pvi",
+            ["Inspect the trace status or stop the active trace before retrying."],
+        )
     if message.startswith("PVI_SESSION_FINGERPRINT_MISMATCH"):
         return "PVI_SESSION_FINGERPRINT_MISMATCH", False, "policy", ["Open a new test session after confirming the target identity."]
     if message.startswith("PVI_OPERATION_TIMEOUT") or message.startswith("PVI_WORKER_DIRTY"):

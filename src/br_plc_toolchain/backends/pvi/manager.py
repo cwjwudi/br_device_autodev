@@ -8,7 +8,17 @@ from collections.abc import Callable
 from typing import Any
 
 from .models import PviTarget
-from .worker import PviWorker
+from .worker import PviWorker, is_pvi_transport_error
+
+
+_RECONNECTABLE_OPERATIONS = {
+    "health",
+    "list_tasks",
+    "list_variables",
+    "variable_info",
+    "read",
+    "read_many",
+}
 
 
 class PviSessionManager:
@@ -42,13 +52,27 @@ class PviSessionManager:
             return worker
 
     def call(self, target: PviTarget, operation: str, **arguments: Any) -> Any:
-        return self.get(target).call(operation, **arguments)
+        attempts = 2 if operation in _RECONNECTABLE_OPERATIONS else 1
+        for attempt in range(attempts):
+            try:
+                return self.get(target).call(operation, **arguments)
+            except Exception as exc:
+                if attempt + 1 >= attempts or not is_pvi_transport_error(exc):
+                    raise
+                if not self.invalidate(target):
+                    raise RuntimeError(
+                        "PVI_WORKER_DIRTY: timed-out native operation is still running; "
+                        "target state is unknown"
+                    ) from exc
+        raise AssertionError("unreachable")
 
-    def invalidate(self, target: PviTarget) -> None:
+    def invalidate(self, target: PviTarget) -> bool:
         with self._lock:
             worker = self._workers.pop(target.key, None)
         if worker is not None:
             worker.close()
+            return not worker.running
+        return True
 
     def close_all(self) -> None:
         with self._lock:

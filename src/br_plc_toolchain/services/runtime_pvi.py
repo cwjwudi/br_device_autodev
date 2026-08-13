@@ -181,17 +181,74 @@ class RuntimePviService:
         return info
 
     def read(self, target_name: str, ref: VariableRef) -> dict[str, Any]:
+        result = self.read_many(target_name, [ref])
+        compact = {"ok": bool(result["ok"]), "name": ref.canonical}
+        if ref.canonical in result["values"]:
+            compact.update(result["values"][ref.canonical])
+        else:
+            compact["error"] = result["errors"].get(ref.canonical, "PVI read failed")
+        return compact
+
+    def read_many(self, target_name: str, refs: list[VariableRef]) -> dict[str, Any]:
+        """Read a de-duplicated set of variables with one worker operation.
+
+        Authorization is intentionally evaluated per variable so one denied or
+        missing symbol does not prevent independent read-only symbols from
+        being returned.
+        """
+        if not refs:
+            raise ValueError("variables must be a non-empty array")
+        if len(refs) > 64:
+            raise ValueError("variables may contain at most 64 items")
         target, config = self._resolve(target_name)
-        decision = self.policy.authorize_read(config=config, variable=ref.canonical)
-        self.policy.require(decision)
-        result = self.manager.call(target, "read", ref=ref)
-        result["access_decision"] = decision.to_dict()
-        with self._lock:
-            self._discovered.setdefault(target_name, {})[ref.canonical] = {
-                **self._discovered.get(target_name, {}).get(ref.canonical, {}),
-                **{key: result.get(key) for key in ("variable", "scope", "task", "name", "data_type", "readable", "writable")},
-            }
-        return result
+        unique: list[VariableRef] = []
+        seen: set[str] = set()
+        for ref in refs:
+            ref.validate()
+            if ref.canonical not in seen:
+                seen.add(ref.canonical)
+                unique.append(ref)
+
+        values: dict[str, dict[str, Any]] = {}
+        errors: dict[str, str] = {}
+        allowed: list[VariableRef] = []
+        for ref in unique:
+            decision = self.policy.authorize_read(config=config, variable=ref.canonical)
+            try:
+                self.policy.require(decision)
+            except PermissionError as exc:
+                errors[ref.canonical] = str(exc)
+                continue
+            allowed.append(ref)
+
+        if allowed:
+            result = self.manager.call(target, "read_many", refs=allowed)
+            for item in result.get("results", []):
+                name = str(item.get("variable") or "")
+                if not name:
+                    continue
+                if item.get("ok"):
+                    values[name] = {
+                        "value": item.get("value"),
+                        "type": item.get("data_type") or "unknown",
+                    }
+                    with self._lock:
+                        self._discovered.setdefault(target_name, {})[name] = {
+                            **self._discovered.get(target_name, {}).get(name, {}),
+                            **{
+                                key: item.get(key)
+                                for key in ("variable", "scope", "task", "name", "data_type", "readable", "writable")
+                            },
+                        }
+                else:
+                    errors[name] = str(item.get("error") or "PVI read failed")
+        return {
+            "ok": bool(unique) and not errors,
+            "target": target.name,
+            "count": len(unique),
+            "values": values,
+            "errors": errors,
+        }
 
     def open_test_session(
         self, target_name: str, *, execute: bool, ttl_minutes: int | None = None

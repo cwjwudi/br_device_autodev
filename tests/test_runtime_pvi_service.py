@@ -48,6 +48,23 @@ class FakeManager:
                 "readable": True,
                 "data_type": "boolean",
             }
+        if operation == "read_many":
+            results = []
+            for ref in arguments["refs"]:
+                if ref.name == "Unknown":
+                    results.append({"ok": False, "variable": ref.canonical, "error": "PVI variable not found"})
+                else:
+                    results.append(
+                        {
+                            "ok": True,
+                            "variable": ref.canonical,
+                            "value": self.value,
+                            "writable": True,
+                            "readable": True,
+                            "data_type": "boolean",
+                        }
+                    )
+            return {"ok": all(item["ok"] for item in results), "results": results}
         if operation == "write":
             self.value = arguments["value"]
             return {"ok": True, "requested": self.value, "readback": self.value, "verified": True}
@@ -96,7 +113,12 @@ def test_unknown_target_can_discover_and_read_but_not_write(tmp_path) -> None:
     service = build_service(tmp_path)
     service.register_ephemeral_target(ip="192.168.50.10", name="unknown")
     ref = VariableRef(name="bEnable", task="Main")
-    assert service.read("unknown", ref)["ok"]
+    assert service.read("unknown", ref) == {
+        "ok": True,
+        "name": "Main:bEnable",
+        "value": False,
+        "type": "boolean",
+    }
     with pytest.raises(PermissionError, match="same-value"):
         service.write("unknown", ref, False, execute=True)
 
@@ -126,6 +148,28 @@ def test_changed_write_rejects_target_identity_change(tmp_path) -> None:
             execute=True,
             session_id=opened["session"]["session_id"],
         )
+
+
+def test_read_many_deduplicates_and_submits_one_worker_operation(tmp_path) -> None:
+    service = build_service(tmp_path)
+    service.register_ephemeral_target(ip="192.168.50.233", name="plc", declared_role="test")
+    manager = service.manager
+    result = service.read_many(
+        "plc",
+        [
+            VariableRef(name="bEnable", task="Main"),
+            VariableRef(name="bEnable", task="Main"),
+            VariableRef(name="bOther", task="Main"),
+            VariableRef(name="Unknown", task="Main"),
+        ],
+    )
+    assert result["ok"] is False
+    assert result["count"] == 3
+    assert set(result["values"]) == {"Main:bEnable", "Main:bOther"}
+    assert result["errors"] == {"Main:Unknown": "PVI variable not found"}
+    calls = [item for item in manager.calls if item[0] == "read_many"]
+    assert len(calls) == 1
+    assert [ref.canonical for ref in calls[0][1]["refs"]] == ["Main:bEnable", "Main:bOther", "Main:Unknown"]
 
 
 def test_changed_write_rejects_incomplete_target_identity(tmp_path) -> None:

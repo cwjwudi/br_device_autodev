@@ -71,6 +71,37 @@ def normalize_value(value: Any) -> Any:
     return value
 
 
+def compact_variable_name(raw_spec: Any, parsed: dict[str, Any]) -> str:
+    """Return the caller's variable spec without exposing PVI internals."""
+
+    if isinstance(raw_spec, dict):
+        raw_name = raw_spec.get("variable") or raw_spec.get("name") or raw_spec.get("node_id")
+        if raw_spec.get("task") and raw_name:
+            return f"{raw_spec['task']}:{raw_name}"
+        if raw_name:
+            return str(raw_name)
+    return str(parsed.get("raw", raw_spec))
+
+
+def compact_variable_result(
+    raw_spec: Any,
+    parsed: dict[str, Any],
+    *,
+    value: Any = None,
+    data_type: Any = None,
+    error: str | None = None,
+) -> dict[str, Any]:
+    """Build the stable, user-facing PVI result for one variable."""
+
+    result: dict[str, Any] = {"name": compact_variable_name(raw_spec, parsed)}
+    if error is not None:
+        result["error"] = error
+        return result
+    result["value"] = normalize_value(value)
+    result["type"] = str(data_type or "unknown")
+    return result
+
+
 def read_variables(args: argparse.Namespace, specs: list[Any]) -> dict[str, Any]:
     if args.pvi_dll_dir:
         os.environ["PVIPY_PVIDLLPATH"] = args.pvi_dll_dir
@@ -89,38 +120,31 @@ def read_variables(args: argparse.Namespace, specs: list[Any]) -> dict[str, Any]
 
         tasks: dict[str, Any] = {}
         for raw_spec in specs:
-            result: dict[str, Any] = {"ok": False}
+            spec: dict[str, Any] = {}
             try:
                 spec = parse_variable_spec(raw_spec)
-                result.update(
-                    {
-                        "scope": spec.get("scope", "global"),
-                        "task": spec.get("task"),
-                        "name": spec["name"],
-                        "raw": spec.get("raw", raw_spec),
-                    }
-                )
 
                 parent = cpu
-                if result["scope"] == "task":
-                    task_name = str(result["task"])
+                if spec.get("scope") == "task":
+                    task_name = str(spec["task"])
                     if task_name not in tasks:
                         tasks[task_name] = Task(cpu, task_name)
                     parent = tasks[task_name]
 
                 variable = Variable(parent, spec["name"], RF=0)
                 connection.sleep(args.variable_wait_ms)
-                result["pvi_path"] = variable.name
-                result["status"] = variable.status
-                result["attributes"] = variable.attributes
-                result["data_type"] = variable.dataType
-                result["value"] = normalize_value(variable.value)
-                result["ok"] = True
+                results.append(
+                    compact_variable_result(
+                        raw_spec,
+                        spec,
+                        value=variable.value,
+                        data_type=variable.dataType,
+                    )
+                )
             except PviError as exc:
-                result["error"] = str(exc)
+                results.append(compact_variable_result(raw_spec, spec, error=str(exc)))
             except Exception as exc:
-                result["error"] = repr(exc)
-            results.append(result)
+                results.append(compact_variable_result(raw_spec, spec, error=repr(exc)))
     finally:
         if connection is not None:
             try:
@@ -130,9 +154,7 @@ def read_variables(args: argparse.Namespace, specs: list[Any]) -> dict[str, Any]
 
     return {
         "command": "ReadPvi",
-        "ok": all(r.get("ok") for r in results) if results else False,
-        "ip": args.ip,
-        "port": args.port,
+        "ok": bool(results) and all("error" not in r for r in results),
         "variables": results,
     }
 
