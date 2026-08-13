@@ -68,6 +68,7 @@ class AuditLogTests(unittest.TestCase):
         self.assertEqual({"started", "succeeded"}, {item["status"] for item in records})
         completed = next(item for item in records if item["status"] == "succeeded")
         self.assertEqual("arsim", completed["target"])
+        self.assertEqual("trusted_role_unrestricted", completed["pvi_access_mode"])
         self.assertEqual("write completed", completed["result_summary"]["summary"])
         self.assertEqual(
             {"count": 1, "variables": ["Harness:Input"]},
@@ -75,6 +76,31 @@ class AuditLogTests(unittest.TestCase):
         )
         audit_text = "\n".join(json.dumps(item) for item in records)
         self.assertNotIn("123.456", audit_text)
+
+    def test_download_result_records_bypass_and_transfer_state(self) -> None:
+        handler = Mock(
+            return_value={
+                "ok": True,
+                "target": "arsim",
+                "data": {
+                    "download_ok": True,
+                    "safety_bypassed": True,
+                    "deployment_state": "runtime_reachable",
+                    "stage": "RuntimeReachable",
+                },
+            }
+        )
+        arguments = {"target": "arsim", "execute": True, "bypass_download_safety": True}
+        with patch.dict(server.TOOLS, {"plc_download_ruc": handler}):
+            response = server.handle_tools_call(
+                {"name": "plc_download_ruc", "arguments": arguments}
+            )
+
+        self.assertFalse(response["isError"])
+        completed = next(item for item in self.records() if item["status"] == "succeeded")
+        self.assertTrue(completed["result_summary"]["download_ok"])
+        self.assertTrue(completed["result_summary"]["safety_bypassed"])
+        self.assertEqual("runtime_reachable", completed["result_summary"]["deployment_state"])
 
     def test_handler_failure_is_audited(self) -> None:
         handler = Mock(side_effect=RuntimeError("simulated failure"))

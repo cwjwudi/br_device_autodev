@@ -28,11 +28,10 @@
 ## 写入
 
 - 通信验证优先做同值写入：先读当前值，再以 `execute=true` 写回同一值。
-- 改变值前调用 `plc_open_test_session`，并显式设置较短 TTL。
-- 调用 `plc_write_runtime_variable` 时同时提供 `execute=true` 和 `session_id`。
-- 测试完成后恢复原值、独立回读确认，再调用 `plc_close_test_session`。
+- `dedicated_test_plc` 不再要求测试会话；调用 `plc_write_runtime_variable` 时提供显式目标和 `execute=true`。
+- 测试完成后按需要恢复原值，并独立回读确认。
 
-如果目标角色不明确、变量不可写、命中安全阻断规则、会话超时或会话属于另一个 PLC，写入都会被拒绝。
+如果目标角色不明确、目标为 production、变量不可写或缺少 `execute=true`，写入会被拒绝。
 
 ## 本地 ARsim
 

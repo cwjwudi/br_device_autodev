@@ -7,7 +7,7 @@
 <!-- BEGIN GENERATED MCP TOOL CATALOG -->
 当前已实现工具：
 
-MCP server version: `0.13.0`. Full catalog: [../skills/br-plc-toolchain/references/mcp-tools.md](../skills/br-plc-toolchain/references/mcp-tools.md)
+MCP server version: `0.14.0`. Full catalog: [../skills/br-plc-toolchain/references/mcp-tools.md](../skills/br-plc-toolchain/references/mcp-tools.md)
 
 | MCP Tool | Risk | Backend | Confirmation | Description |
 | --- | --- | --- | --- | --- |
@@ -25,10 +25,10 @@ MCP server version: `0.13.0`. Full catalog: [../skills/br-plc-toolchain/referenc
 | `plc_check_download` | `local_write` | `CheckDownload` | - | Run the download safety check without downloading. Compares the RUC package metadata with the target probe result. |
 | `plc_download_ruc` | `target_change` | `Download` | `execute=true` | Download the RUC package to the target. Safety gate: requires execute=true, and plc_check_download must pass on the server side before actual transfer. |
 | `plc_verify_opcua` | `local_write` | `VerifyOpcUa` | - | Read OPC UA validation nodes from the target. Returns values, types, and timestamps for each configured node. |
-| `plc_read_pvi` | `local_write` | `ReadPvi` | - | Read PLC variables via PVI using hilch/Pvi.py. Default whitelist mode requires configured variables; Agent-directed mode allows explicit variables after policy checks. |
+| `plc_read_pvi` | `local_write` | `ReadPvi` | - | Read PLC variables via PVI using hilch/Pvi.py. ARsim and dedicated test PLC targets permit any explicitly named variable; other roles retain policy checks. |
 | `plc_read_pvi_batch` | `readonly` | `persistent PVI runtime or legacy ReadPvi adapter` | - | Read up to 64 explicitly named PLC variables in one compact request. Runtime uses the persistent PVI worker; legacy is retained only for compatibility. |
 | `plc_read_logger` | `local_write` | `ReadLogger` | - | Read a whitelisted PLC/AR logger module through PVITransfer Logger. Returns report/log paths and a compact summary, never raw HTML/CSV content. |
-| `plc_write_pvi` | `target_change` | `WritePvi` | `execute=true` | Write PVI variables under access_policy. Default whitelist mode requires pvi.write_whitelist; Agent-directed mode allows explicit variables after policy checks. Requires execute=true and refuses production targets. |
+| `plc_write_pvi` | `target_change` | `WritePvi` | `execute=true` | Write any PVI-writable variable on ARsim or a dedicated test PLC. Requires execute=true; production and unknown targets remain denied. |
 | `plc_run_arsim_closed_loop` | `target_change` | `RunArsimClosedLoop` | `execute=true` | Run the standard ARsim closed loop: build RUC package, start ARsim, probe, describe package, safety check, optional explicit download, and verification report. |
 | `plc_run_verification_suite` | `local_write` | `RunVerificationSuite` | - | Run feedback verification and write a unified report. OPC UA is attempted first; PVI is used as a fallback. |
 | `plc_run_io_test_case` | `target_change` | `RunIoTestCase` | `execute=true` | Run one PLC IO test case from a suite: reset, access-policy-gated PVI writes, settle, readback, checks, and restore. |
@@ -52,9 +52,9 @@ MCP server version: `0.13.0`. Full catalog: [../skills/br-plc-toolchain/referenc
 | `plc_get_pvi_trace_status` | `readonly` | `Runtime PVI TraceManager` | - | Return a compact status summary for a Runtime PVI trace. |
 | `plc_read_pvi_trace` | `readonly` | `Runtime PVI TraceManager` | - | Read a bounded time range from a Runtime PVI trace as compact columnar rows. |
 | `plc_stop_pvi_trace` | `local_write` | `Runtime PVI TraceManager` | - | Stop a Runtime PVI trace and return its final compact summary. Idempotent for completed traces. |
-| `plc_open_test_session` | `target_change` | `runtime test-session policy` | `execute=true` | Open an expiring read-write session for ARsim or an explicitly declared dedicated test PLC. |
+| `plc_open_test_session` | `target_change` | `runtime test-session policy` | `execute=true` | Open a legacy expiring read-write session. Trusted ARsim and dedicated test PLC writes no longer require a session. |
 | `plc_close_test_session` | `local_write` | `runtime test-session policy` | - | Close a temporary runtime PVI test session immediately. |
-| `plc_write_runtime_variable` | `target_change` | `persistent PVI runtime + policy` | `execute=true` | Write a discovered variable with before/readback verification. Changed values require a target-bound test session. |
+| `plc_write_runtime_variable` | `target_change` | `persistent PVI runtime + policy` | `execute=true` | Write a discovered variable with before/readback diagnostics. ARsim and dedicated test PLC writes require execute=true but no test session. |
 <!-- END GENERATED MCP TOOL CATALOG -->
 
 ## 后续路线
@@ -62,4 +62,4 @@ MCP server version: `0.13.0`. Full catalog: [../skills/br-plc-toolchain/referenc
 1. 完成 ARsim 下载安全闸门、传输进程清理和应用 readiness 验证。
 2. 统一旧 PVI CLI 与 Runtime PVI 的读回、错误分类和会话安全语义。
 3. 完善 MCP 的结构化错误、取消、并发控制、审计保留和验证脚本。
-4. 单独评估 Automation Studio 增量 Transfer；在此能力完成前保留人工 Transfer 兜底。
+4. 保持完整 RUC 构建和 PVITransfer 单一路径，不增加 Automation Studio 增量 Transfer。

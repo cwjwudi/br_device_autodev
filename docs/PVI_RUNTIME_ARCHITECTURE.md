@@ -2,7 +2,7 @@
 
 ## 目标
 
-运行时 PVI 服务允许 AI 在没有 Automation Studio 源工程、符号清单或白名单文件时，先连接 PLC、发现任务与变量并读取数据。写入能力不由“能连接”自动推导，而由目标角色、不可变安全规则、在线变量属性和临时测试会话共同决定。
+运行时 PVI 服务允许 AI 在没有 Automation Studio 源工程、符号清单或白名单文件时连接 PLC、发现任务并读写变量。`arsim`/`dedicated_test_plc` 按角色开放全部 PVI 变量，写入由显式目标、`execute=true` 和在线可写属性决定；production 与未知目标保持受限。
 
 ## 调用链
 
@@ -45,5 +45,5 @@ MCP runtime tools
 
 ## 兼容层
 
-`plc_read_pvi`、`plc_write_pvi` 与 `tools/pvi_*.py` 暂时保留，服务既有 CLI、测试套件及白名单生产流程。新开发和无源码探索使用 `plc_*_runtime_*` 工具。后续在调用方完成迁移后，旧脚本应缩减成调用新服务的薄适配器，而不是继续扩展第二套连接实现。
+`plc_read_pvi`、`plc_write_pvi` 与 `tools/pvi_*.py` 暂时保留，服务既有 CLI 和测试套件。legacy 与 runtime 路径对可信调试角色执行相同的全量 PVI 策略；后续应将旧脚本缩减成调用新服务的薄适配器。
 

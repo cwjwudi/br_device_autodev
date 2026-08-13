@@ -127,7 +127,7 @@ MCP 只做结构化参数、调用 CLI、返回 JSON；核心逻辑仍放在本�
    - 若目标为测试 PLC，则先生成匹配 `X20CP1586 / J4.93` 的工程配置和 RUC 包。
 7. M9：把 ARsim 下载从“命令成功”提升为可诊断、可恢复的部署闭环：
    - 下载前比较 RUC 与目标的 CPU、OrderNumber、RuntimeType、ARVersion、分区布局和安装模式。
-   - 对不兼容目标停止自动下载，并明确建议增量 Transfer、重建 ARsim 介质或仅生成 RUC。
+   - 对 ARsim/测试 PLC 的兼容性差异输出告警，继续使用完整 RUC；production 与跨运行时类型下载仍阻止。
    - 对超时、取消和异常清理 PVITransfer 进程树，保留最后一段传输日志。
    - 将 `process_started`、`runtime_reachable` 和 `application_ready` 分开验证。
    - 补充下载阶段事件、应用 readiness、Logger 和工作树产物的结构化证据。
@@ -157,7 +157,7 @@ MCP 只做结构化参数、调用 CLI、返回 JSON；核心逻辑仍放在本�
 - M7 已完成：PVITransfer Logger 读取已实现并完成实机验证。
 - M8 已完成第一版：无源码 PVI 发现、持久多目标连接、运行时读取、测试 profile、临时会话写入和写后回读。
 - 下一阶段是把旧 PVI CLI 缩减为新运行时服务的兼容适配器，并扩展连接恢复与兼容性测试。
-- M9 尚未完成：需要补齐 ARsim 分区兼容性、下载进程生命周期、实时进度、应用 readiness 和增量 Transfer 策略。
+- M9 尚未完成：需要补齐完整 RUC 下载进程生命周期、实时进度和应用 readiness。
 
 ## ARsim 下载闭环
 
@@ -220,7 +220,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Com
    - 比较 RUC 的 `CPUType`、`OrderNumber`、`RuntimeType`、`ARVersion` 与目标 Probe 结果。
    - 增加分区布局和安装模式检查；不能因为目标是 ARsim 就跳过 CPU/版本兼容性检查。
    - 对 `Minimum requirements of partition layout failed` 建立明确的结构化错误分类。
-   - 不兼容时不得自动轮换多个安装限制反复尝试；只返回可执行选项：重建 ARsim 介质、使用增量 Transfer 或仅保留 RUC。
+   - 不兼容时不得自动轮换多个安装限制反复尝试；可信调试目标记录告警后仍只执行一次完整 RUC 传输。
 
 2. **超时、取消和异常清理**
    - 为每次 PVITransfer 建立独立进程组，记录 PID、命令、包路径和目标。
@@ -239,14 +239,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Com
    - 统一输出 `Connected`、`PackageValidated`、`TargetEnteringService`、`Installing`、`Restarting`、`WaitingForReconnection`、`RunVerified`、`Failed` 等阶段。
    - 轮询或读取 PVITransfer 日志时返回阶段、时间戳和最后 N 行，避免 180 秒无反馈后才一次性超时。
 
-2. **增量 Transfer 能力**
-   - 当前 RUC Download 不能替代 Automation Studio `Transfer to Target` 的依赖分析、依赖排序和应用任务安全替换。
-   - 优先评估生成/下载 `artransfer.br`、调用受控 Transfer 接口，或根据 `TransferModuleContent` 生成依赖感知更新包。
-   - 在该能力完成前，直接下载单个 `.br` 模块不作为默认恢复路径；遇到 PVI 11156 时补充目标任务状态、模块依赖和替换限制诊断。
+2. **完整 RUC 下载能力**
+   - MCP 只构建并传输完整 `RUCPackage.zip`，不实现 Automation Studio 增量 Transfer。
+   - 遇到 PVI 11156 时补充目标任务状态、完整 RUC、运行时类型和替换限制诊断，不尝试单模块下载。
 
 3. **输入和输出诊断**
    - 工程路径不存在时，在仓库根目录搜索 `.apj`；唯一候选只给出建议，多候选不得自动选择。
-   - PVI 白名单拒绝时返回最多三个相似变量候选，但不得自动放宽白名单。
+   - PVI 对象不存在时返回相似变量候选；可信调试目标不再产生白名单拒绝。
    - PVI/Reset 默认返回紧凑摘要，完整变量级结果写入报告文件。
    - 修正 CSVX 的 `Severity`、`Time`、`ASCII Data`、`TaskName` 和 `ErrorCode` 解析，并支持按测试时间窗统计 Error/Fatal。
 
@@ -322,7 +321,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Com
 
 - `config/targets/default-safe.json` 中 `pvi.enabled=true` 控制是否启用 PVI 读取。
 - `pvi.verify_after_download=false` 默认不在下载后自动运行 PVI；当前下载后默认仍优先运行 OPC UA。
-- `pvi.validation_variables` 使用白名单变量，不做“读取全部变量”的默认行为。
+- `pvi.validation_variables` 仅提供下载后的默认抽样变量；显式请求可读取任意 PVI 变量。
 - PVI DLL 目录由全局 `toolchains.<id>.pvi.dll_dir` 指定，脚本会传入 `PVIPY_PVIDLLPATH`；targets 文件不再保存本机 DLL 路径。
 
 当前已验证的 PVI 读取：
@@ -378,7 +377,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\plc_toolchain.ps1 -Com
 
 | 命令 | 用途 |
 |---|---|
-| `WritePvi` | 对白名单变量执行 PVI 写入，必须 `-Execute` |
+| `WritePvi` | 对可信调试目标的任意 PVI 可写变量执行写入，必须 `-Execute` |
 | `RunIoTestCase` | 执行单个输入输出测试用例 |
 | `RunTestSuite` | 执行 JSON 测试套件 |
 | `ResetTestHarness` | 恢复测试 harness 到安全状态 |
@@ -389,7 +388,7 @@ MCP Server 已提供：
 
 | 工具 | 用途 |
 |---|---|
-| `plc_write_pvi` | 白名单 PVI 写入 |
+| `plc_write_pvi` | ARsim/测试 PLC 全量 PVI 写入 |
 | `plc_run_io_test_case` | 单个输入输出测试 |
 | `plc_run_test_suite` | 批量测试套件 |
 | `plc_reset_test_harness` | 测试前后恢复 |

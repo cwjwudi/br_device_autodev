@@ -86,22 +86,22 @@ ARsim 强制下载是为本机仿真调试准备的例外流程，用于处理 A
 
 ## PVI 安全
 
-1. PVI 读取默认白名单变量，通过 `pvi.read_whitelist` 或 `pvi.validation_variables` 控制
-2. `plc_read_pvi` 可在 `agent_directed` 模式下读取 Agent 传入的白名单外变量
-3. 白名单外动态读取必须先调用 `plc_search_variables` 或 `plc_list_variables` 查找变量
+1. `arsim`/`dedicated_test_plc` 可读取任意明确命名的 PVI 变量，白名单仅作为默认验证变量集合
+2. production 和未知目标继续由 `access_policy` 限制
+3. 建议先调用 `plc_search_variables` 或 `plc_list_variables` 查找变量，以减少名称错误
 4. 读取变量值的变化仅用于验证，不用于控制
 
 ## PVI 写入测试安全
 
-PVI 写入能力默认只能用于输入输出测试 harness。若用户手动将 `access_policy.mode` 切换为 `agent_directed`，Agent 可以选择白名单外变量尝试写入，但仍不能绕过目标角色、名称黑名单、`execute=true` 和审计报告。
+PVI 写入能力直接开放给明确标记为 `arsim` 或 `dedicated_test_plc` 的目标，不检查变量白名单、目录权限或名称黑名单；仍不能绕过显式目标、`execute=true`、变量自身可写属性和审计报告。
 
 强制规则：
 
 1. `plc_write_pvi` 必须显式传入 `execute=true`
-2. 默认 `whitelist` 模式只允许写 `config/targets/default-safe.json` 中的 `pvi.write_whitelist`
-3. `agent_directed` 模式下，Agent 必须先搜索变量，再传入写入请求
+2. `arsim`/`dedicated_test_plc` 可写任意由 PVI 标记为可写的变量，不检查 `pvi.write_whitelist`
+3. 写入不要求测试会话，但仍必须显式目标和 `execute=true`
 4. 禁止写 `role=production` 的目标
-5. 禁止写 Safety、物理 I/O、系统变量，变量名匹配 `access_policy.blocked_name_patterns` 时直接拒绝
+5. 可信调试目标不应用变量名称黑名单；production 和未知目标仍受限
 6. 每个测试用例结束后必须执行 restore/reset
 7. 写入前后都要读取关键变量，并写入报告
 8. 动态写入优先执行“读当前值 -> 写同值 -> 独立读回”的低副作用验证；只有用户明确要求改变状态或测试 suite 定义了 restore/reset 时，才写入不同值

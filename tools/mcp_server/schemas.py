@@ -334,6 +334,11 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                     "description": "If true, allow only the explicit ARsim CPU/OrderNumber mismatch boundary. It never overrides role, production, reachability, AR version, RuntimeType, configuration, partition, or unknown-state failures.",
                     "default": False,
                 },
+                "bypass_download_safety": {
+                    "type": "boolean",
+                    "description": "Skip optional RUC compatibility checks for an explicit ARsim or dedicated test PLC target. Production, role, reachability, package, and execute guards remain enforced.",
+                    "default": False,
+                },
             }
         ),
     },
@@ -353,6 +358,11 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "force_arsim_download": {
                     "type": "boolean",
                     "description": "If true with execute=true, allow an explicit ARsim target download even when the RUC package CPU/order does not match the probed ARsim CPU. Never applies to physical or production targets.",
+                    "default": False,
+                },
+                "bypass_download_safety": {
+                    "type": "boolean",
+                    "description": "Skip optional RUC compatibility checks for an explicit ARsim or dedicated test PLC target. Production, role, reachability, package, and execute guards remain enforced.",
                     "default": False,
                 },
             },
@@ -375,7 +385,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "plc_read_pvi",
-        "description": "Read PLC variables via PVI using hilch/Pvi.py. Default whitelist mode requires configured variables; Agent-directed mode allows explicit variables after policy checks.",
+        "description": "Read PLC variables via PVI using hilch/Pvi.py. ARsim and dedicated test PLC targets permit any explicitly named variable; other roles retain policy checks.",
         "inputSchema": object_schema(
             {
                 "pvi_variables": {
@@ -433,7 +443,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "plc_write_pvi",
-        "description": "Write PVI variables under access_policy. Default whitelist mode requires pvi.write_whitelist; Agent-directed mode allows explicit variables after policy checks. Requires execute=true and refuses production targets.",
+        "description": "Write any PVI-writable variable on ARsim or a dedicated test PLC. Requires execute=true; production and unknown targets remain denied.",
         "inputSchema": required_schema(
             build_schema(
                 {
@@ -462,7 +472,18 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "name": "plc_run_arsim_closed_loop",
         "description": "Run the standard ARsim closed loop: build RUC package, start ARsim, probe, describe package, safety check, optional explicit download, and verification report.",
         "inputSchema": build_schema(
-            {},
+            {
+                "bypass_download_safety": {
+                    "type": "boolean",
+                    "description": "Skip optional RUC compatibility checks for the ARsim closed-loop download.",
+                    "default": False,
+                },
+                "force_arsim_download": {
+                    "type": "boolean",
+                    "description": "Deprecated alias for bypass_download_safety.",
+                    "default": False,
+                },
+            },
             require_execute=True,
             require_timeout=True,
         ),
@@ -703,7 +724,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "plc_open_test_session",
-        "description": "Open an expiring read-write session for ARsim or an explicitly declared dedicated test PLC.",
+        "description": "Open a legacy expiring read-write session. Trusted ARsim and dedicated test PLC writes no longer require a session.",
         "inputSchema": runtime_schema(
             {
                 "ttl_minutes": {"type": "integer", "minimum": 1, "maximum": 480, "default": 60},
@@ -722,7 +743,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "plc_write_runtime_variable",
-        "description": "Write a discovered variable with before/readback verification. Changed values require a target-bound test session.",
+        "description": "Write a discovered variable with before/readback diagnostics. ARsim and dedicated test PLC writes require execute=true but no test session.",
         "inputSchema": runtime_schema(
             {
                 "scope": {"type": "string", "enum": ["task", "global"], "default": "task"},

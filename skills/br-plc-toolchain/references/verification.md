@@ -41,7 +41,7 @@ plc_verify_opcua(arguments: {
 
 ## PVI 验证
 
-### 默认白名单变量
+### 默认验证变量
 
 当前配置在 `config/targets/default-safe.json` → `pvi.validation_variables`：
 
@@ -66,7 +66,7 @@ plc_read_pvi(arguments: {
 
 - 全局变量：直接写变量名，如 `gstHmi.stOutputs.diSImage`
 - Task 变量：`<TaskName>:<VarName>` 格式，如 `SVG:strTransform`
-- 自定义变量仍受 `access_policy` 约束。默认 `whitelist` 模式下必须在 PVI 读取白名单中；动态模式下应先调用 `plc_search_variables` 查询变量。
+- `arsim`/`dedicated_test_plc` 可直接读取任意自定义 PVI 变量；`validation_variables` 仅用于未显式指定变量时的默认抽样。
 
 ### PVI 动态变量诊断
 
@@ -74,7 +74,7 @@ PVI 动态读取失败时，先区分两类问题：
 
 | 现象 | 含义 | 下一步 |
 |---|---|---|
-| MCP 返回策略错误、`access_policy`、`blocked_name_patterns` 或目标角色错误 | 策略门控拒绝 | 检查当前 `access_policy.mode`、`allow_dynamic_*`、目标 `role` 和变量名 |
+| MCP 返回策略或目标角色错误 | 目标不是可信调试角色，或写入缺少 `execute=true` | 检查目标 `role`、显式目标和执行确认 |
 | PVI 返回 `Object not found` / `11033` | 策略已经放行，但当前运行映像里找不到该 PVI 对象 | 确认对应任务/变量已参与构建，ARsim/PLC 已下载最新映像，任务正在运行 |
 | PVI 连接失败 / ANSL 建链失败 | 目标或 PVI 通道不可达 | 先 `plc_probe_target`，检查 ARsim/PVI Manager/IP/端口 |
 

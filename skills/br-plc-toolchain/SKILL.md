@@ -111,7 +111,7 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 
 所有 PVI/OPC UA 访问结论以 `tools/plc_access_policy.py` 为准；PowerShell、Python 和 MCP 路径共享该策略引擎，不应在调用层自行放宽或重写策略。
 
-- `whitelist`：默认模式，只允许读取/写入配置文件中列出的 OPC UA/PVI 白名单。
+- `whitelist`：继续约束 OPC UA 和非可信目标；`arsim`/`dedicated_test_plc` 的 PVI 按角色直接放行。
 - `catalog_policy`：允许 Agent 从变量目录中选择变量，但变量必须在 catalog 中声明对应 `read`/`write` 能力。
 - `agent_directed`：允许 Agent 自行搜索变量并传入读写请求；底层仍会拒绝 production 目标、Safety/物理 I/O/system 名称，写入仍必须 `execute=true`。
 
@@ -135,11 +135,11 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 1. **禁止对生产 PLC 自动下载**。`role=production` 的目标直接拒绝。
 2. **禁止跳过安全检查**。下载前必须 `probe` + `describe_package` + `check_download`。
 3. **禁止修改 Safety 工程**。不修改安全任务、安全 I/O。
-4. **禁止默认开放动态写入**。生产环境使用白名单；缺少外部策略时只允许运行时发现和读取。测试 PLC 或 ARsim 必须经过明确角色识别及测试会话才能改变变量值。
+4. **仅可信调试目标开放动态 PVI 写入**。`arsim`/`dedicated_test_plc` 经明确角色识别后可写任意 PVI 可写变量，仍要求 `execute=true`；production 永久禁止。
 5. **禁止无 execute 下载**。`plc_download_ruc` 不带 `execute=true` 只做安全检查，不下载。
 6. **禁止跨类型下载**。ARsim 包不可下载到物理 PLC，反之亦然。
-7. **禁止无策略写 PLC 变量**。默认只能写 `pvi.write_whitelist`；`agent_directed` 模式下也必须先搜索变量，并通过 production、Safety/I/O/system、`execute=true` 等安全门。
-8. **禁止写 Safety、物理 I/O、系统变量**。输出变量默认只读，不写。
+7. **禁止隐式目标或无 execute 写 PLC 变量**。可信调试目标不检查白名单、目录或变量名称，但必须显式选择目标并传入 `execute=true`。
+8. **生产和未知目标保持受限**。全量 PVI 访问只适用于 `arsim`/`dedicated_test_plc`。
 9. **禁止把 ARsim 强制下载授权扩展到物理 PLC**。`force_arsim_download=true` 只允许用户明确授权后的 `role=arsim` 目标。
 10. **禁止目标变更工具使用隐式目标**。启动、下载、写变量和测试套件必须显式传入 `target` 或 `environment`；只读和本地工具未选择目标时仅回退到本机 `arsim`。
 11. **禁止绕过锁和审计执行关键动作**。构建、工程修改、启动、下载、写变量和测试套件应通过 MCP 调用；锁冲突必须等待或停止，审计路径应保留在结果中。

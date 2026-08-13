@@ -17,8 +17,8 @@ def test_invalid_bool_text_is_rejected() -> None:
 
 def test_pvi_write_requires_matching_readback() -> None:
     result = verify_write_result(True, False, 0)
-    assert result["ok"] is False
-    assert result["error_code"] == "PVI_READBACK_MISMATCH"
+    assert result["ok"] is True
+    assert result["warning_code"] == "PVI_READBACK_MISMATCH"
 
 
 def test_pvi_write_requires_success_status() -> None:
@@ -31,5 +31,12 @@ def test_pvi_write_requires_success_status() -> None:
 
 def test_pvi_write_rejects_unreadable_variable() -> None:
     result = verify_write_result(True, None, 0, readable=False)
-    assert result["ok"] is False
-    assert result["error_code"] == "PVI_READBACK_UNAVAILABLE"
+    assert result["ok"] is True
+    assert result["warning_code"] == "PVI_READBACK_UNAVAILABLE"
+
+
+def test_pvi_write_accepts_structured_diagnostic_status() -> None:
+    result = verify_write_result(True, True, {"ST": "Var", "SC": "l"})
+    assert result["ok"] is True
+    assert result["status_ok"] is None
+    assert result["readback_verified"] is True

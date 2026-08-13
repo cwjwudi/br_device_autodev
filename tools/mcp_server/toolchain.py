@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 import uuid
 from contextvars import ContextVar
 from pathlib import Path
@@ -37,6 +38,7 @@ _ACTIVE_PROCESSES: dict[str, int] = {}
 _CANCELLED_OPERATIONS: set[str] = set()
 _PROCESS_LOCK = threading.RLock()
 _CURRENT_OPERATION_ID: ContextVar[str | None] = ContextVar("br_plc_operation_id", default=None)
+DOWNLOAD_LOG_SUCCESS_GRACE_SECONDS = 3.0
 
 
 def runtime_pvi_service():
@@ -249,6 +251,7 @@ def run_plc_toolchain(
     build_ruc_package: bool = False,
     execute: bool = False,
     force_arsim_download: bool = False,
+    bypass_download_safety: bool = False,
     settle_ms: int | None = None,
     start_wait_seconds: int | None = None,
     timeout_seconds: int = 60,
@@ -318,6 +321,8 @@ def run_plc_toolchain(
         args.append("-Execute")
     if force_arsim_download:
         args.append("-ForceArsimDownload")
+    if bypass_download_safety:
+        args.append("-BypassDownloadSafety")
     if start_wait_seconds is not None:
         args.extend(["-StartWaitSeconds", str(start_wait_seconds)])
     if settle_ms is not None:
@@ -359,8 +364,56 @@ def run_plc_toolchain(
             )
         _ACTIVE_PROCESSES[operation_id] = process.pid
     cancelled = False
+    timeout_log_path = REPO_ROOT / "var" / "downloads" / operation_id / f"pvi_download_{target}.log"
     try:
-        stdout, stderr = process.communicate(timeout=timeout_seconds)
+        if command == "Download":
+            deadline = time.monotonic() + timeout_seconds
+            success_seen_at: float | None = None
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise subprocess.TimeoutExpired(args, timeout_seconds)
+                try:
+                    stdout, stderr = process.communicate(timeout=min(1.0, remaining))
+                    break
+                except subprocess.TimeoutExpired:
+                    transfer_log = (
+                        timeout_log_path.read_text(encoding="utf-8", errors="replace")
+                        if timeout_log_path.is_file()
+                        else ""
+                    )
+                    transfer_succeeded = (
+                        "PROCESS FINISHED (SUCCESS)" in transfer_log
+                        or ("Transfer " in transfer_log and " SUCCESSFUL" in transfer_log)
+                    )
+                    if transfer_succeeded:
+                        success_seen_at = success_seen_at or time.monotonic()
+                        if time.monotonic() - success_seen_at >= DOWNLOAD_LOG_SUCCESS_GRACE_SECONDS:
+                            cleanup = terminate_process_tree(process.pid)
+                            try:
+                                stdout, stderr = process.communicate(timeout=5)
+                            except subprocess.TimeoutExpired:
+                                process.kill()
+                                stdout, stderr = process.communicate()
+                            return {
+                                "command": "Download",
+                                "ok": True,
+                                "target": target,
+                                "executed": True,
+                                "download_ok": True,
+                                "safety_bypassed": bool(bypass_download_safety or force_arsim_download),
+                                "deployment_state": "transfer_completed",
+                                "stage": "TransferCompleted",
+                                "attempt_id": operation_id,
+                                "process_id": process.pid,
+                                "log_path": str(timeout_log_path),
+                                "warnings": [
+                                    "PVITransfer logged a successful full-RUC transfer, but its wrapper did not exit during the grace period; the process tree was cleaned up.",
+                                ],
+                                "cleanup": cleanup,
+                            }
+        else:
+            stdout, stderr = process.communicate(timeout=timeout_seconds)
     except subprocess.TimeoutExpired as exc:
         cleanup = terminate_process_tree(process.pid)
         try:
@@ -372,6 +425,31 @@ def run_plc_toolchain(
             # second exception.
             process.kill()
             stdout, stderr = process.communicate()
+        timeout_log = ""
+        if command == "Download" and timeout_log_path.is_file():
+            timeout_log = timeout_log_path.read_text(encoding="utf-8", errors="replace")
+        if command == "Download" and (
+            "PROCESS FINISHED (SUCCESS)" in timeout_log
+            or ("Transfer " in timeout_log and " SUCCESSFUL" in timeout_log)
+        ):
+            return {
+                "command": "Download",
+                "ok": True,
+                "target": target,
+                "executed": True,
+                "download_ok": True,
+                "safety_bypassed": bool(bypass_download_safety or force_arsim_download),
+                "deployment_state": "transfer_completed",
+                "stage": "TransferCompleted",
+                "attempt_id": operation_id,
+                "process_id": process.pid,
+                "log_path": str(timeout_log_path),
+                "warnings": [
+                    "PVITransfer logged a successful full-RUC transfer, but the wrapper exceeded the outer timeout; the process tree was cleaned up.",
+                    "Post-download target verification was not completed by this invocation.",
+                ],
+                "cleanup": cleanup,
+            }
         error_code = "TRANSFER_TIMEOUT" if command == "Download" else "TOOLCHAIN_TIMEOUT"
         cleanup = {
             **cleanup,
@@ -660,7 +738,7 @@ def next_actions(tool: str, data: dict[str, Any]) -> list[str]:
         return ["A download may be attempted only with an explicit execute=true download tool."]
     if tool == "plc_check_download" and not data.get("ok"):
         if data.get("decision") in {"manual_intervention", "unknown"}:
-            return ["Do not retry automatically. Rebuild a matching ARsim medium, use Automation Studio incremental Transfer manually, or retain the RUC without downloading."]
+            return ["Do not retry automatically. Rebuild the complete RUC package, verify target connectivity, and inspect the PVITransfer log."]
         return ["Do not download. Fix the reported package/target mismatch first."]
     if tool == "plc_read_pvi" and not data.get("ok"):
         return ["Check PVI Manager, target reachability, and variable whitelist names."]
@@ -1016,6 +1094,7 @@ def plc_check_download(arguments: dict[str, Any]) -> dict[str, Any]:
         package_path=arguments.get("package_path"),
         transfer_pil_path=arguments.get("transfer_pil_path"),
         force_arsim_download=arguments.get("force_arsim_download") is True,
+        bypass_download_safety=arguments.get("bypass_download_safety") is True,
         timeout_seconds=int(arguments.get("timeout_seconds") or 90),
     )
     return wrap_result("plc_check_download", "CheckDownload", data, target)
@@ -1305,8 +1384,33 @@ def plc_download_ruc(arguments: dict[str, Any]) -> dict[str, Any]:
         transfer_pil_path=arguments.get("transfer_pil_path"),
         execute=execute,
         force_arsim_download=arguments.get("force_arsim_download") is True,
+        bypass_download_safety=arguments.get("bypass_download_safety") is True,
         timeout_seconds=int(arguments.get("timeout_seconds") or 180),
     )
+    if data.get("deployment_state") == "transfer_completed":
+        try:
+            probe_after = run_plc_toolchain(
+                "Probe",
+                target=target,
+                project_path=options["project_path"],
+                config=options["config"],
+                targets_path=options["targets_path"],
+                toolchain=options["toolchain"],
+                toolchains_path=options["toolchains_path"],
+                timeout_seconds=30,
+            )
+            data["probe_after"] = probe_after
+            if probe_after.get("ok"):
+                data["deployment_state"] = "runtime_reachable"
+                data["stage"] = "RuntimeReachable"
+            else:
+                data.setdefault("warnings", []).append(
+                    "Full-RUC transfer succeeded, but the target was not reachable during the post-download probe."
+                )
+        except ToolchainError as exc:
+            data.setdefault("warnings", []).append(
+                f"Full-RUC transfer succeeded, but the post-download probe failed: {exc}"
+            )
     return wrap_result("plc_download_ruc", "Download", data, target)
 
 
@@ -1345,6 +1449,8 @@ def plc_run_arsim_closed_loop(arguments: dict[str, Any]) -> dict[str, Any]:
         toolchain=options["toolchain"],
         toolchains_path=options["toolchains_path"],
         execute=execute,
+        force_arsim_download=arguments.get("force_arsim_download") is True,
+        bypass_download_safety=arguments.get("bypass_download_safety") is True,
         timeout_seconds=int(arguments.get("timeout_seconds") or 600),
     )
     return wrap_result("plc_run_arsim_closed_loop", "RunArsimClosedLoop", data, target)
@@ -1686,7 +1792,11 @@ def plc_discover_runtime_target(arguments: dict[str, Any]) -> dict[str, Any]:
 
 def plc_runtime_health(arguments: dict[str, Any]) -> dict[str, Any]:
     service, target = _ensure_runtime_target(arguments)
-    return service.health(target)
+    result = service.health(target)
+    from version import SERVER_RUNTIME
+
+    result["server_runtime"] = dict(SERVER_RUNTIME)
+    return result
 
 
 def plc_save_runtime_target(arguments: dict[str, Any]) -> dict[str, Any]:

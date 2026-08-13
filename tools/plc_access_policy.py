@@ -20,6 +20,7 @@ DEFAULT_BLOCKED_NAME_PATTERNS = [
     "sys:*",
 ]
 DEFAULT_ALLOWED_TARGET_ROLES = ["arsim", "dedicated_test_plc"]
+TRUSTED_PVI_ROLES = {"arsim", "dedicated_test_plc"}
 
 
 def canonical_variable(spec: Any) -> str:
@@ -52,6 +53,12 @@ def target_role_allowed(policy: dict[str, Any], target_config: dict[str, Any]) -
 
 def is_production_target(target_config: dict[str, Any]) -> bool:
     return str(target_config.get("role") or "").lower() == "production"
+
+
+def has_full_pvi_access(target_config: dict[str, Any]) -> bool:
+    """Trusted development targets may access every PVI variable."""
+
+    return str(target_config.get("role") or "").lower() in TRUSTED_PVI_ROLES
 
 
 def matches_blocked_name(name: str, policy: dict[str, Any]) -> bool:
@@ -156,6 +163,8 @@ def validate_pvi_read(
         errors.append("Refusing dynamic PVI reads on a production target.")
     if not target_role_allowed(policy, target_config):
         errors.append(f"Target role '{target_config.get('role')}' is not allowed by access_policy.allowed_target_roles.")
+    if errors or has_full_pvi_access(target_config):
+        return errors
 
     read_allowed = pvi_read_map(config)
     catalog = catalog_variable_map(config, targets_file)
@@ -196,6 +205,8 @@ def validate_pvi_write(
         errors.append(f"Target role '{target_config.get('role')}' is not allowed by access_policy.allowed_target_roles.")
     if not execute:
         errors.append("PVI writes require explicit execute=true.")
+    if errors or has_full_pvi_access(target_config):
+        return errors
 
     write_allowed = pvi_write_map(config)
     catalog = catalog_variable_map(config, targets_file)

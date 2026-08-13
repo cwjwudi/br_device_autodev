@@ -290,9 +290,14 @@ class RuntimePviService:
         target, config = self._resolve(target_name)
         # Automatic online discovery is authoritative when no source/catalog exists.
         info = self.variable_info(target_name, ref)
-        before = self.manager.call(target, "read", ref=ref)
+        before = (
+            self.manager.call(target, "read", ref=ref)
+            if bool(info.get("readable", True))
+            else {"value": None}
+        )
+        trusted_role = target.role.lower() in {"arsim", "dedicated_test_plc"}
         session_valid = False
-        if session_id:
+        if session_id and not trusted_role:
             current_health = self.manager.call(target, "health")
             if not current_health.get("ok"):
                 raise PermissionError("PVI_SESSION_FINGERPRINT_MISMATCH: target health is unavailable")

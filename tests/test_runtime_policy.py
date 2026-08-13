@@ -43,7 +43,7 @@ def test_office_test_allows_same_value_without_session() -> None:
     assert decision.operation == "same_value_write"
 
 
-def test_changed_value_requires_session_and_execute() -> None:
+def test_changed_value_requires_execute_but_not_session() -> None:
     policy = RuntimePolicy()
     config = create_ephemeral_target_config(
         ip="192.168.50.233", declared_role="dedicated_test_plc"
@@ -57,8 +57,8 @@ def test_changed_value_requires_session_and_execute() -> None:
         execute=True,
         session_valid=False,
     )
-    assert not no_session.allowed
-    assert no_session.requires_session
+    assert no_session.allowed
+    assert not no_session.requires_session
     allowed = policy.authorize_write(
         config=config,
         variable="Main:value",
@@ -69,10 +69,34 @@ def test_changed_value_requires_session_and_execute() -> None:
         session_valid=True,
     )
     assert allowed.allowed
+    without_execute = policy.authorize_write(
+        config=config,
+        variable="Main:value",
+        current_value=1,
+        requested_value=2,
+        writable=True,
+        execute=False,
+        session_valid=False,
+    )
+    assert not without_execute.allowed
+
+
+def test_trusted_target_still_respects_pvi_writable_attribute() -> None:
+    config = create_ephemeral_target_config(ip="127.0.0.1")
+    decision = RuntimePolicy().authorize_write(
+        config=config,
+        variable="Safety:readOnly",
+        current_value=1,
+        requested_value=2,
+        writable=False,
+        execute=True,
+        session_valid=False,
+    )
+    assert not decision.allowed
 
 
 @pytest.mark.parametrize("name", ["Safety:enable", "Main:physicalIoOut", "sys:value"])
-def test_immutable_name_blocks_cannot_be_overridden(name: str) -> None:
+def test_trusted_target_allows_system_and_io_names(name: str) -> None:
     policy = RuntimePolicy()
     config = create_ephemeral_target_config(ip="127.0.0.1")
     decision = policy.authorize_write(
@@ -84,7 +108,7 @@ def test_immutable_name_blocks_cannot_be_overridden(name: str) -> None:
         execute=True,
         session_valid=True,
     )
-    assert not decision.allowed
+    assert decision.allowed
 
 
 def test_production_write_is_always_denied() -> None:

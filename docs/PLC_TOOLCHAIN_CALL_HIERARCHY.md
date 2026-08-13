@@ -22,8 +22,8 @@ flowchart TD
     CLI --> ASBuild["BR.AS.Build.exe\nAutomation Studio 官方构建"]
     CLI --> PVITransfer["PVITransfer.exe\nRUC 下载 / 探针 / Logger"]
     CLI --> OpcUa["tools/opcua_read.py\nOPC UA 白名单读取"]
-    CLI --> PviRead["tools/pvi_read.py\nPVI 白名单读取"]
-    CLI --> PviWrite["tools/pvi_write.py\nPVI 测试白名单写入"]
+    CLI --> PviRead["tools/pvi_read.py\n可信目标全量 PVI 读取"]
+    CLI --> PviWrite["tools/pvi_write.py\n可信目标全量 PVI 写入"]
     CLI --> IoRunner["tools/plc_io_test_runner.py\nIO 测试闭环"]
     CLI --> Logger["tools/plc_logger_read.py\nLogger 只读诊断"]
     Wrapper --> SymbolIndex["tools/plc_symbol_index.py\n变量目录 / 动态变量搜索"]
@@ -98,7 +98,7 @@ Agent 进入仓库并读取 AGENTS.md
 | `plc_list_variables` | `tools/plc_symbol_index.py` | 只读变量目录 | 扫描工程变量并生成变量 catalog |
 | `plc_search_variables` | `tools/plc_symbol_index.py` | 只读变量搜索 | Agent 按名称、模块、读写权限搜索变量 |
 | `plc_read_logger` | `ReadLogger` | 只读诊断 | 读取白名单 PLC/AR Logger 模块 |
-| `plc_write_pvi` | `WritePvi` | 测试写入 | 默认只允许写 `pvi.write_whitelist`；`agent_directed` 模式允许策略内动态写入 |
+| `plc_write_pvi` | `WritePvi` | 测试写入 | ARsim/测试 PLC 可写任意 PVI 可写变量，仍要求 `execute=true` |
 | `plc_run_arsim_closed_loop` | `RunArsimClosedLoop` | 组合流程 | 构建、启动 ARsim、探针、安全检查、可选下载、验证并写报告 |
 | `plc_run_verification_suite` | `RunVerificationSuite` | 组合验证 | OPC UA 优先，PVI 备用，输出统一报告 |
 | `plc_run_io_test_case` | `RunIoTestCase` | IO 测试 | 执行单个测试用例：reset、写入、等待、读回、断言、restore |
@@ -176,9 +176,9 @@ plc_reset_test_harness(execute=true)
 -> 输出 IO 测试报告
 ```
 
-IO 测试只允许写入 `config/targets/default-safe.json` 中 `pvi.write_whitelist` 定义的测试 harness 变量，不允许写 Safety、物理 I/O、系统变量或生产目标。
+IO 测试在 ARsim/测试 PLC 上可写任意 PVI 可写变量；production 目标仍禁止写入。
 
-在 `access_policy.mode=agent_directed` 时，Agent 可以先调用 `plc_search_variables` 搜索输入/输出变量，再动态生成测试用例或直接调用 `plc_write_pvi` / `plc_read_pvi`。即使在该模式下，生产目标、Safety/物理 I/O/system 名称、缺少 `execute=true` 的写入仍会被拒绝。
+Agent 可以先调用 `plc_search_variables` 搜索输入/输出变量，再动态生成测试用例或直接调用 `plc_write_pvi` / `plc_read_pvi`。可信调试目标不检查名称黑名单；production 目标和缺少 `execute=true` 的写入仍会被拒绝。
 
 动态 PVI 写入的推荐闭环是：
 
@@ -216,8 +216,8 @@ Logger 读取只返回摘要和报告路径，不把大段 HTML/CSV 内容直接
 | 变量访问模式 | `access_policy` | `whitelist` 默认只允许配置白名单；`catalog_policy` 使用变量目录；`agent_directed` 允许 Agent 动态选择变量 |
 | 生产目标拒绝 | CLI 和工具脚本 | `role=production` 目标不自动下载或写入 |
 | 包-目标匹配 | `CheckDownload` / `Download` | ARsim 包和物理 PLC 包不能混用；`force_arsim_download` 只允许用户授权后的 ARsim 目标 |
-| 读取策略 | OPC UA/PVI 配置和 `access_policy` | 默认白名单读取；动态读取必须由用户显式切换模式 |
-| 写入策略 | `pvi.write_whitelist` 和 `access_policy` | 默认只允许测试 harness；动态写入仍受黑名单和目标角色约束 |
+| 读取策略 | 目标角色和 `access_policy` | ARsim/测试 PLC 允许全量 PVI 读取；其他角色保持受限 |
+| 写入策略 | 目标角色、`execute=true`、PVI 属性 | ARsim/测试 PLC 允许全量 PVI 写入；production 禁止 |
 | Logger 白名单 | `logger.allowed_modules` / `blocked_modules` | Logger 只读，Safety logger 默认拒绝 |
 | Safety 工程保护 | Skill / 人工流程 | 不自动修改 Safety 工程、安全任务、安全 I/O |
 
@@ -296,8 +296,8 @@ Automation Studio config 必须按项目真实名称处理。本项目当前可�
 | 本地 CLI | `tools/plc_toolchain.ps1` | 统一执行入口 |
 | PVITransfer wrapper | `scripts/windows/invoke-pvitransfer-silent.ps1` | 静默调用 PVITransfer |
 | OPC UA 读取 | `tools/opcua_read.py` | OPC UA 白名单验证 |
-| PVI 读取 | `tools/pvi_read.py` | PVI 白名单读取 |
-| PVI 写入 | `tools/pvi_write.py` | 测试 harness 白名单写入 |
+| PVI 读取 | `tools/pvi_read.py` | 可信调试目标全量 PVI 读取 |
+| PVI 写入 | `tools/pvi_write.py` | 可信调试目标全量 PVI 写入 |
 | IO 测试 runner | `tools/plc_io_test_runner.py` | 单用例/测试套件执行、断言和恢复 |
 | Logger 读取 | `tools/plc_logger_read.py` | PVITransfer Logger 只读诊断 |
 | 变量目录/搜索 | `tools/plc_symbol_index.py` | 扫描 PLC 变量，生成 `var/catalogs/plc_symbol_catalog.json`，供 Agent 动态选变量 |

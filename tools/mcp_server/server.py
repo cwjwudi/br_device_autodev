@@ -28,10 +28,10 @@ from toolchain import (
     set_operation_id,
 )
 from validation import validate_json_schema
-from version import __version__
+from version import SERVER_RUNTIME, __version__
 
 
-SERVER_INFO = {"name": "br-plc-toolchain", "version": __version__}
+SERVER_INFO = {"name": "br-plc-toolchain", "version": __version__, **SERVER_RUNTIME}
 PROTOCOL_VERSION = "2024-11-05"
 TOOL_DEFINITIONS_BY_NAME = {definition["name"]: definition for definition in TOOL_DEFINITIONS}
 AUDIT_DIR = DEFAULT_AUDIT_DIR

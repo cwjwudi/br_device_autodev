@@ -24,6 +24,7 @@ param(
     [switch]$BuildRucPackage,
     [int]$StartWaitSeconds = 3,
     [switch]$ForceArsimDownload,
+    [switch]$BypassDownloadSafety,
     [switch]$Execute
 )
 
@@ -893,6 +894,9 @@ function Test-DownloadSafety {
     $errorCodes = New-Object System.Collections.Generic.List[string]
     $isArsimPackage = ($packageInfo.cpu_type -eq "AR000" -or $packageInfo.runtime_type -match "AR Simulation")
     $isArsimTarget = ($targetConfig.role -match "arsim")
+    $targetRole = ([string]$targetConfig.role).ToLowerInvariant()
+    $isTrustedDevelopmentTarget = $targetRole -in @("arsim", "dedicated_test_plc")
+    $safetyBypassed = [bool](($BypassDownloadSafety -or $ForceArsimDownload) -and $isTrustedDevelopmentTarget)
     $targetPartitionLayout = if ($probe.partition_layout) { [string]$probe.partition_layout } else { [string]$targetConfig.partition_layout }
     $packagePartitionLayout = if ($packageInfo.partition_layout) {
         [string]$packageInfo.partition_layout
@@ -1031,6 +1035,42 @@ function Test-DownloadSafety {
         $reasons.Add("RUC installation mode '$packageInstallationMode' does not match target mode '$targetInstallationMode'.")
     }
 
+    if ($ForceArsimDownload) {
+        $warnings.Add("force_arsim_download is deprecated; use bypass_download_safety instead.")
+    }
+
+    # ARsim and dedicated test PLCs are trusted development targets. Detailed
+    # package identity comparisons remain useful diagnostics, but do not block
+    # a full RUC transfer. Only the small, explicit hard boundary below does.
+    if ($isTrustedDevelopmentTarget) {
+        foreach ($reason in @($reasons)) {
+            $warnings.Add($(if ($safetyBypassed) { "BYPASSED: $reason" } else { "Compatibility warning: $reason" }))
+        }
+        $reasons.Clear()
+        $errorCodes.Clear()
+
+        if (-not $targetConfig.allow_auto_download) {
+            $errorCodes.Add("TARGET_ROLE_MISMATCH")
+            $reasons.Add("Target '$Target' does not allow automatic download.")
+        }
+        if (-not $probe.ok -or -not $probe.cpu_type) {
+            $errorCodes.Add("TARGET_PROBE_INVALID")
+            $reasons.Add("Target probe did not return a valid CPU type.")
+        }
+        if ($isArsimPackage -and -not $isArsimTarget) {
+            $errorCodes.Add("TARGET_ROLE_MISMATCH")
+            $reasons.Add("An ARsim RUC package cannot be downloaded to a dedicated test PLC.")
+        }
+        if ((-not $isArsimPackage) -and $isArsimTarget) {
+            $errorCodes.Add("TARGET_ROLE_MISMATCH")
+            $reasons.Add("A physical PLC RUC package cannot be downloaded to ARsim.")
+        }
+    }
+    elseif ($BypassDownloadSafety -or $ForceArsimDownload) {
+        $errorCodes.Add("TARGET_ROLE_MISMATCH")
+        $reasons.Add("Download safety bypass is limited to ARsim and dedicated test PLC targets.")
+    }
+
     $ok = ($reasons.Count -eq 0)
     $decision = if ($ok) { "allow" } elseif (@($errorCodes | Where-Object { $_ -match "_UNKNOWN$" }).Count -gt 0) { "unknown" } elseif ($errorCodes -contains "PARTITION_LAYOUT_INCOMPATIBLE" -or $errorCodes -contains "INSTALLATION_MODE_MISMATCH") { "manual_intervention" } else { "block" }
     $report = [ordered]@{
@@ -1060,11 +1100,12 @@ function Test-DownloadSafety {
             matches = [bool]($packagePartitionLayout -and $targetPartitionLayout -and $packagePartitionLayout -eq $targetPartitionLayout)
         }
         transfer_policy = $transferPolicy
-        force_arsim_download = [bool]($ForceArsimMismatch -and $isArsimTarget)
+        force_arsim_download = [bool]$ForceArsimDownload
+        safety_bypassed = $safetyBypassed
         error_codes = @($errorCodes | Select-Object -Unique)
         reasons = @($reasons)
         warnings = @($warnings)
-        next_action = if ($ok) { "A single explicit download may be attempted." } elseif ($errorCodes -contains "PARTITION_LAYOUT_INCOMPATIBLE" -or $errorCodes -contains "PARTITION_LAYOUT_UNKNOWN" -or $errorCodes -contains "INSTALLATION_MODE_MISMATCH") { "Rebuild a matching ARsim virtual medium, use Automation Studio incremental Transfer manually, or retain the RUC without downloading." } else { "Fix the reported target/package mismatch; do not retry by rotating installation modes." }
+        next_action = if ($ok) { "A single explicit full-RUC download may be attempted." } else { "Rebuild the complete RUC package, verify target connectivity, and inspect the PVITransfer log." }
     }
 
     if ($Quiet) {
@@ -1125,7 +1166,9 @@ function Invoke-Download {
     $wrapper = Resolve-RepoPath "scripts\windows\invoke-pvitransfer-silent.ps1"
     $pviTransfer = Resolve-RepoPath $toolchainConfig.pvi.transfer_exe
     $pil = Resolve-TransferPilPath
-    $log = Join-Path (Split-Path -Parent $pil) "pvi_download_$Target.log"
+    $downloadLogDir = Join-Path $GeneratedDir (Join-Path "downloads" $OperationId)
+    New-Item -ItemType Directory -Path $downloadLogDir -Force | Out-Null
+    $log = Join-Path $downloadLogDir "pvi_download_$Target.log"
     $conn = "'/IF=tcpip', '/IP=$($targetConfig.ip) /COMT=2500 /AM=* /PT=11169', 'WT=60', 'IGNORE'"
 
     $output = $null
@@ -1204,6 +1247,7 @@ function Invoke-Download {
         probe_after = $probeAfter
         output_tail = Get-OutputTail $lines
         log_tail = if (Test-Path -LiteralPath $log) { @(Get-Content -LiteralPath $log -Tail 40 -ErrorAction SilentlyContinue) } else { @() }
+        warnings = @($lines | Where-Object { $_ -match '^WARNING:' })
         error_code = if ($deploymentState -eq "unknown") { "TRANSFER_STATE_UNKNOWN" } elseif (-not $downloadOk) { "TRANSFER_FAILED" } elseif ($applicationReadiness -and -not $applicationReadiness.ok) { $applicationReadiness.error_code } elseif ($verification -and -not $verification.ok) { "APPLICATION_NOT_READY" } else { $null }
         next_action = if ($deploymentState -eq "unknown") { "Re-probe the target and inspect the PVITransfer and Logger output before retrying." } elseif (-not $downloadOk) { "Inspect the transfer log; do not automatically retry with another installation mode." } elseif ($deploymentState -eq "runtime_reachable") { "Verify application readiness before running tests." } else { "Review the deployment report." }
         verification = $verification

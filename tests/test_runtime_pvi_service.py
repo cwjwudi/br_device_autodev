@@ -97,12 +97,13 @@ def test_same_value_write_does_not_require_session(tmp_path) -> None:
     assert result["access_decision"]["operation"] == "same_value_write"
 
 
-def test_changed_value_requires_target_bound_session(tmp_path) -> None:
+def test_changed_value_does_not_require_target_bound_session(tmp_path) -> None:
     service = build_service(tmp_path)
     service.register_ephemeral_target(ip="192.168.50.233", name="plc", declared_role="test")
     ref = VariableRef(name="bEnable", task="Main")
-    with pytest.raises(PermissionError, match="test session"):
-        service.write("plc", ref, True, execute=True)
+    result = service.write("plc", ref, True, execute=True)
+    assert result["ok"]
+    assert result["access_decision"]["requires_session"] is False
     opened = service.open_test_session("plc", execute=True)
     session_id = opened["session"]["session_id"]
     result = service.write("plc", ref, True, execute=True, session_id=session_id)
@@ -134,20 +135,20 @@ def test_save_target_is_explicit_and_uses_ignored_local_config(tmp_path, monkeyp
     assert (tmp_path / "local" / "office-plc.json").is_file()
 
 
-def test_changed_write_rejects_target_identity_change(tmp_path) -> None:
+def test_trusted_write_ignores_legacy_session_identity_change(tmp_path) -> None:
     manager = FakeManager()
     service = RuntimePviService(manager=manager, discovery_root=tmp_path)
     service.register_ephemeral_target(ip="192.168.50.233", name="plc", declared_role="test")
     opened = service.open_test_session("plc", execute=True)
     manager.generation = 2
-    with pytest.raises(PermissionError, match="PVI_SESSION_FINGERPRINT_MISMATCH"):
-        service.write(
-            "plc",
-            VariableRef(name="bEnable", task="Main"),
-            True,
-            execute=True,
-            session_id=opened["session"]["session_id"],
-        )
+    result = service.write(
+        "plc",
+        VariableRef(name="bEnable", task="Main"),
+        True,
+        execute=True,
+        session_id=opened["session"]["session_id"],
+    )
+    assert result["ok"]
 
 
 def test_read_many_deduplicates_and_submits_one_worker_operation(tmp_path) -> None:
@@ -172,7 +173,7 @@ def test_read_many_deduplicates_and_submits_one_worker_operation(tmp_path) -> No
     assert [ref.canonical for ref in calls[0][1]["refs"]] == ["Main:bEnable", "Main:bOther", "Main:Unknown"]
 
 
-def test_changed_write_rejects_incomplete_target_identity(tmp_path) -> None:
+def test_trusted_write_ignores_incomplete_legacy_session_identity(tmp_path) -> None:
     manager = FakeManager()
     service = RuntimePviService(manager=manager, discovery_root=tmp_path)
     service.register_ephemeral_target(ip="192.168.50.233", name="plc", declared_role="test")
@@ -186,14 +187,14 @@ def test_changed_write_rejects_incomplete_target_identity(tmp_path) -> None:
         return result
 
     manager.call = incomplete_health  # type: ignore[method-assign]
-    with pytest.raises(PermissionError, match="PVI_SESSION_FINGERPRINT_MISMATCH"):
-        service.write(
-            "plc",
-            VariableRef(name="bEnable", task="Main"),
-            True,
-            execute=True,
-            session_id=opened["session"]["session_id"],
-        )
+    result = service.write(
+        "plc",
+        VariableRef(name="bEnable", task="Main"),
+        True,
+        execute=True,
+        session_id=opened["session"]["session_id"],
+    )
+    assert result["ok"]
 
 
 def test_runtime_target_name_cannot_escape_discovery_root(tmp_path) -> None:

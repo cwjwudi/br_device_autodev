@@ -79,31 +79,40 @@ def verify_write_result(
     readable: bool = True,
 ) -> dict[str, Any]:
     status_value = getattr(status, "value", status)
-    status_ok = status_value in (0, "0")
+    status_is_scalar = isinstance(status_value, (int, float, str)) and not isinstance(status_value, bool)
     try:
         status_code = int(status_value)
     except (TypeError, ValueError):
         status_code = None
+    status_failed = status_is_scalar and status_code not in (None, 0)
+    status_ok = status_code == 0 if status_is_scalar else None
     result = {
         "status_ok": status_ok,
         "status_code": status_code if status_code is not None else normalize_value(status_value),
-        "status_explanation": "PVI status indicates success." if status_ok else "PVI status indicates that the write was not accepted; readback is not trusted.",
+        "status_explanation": (
+            "PVI status indicates success."
+            if status_ok
+            else "PVI status is diagnostic and is not a scalar error code."
+            if not status_is_scalar
+            else "PVI status indicates that the write was not accepted."
+        ),
         "readback_verified": None,
         "ok": False,
     }
-    if not status_ok:
+    if status_failed:
         result["error_code"] = "PVI_STATUS_FAILURE"
         result["error"] = f"PVI variable status indicates failure: {normalize_value(status)!r}"
         return result
     if not readable:
-        result["error_code"] = "PVI_READBACK_UNAVAILABLE"
-        result["error"] = "PVI readback is unavailable for this variable."
+        result["ok"] = True
+        result["warning_code"] = "PVI_READBACK_UNAVAILABLE"
+        result["warning"] = "PVI write completed, but readback is unavailable for this variable."
         return result
     result["readback_verified"] = values_equal(requested, readback)
-    result["ok"] = bool(result["readback_verified"])
-    if not result["ok"]:
-        result["error_code"] = "PVI_READBACK_MISMATCH"
-        result["error"] = "PVI readback does not match the requested value."
+    result["ok"] = True
+    if not result["readback_verified"]:
+        result["warning_code"] = "PVI_READBACK_MISMATCH"
+        result["warning"] = "PVI write completed, but readback does not match the requested value."
     return result
 
 
@@ -185,12 +194,15 @@ def write_variables(args: argparse.Namespace, writes: list[dict[str, Any]]) -> d
                 variable = Variable(parent, item["name"], RF=0)
                 connection.sleep(args.variable_wait_ms)
                 result["data_type"] = variable.dataType
-                result["before"] = normalize_value(variable.value)
+                readable = bool(variable.readable)
+                if not bool(variable.writable):
+                    raise PermissionError(f"Variable {item['variable']!r} is not writable")
+                result["before"] = normalize_value(variable.value) if readable else None
                 declared_type = (allowed.get(item["variable"]) or {}).get("type")
                 coerced = coerce_value(item["value"], declared_type)
                 variable.value = coerced
                 connection.sleep(args.write_wait_ms)
-                result["readback"] = normalize_value(variable.value)
+                result["readback"] = normalize_value(variable.value) if readable else None
                 result["requested_value"] = normalize_value(coerced)
                 result["status"] = normalize_value(variable.status)
                 result.update(
@@ -198,12 +210,15 @@ def write_variables(args: argparse.Namespace, writes: list[dict[str, Any]]) -> d
                         coerced,
                         result["readback"],
                         variable.status,
-                        readable=bool(variable.readable),
+                        readable=readable,
                     )
                 )
             except ValueError as exc:
                 result["error"] = str(exc)
                 result["error_code"] = "PVI_INVALID_VALUE"
+            except PermissionError as exc:
+                result["error"] = str(exc)
+                result["error_code"] = "PVI_NOT_WRITABLE"
             except PviError as exc:
                 result["error"] = str(exc)
                 result["error_code"] = "PVI_OPERATION_FAILED"
@@ -226,11 +241,12 @@ def write_variables(args: argparse.Namespace, writes: list[dict[str, Any]]) -> d
         "target_ip": target_config.get("ip"),
         "target_role": target_config.get("role"),
         "writes": results,
+        "warnings": [item["warning"] for item in results if item.get("warning")],
     }
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Write whitelisted B&R PLC test variables via PVI.")
+    parser = argparse.ArgumentParser(description="Write B&R PLC development-target variables via PVI.")
     parser.add_argument("--target", required=True, help="Target name from the selected target configuration.")
     parser.add_argument("--targets-file", required=True, help="Toolchain target configuration JSON.")
     parser.add_argument("--writes-file", required=True, help="JSON file containing write objects.")

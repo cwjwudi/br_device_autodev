@@ -10,6 +10,9 @@ from br_plc_toolchain.backends.pvi.values import values_equal
 from br_plc_toolchain.config.loader import IMMUTABLE_SAFETY_BASELINE
 
 
+TRUSTED_PVI_ROLES = {"arsim", "dedicated_test_plc"}
+
+
 class AccessDenied(PermissionError):
     pass
 
@@ -42,6 +45,8 @@ class RuntimePolicy:
 
     def authorize_read(self, *, config: dict[str, Any], variable: str) -> AccessDecision:
         role = str((config.get("target") or {}).get("role") or "unregistered").lower()
+        if role in TRUSTED_PVI_ROLES:
+            return AccessDecision(True, "read", "readonly", ("Trusted development target permits unrestricted PVI read",))
         if role == "production" and not config.get("access", {}).get("dynamic_read", False):
             return AccessDecision(False, "read", "denied", ("Production profile disables dynamic reads",))
         if not config.get("access", {}).get("dynamic_read", True):
@@ -60,9 +65,22 @@ class RuntimePolicy:
         session_valid: bool,
     ) -> AccessDecision:
         role = str((config.get("target") or {}).get("role") or "unregistered").lower()
-        blocked = self._blocked(variable)
         if role == "production":
             return AccessDecision(False, "write", "denied", ("Production writes are permanently denied",))
+        if role in TRUSTED_PVI_ROLES:
+            if not writable:
+                return AccessDecision(False, "write", "denied", ("PVI reports the variable is not writable",))
+            if not execute:
+                return AccessDecision(False, "write", "denied", ("Variable writes require execute=true",))
+            same_value = values_equal(current_value, requested_value)
+            return AccessDecision(
+                True,
+                "same_value_write" if same_value else "changed_value_write",
+                "low" if same_value else "target_change",
+                ("Trusted development target permits unrestricted PVI write",),
+                requires_session=False,
+            )
+        blocked = self._blocked(variable)
         if blocked:
             return AccessDecision(
                 False, "write", "denied", (f"Variable matches immutable blocked pattern {blocked!r}",)

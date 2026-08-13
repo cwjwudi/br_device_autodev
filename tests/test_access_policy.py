@@ -124,6 +124,17 @@ class AccessPolicyTests(unittest.TestCase):
         self.assertIn("production", " ".join(result["errors"]).lower())
         self.assertEqual("production", result["target_role"])
 
+    def test_trusted_target_can_read_and_write_any_variable_name(self) -> None:
+        for variable in ("Other:NotListed", "Safety:Enable", "sys:value", "Main:physicalIoOut"):
+            with self.subTest(variable=variable):
+                self.assertTrue(self.evaluate("pvi_read", [variable], explicit=True)["ok"])
+                self.assertTrue(self.evaluate("pvi_write", [variable], execute=True)["ok"])
+
+    def test_trusted_write_still_requires_execute(self) -> None:
+        result = self.evaluate("pvi_write", ["Other:NotListed"], execute=False)
+        self.assertFalse(result["ok"])
+        self.assertIn("execute=true", " ".join(result["errors"]))
+
     def test_policy_payload_contains_required_contract_fields(self) -> None:
         result = self.run_cli("pvi_read", ["Safety:Input"], explicit=True)
 
@@ -164,11 +175,8 @@ class AccessPolicyTests(unittest.TestCase):
             check=False,
         )
 
-        self.assertEqual(1, completed.returncode)
-        payload = json.loads(completed.stdout)
-        self.assertIn("blocked_name_patterns", " ".join(payload["errors"]))
-        self.assertNotIn("access_policy", payload)
-        self.assertNotIn("requested_variables", payload)
+        self.assertNotIn("blocked_name_patterns", completed.stdout)
+        self.assertNotIn("not in pvi.read_whitelist", completed.stdout)
 
     def test_powershell_has_no_duplicate_policy_engine(self) -> None:
         script = (TOOLS_DIR / "plc_toolchain.ps1").read_text(encoding="utf-8-sig")

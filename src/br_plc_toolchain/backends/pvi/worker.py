@@ -405,8 +405,8 @@ class PviWorker:
         self._pump_for(0.05)
         readback = variable.value if variable.readable else None
         verified = values_equal(coerced, readback) if variable.readable else None
-        return {
-            "ok": verified is not False,
+        result = {
+            "ok": True,
             "target": self.target.name,
             **self._ref_dict(ref),
             "pvi_path": variable.name,
@@ -416,6 +416,13 @@ class PviWorker:
             "readback": json_safe(readback),
             "verified": verified,
         }
+        if verified is False:
+            result["warning_code"] = "PVI_READBACK_MISMATCH"
+            result["warning"] = "PVI write completed, but readback does not match the requested value."
+        elif verified is None:
+            result["warning_code"] = "PVI_READBACK_UNAVAILABLE"
+            result["warning"] = "PVI write completed, but readback is unavailable for this variable."
+        return result
 
     def _write_many(self, writes: list[tuple[VariableRef, Any]]) -> dict[str, Any]:
         results: list[dict[str, Any]] = []
