@@ -327,7 +327,15 @@ def build_catalog(config: dict[str, Any], targets_file: str, project_root: Path 
     }
 
 
-def filter_catalog(catalog: dict[str, Any], *, query: str | None, module: str | None, access: str | None) -> dict[str, Any]:
+def filter_catalog(
+    catalog: dict[str, Any],
+    *,
+    query: str | None,
+    module: str | None,
+    access: str | None,
+    offset: int = 0,
+    limit: int | None = None,
+) -> dict[str, Any]:
     terms = [term.lower() for term in re.split(r"\s+", query or "") if term.strip()]
     filtered = []
     for item in catalog.get("variables") or []:
@@ -339,13 +347,22 @@ def filter_catalog(catalog: dict[str, Any], *, query: str | None, module: str | 
         if access and access not in set(item.get("access") or []):
             continue
         filtered.append(item)
+    matched_count = len(filtered)
+    safe_offset = max(0, offset)
+    page = filtered[safe_offset:] if limit is None else filtered[safe_offset : safe_offset + max(1, limit)]
     result = dict(catalog)
     result["command"] = "SearchVariables" if query or module or access else "ListVariables"
     result["query"] = query
     result["module"] = module
     result["access_filter"] = access
-    result["variables"] = filtered
-    result["count"] = len(filtered)
+    result["variables"] = page
+    result["count"] = len(page)
+    result["matched_count"] = matched_count
+    result["total_count"] = len(catalog.get("variables") or [])
+    result["offset"] = safe_offset
+    result["limit"] = limit
+    result["truncated"] = safe_offset + len(page) < matched_count
+    result["next_offset"] = safe_offset + len(page) if result["truncated"] else None
     return result
 
 
@@ -355,6 +372,8 @@ def main() -> int:
     parser.add_argument("--query")
     parser.add_argument("--module")
     parser.add_argument("--access", choices=["read", "write"])
+    parser.add_argument("--offset", type=int, default=0)
+    parser.add_argument("--limit", type=int)
     parser.add_argument("--output-file")
     parser.add_argument("--project-root", default=str(DEFAULT_PROJECT_ROOT))
     args = parser.parse_args()
@@ -367,7 +386,14 @@ def main() -> int:
         project_root = REPO_ROOT / project_root
     config = load_json_file(str(targets_path))
     catalog = build_catalog(config, str(targets_path), project_root=project_root)
-    result = filter_catalog(catalog, query=args.query, module=args.module, access=args.access)
+    result = filter_catalog(
+        catalog,
+        query=args.query,
+        module=args.module,
+        access=args.access,
+        offset=args.offset,
+        limit=args.limit,
+    )
 
     if args.output_file:
         output = Path(args.output_file)

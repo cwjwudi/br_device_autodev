@@ -140,6 +140,25 @@ class PlcSymbolIndexTests(unittest.TestCase):
         self.assertEqual(catalog["confidence"], result["confidence"])
         self.assertEqual(1, result["count"])
 
+    def test_filter_paginates_without_losing_match_counts(self) -> None:
+        catalog = self.build()
+
+        first = symbol_index.filter_catalog(
+            catalog, query=None, module=None, access=None, offset=0, limit=1
+        )
+        second = symbol_index.filter_catalog(
+            catalog, query=None, module=None, access=None, offset=1, limit=1
+        )
+
+        self.assertEqual(1, first["count"])
+        self.assertEqual(2, first["matched_count"])
+        self.assertEqual(2, first["total_count"])
+        self.assertTrue(first["truncated"])
+        self.assertEqual(1, first["next_offset"])
+        self.assertEqual(1, second["count"])
+        self.assertFalse(second["truncated"])
+        self.assertIsNone(second["next_offset"])
+
 
 if __name__ == "__main__":
     unittest.main()

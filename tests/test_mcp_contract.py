@@ -95,6 +95,14 @@ class McpContractTests(unittest.TestCase):
                 schema = self.definitions_by_name[name]["inputSchema"]
                 self.assertTrue(expected.issubset(set(schema.get("required") or [])))
 
+    def test_symbol_catalog_responses_have_bounded_page_size(self) -> None:
+        for name in ("plc_list_variables", "plc_search_variables"):
+            with self.subTest(tool=name):
+                limit = self.definitions_by_name[name]["inputSchema"]["properties"]["limit"]
+                self.assertEqual(1, limit["minimum"])
+                self.assertEqual(500, limit["maximum"])
+                self.assertEqual(200, limit["default"])
+
     @patch.object(toolchain, "run_plc_toolchain")
     def test_start_arsim_confirmation_gate_blocks_execution(self, run_toolchain) -> None:
         result = toolchain.plc_start_arsim({"target": "arsim", "execute": False})

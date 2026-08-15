@@ -1686,6 +1686,10 @@ def run_symbol_index(arguments: dict[str, Any], *, search: bool) -> dict[str, An
         str(project_file.parent),
         "--output-file",
         str(catalog_path),
+        "--offset",
+        str(max(0, int(arguments.get("offset") or 0))),
+        "--limit",
+        str(max(1, min(500, int(arguments.get("limit") or 200)))),
     ]
     query = arguments.get("query")
     module = arguments.get("module")

@@ -103,6 +103,11 @@ def classify_exception(exc: BaseException) -> tuple[str, bool, str, list[str]]:
         return "PVI_SESSION_FINGERPRINT_MISMATCH", False, "policy", ["Open a new test session after confirming the target identity."]
     if message.startswith("PVI_OPERATION_TIMEOUT") or message.startswith("PVI_WORKER_DIRTY"):
         return "PVI_OPERATION_TIMEOUT", False, "pvi", ["Treat the target state as unknown and reconnect before retrying."]
+    if "PVI_CONNECTION_UNAVAILABLE" in message or "Pvi-Error 12004" in message or "Pvi-Error 12059" in message:
+        return "PVI_CONNECTION_UNAVAILABLE", True, "pvi", [
+            "Check whether PVI Manager is running and licensed; the unlicensed trial expires after two hours and then requires a PVI Manager restart.",
+            "After restarting PVI Manager, retry the read-only discovery so the MCP server creates a fresh PVI object hierarchy.",
+        ]
     if message.startswith("INVALID_TARGET_NAME"):
         return "INVALID_TARGET_NAME", False, "validation", ["Use only letters, digits, dot, underscore, and hyphen in target names."]
     if isinstance(exc, PermissionError):

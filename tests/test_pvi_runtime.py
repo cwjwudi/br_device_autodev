@@ -153,4 +153,15 @@ def test_batch_timeout_scales_with_variable_link_budget() -> None:
 
 def test_transport_error_classifier_handles_manager_timeout() -> None:
     assert is_pvi_transport_error(RuntimeError("Pvi-Error 12059 : Communication timeout"))
+    assert is_pvi_transport_error(RuntimeError("Pvi-Error 12004 : Undefined object handle"))
+    assert is_pvi_transport_error(RuntimeError("PVI_CONNECTION_UNAVAILABLE: manager did not connect"))
     assert not is_pvi_transport_error(RuntimeError("Pvi-Error 11033 : Object not found"))
+
+
+def test_manager_disconnect_marks_link_hierarchy_dirty() -> None:
+    worker = PviWorker(PviTarget(name="plc", ip="127.0.0.1"))
+    worker._manager_connected = True  # type: ignore[attr-defined]
+
+    worker._on_manager_connection(False)  # type: ignore[attr-defined]
+
+    assert worker.dirty is True

@@ -79,6 +79,38 @@ function Resolve-TransferPilPath {
     return Join-Path $packageDir "Transfer.pil"
 }
 
+function Resolve-ArsimLoaderPath {
+    param([Parameter(Mandatory = $true)]$TargetConfig)
+
+    $configured = [string]$TargetConfig.arsim_loader_exe
+    if ($configured -and $configured -notlike '<*') {
+        return Resolve-RepoPath $configured
+    }
+    if (-not $ProjectPath -or -not $Config) {
+        throw "ARSIM_LOADER_REQUIRED: provide ProjectPath and Config so the generated ARsim loader can be resolved."
+    }
+
+    $resolvedProject = Resolve-RepoPath $ProjectPath
+    $projectDir = if (Test-Path -LiteralPath $resolvedProject -PathType Container) {
+        $resolvedProject
+    }
+    else {
+        Split-Path -Parent $resolvedProject
+    }
+    $simulationRoot = Join-Path $projectDir (Join-Path "Temp\Simulation" $Config)
+    $matches = @()
+    if (Test-Path -LiteralPath $simulationRoot -PathType Container) {
+        $matches = @(Get-ChildItem -LiteralPath $simulationRoot -Recurse -Filter "ar000loader.exe" -File)
+    }
+    if ($matches.Count -eq 1) {
+        return $matches[0].FullName
+    }
+    if ($matches.Count -gt 1) {
+        throw "ARSIM_LOADER_AMBIGUOUS: found $($matches.Count) loaders below '$simulationRoot'; configure arsim_loader_exe explicitly."
+    }
+    throw "ARSIM_LOADER_REQUIRED: no generated ar000loader.exe was found below '$simulationRoot'; build the selected simulation config first."
+}
+
 function Get-ProjectConfigurationMetadata {
     $report = [ordered]@{
         automation_studio_config = $Config
@@ -133,7 +165,7 @@ function Test-ArsimProjectBinding {
         Split-Path -Parent $resolvedProject
     }
     $simulationDir = [System.IO.Path]::GetFullPath((Join-Path $projectDir (Join-Path "Temp\Simulation" $Config))).TrimEnd('\') + '\'
-    $loaderPath = [System.IO.Path]::GetFullPath((Resolve-RepoPath ([string]$TargetConfig.arsim_loader_exe)))
+    $loaderPath = [System.IO.Path]::GetFullPath((Resolve-ArsimLoaderPath -TargetConfig $TargetConfig))
     return $loaderPath.StartsWith($simulationDir, [System.StringComparison]::OrdinalIgnoreCase)
 }
 
@@ -156,7 +188,7 @@ function Get-BoundArsimMediaMetadata {
         return [pscustomobject]$report
     }
 
-    $loaderPath = [System.IO.Path]::GetFullPath((Resolve-RepoPath ([string]$TargetConfig.arsim_loader_exe)))
+    $loaderPath = [System.IO.Path]::GetFullPath((Resolve-ArsimLoaderPath -TargetConfig $TargetConfig))
     $mediaRoot = Split-Path -Parent $loaderPath
     $report.bound = $true
     $report.media_root = $mediaRoot
@@ -560,11 +592,7 @@ function Invoke-StartArsim {
     if ($targetConfig.role -notmatch "arsim") {
         throw "Target '$Target' is not marked as an ARsim target."
     }
-    if (-not $targetConfig.arsim_loader_exe -or [string]$targetConfig.arsim_loader_exe -like '<*') {
-        throw "ARSIM_LOADER_REQUIRED: target '$Target' does not define a real arsim_loader_exe path."
-    }
-
-    $loader = Resolve-RepoPath $targetConfig.arsim_loader_exe
+    $loader = Resolve-ArsimLoaderPath -TargetConfig $targetConfig
     if (-not (Test-Path -LiteralPath $loader)) {
         throw "ARsim loader was not found: $loader"
     }

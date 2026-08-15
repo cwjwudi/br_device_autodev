@@ -574,8 +574,13 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "plc_list_variables",
-        "description": "Build and list the PLC variable catalog, preferring fresh Automation Studio build artifacts and falling back to source scanning. Returns source, confidence, provenance, and warnings.",
-        "inputSchema": object_schema({}),
+        "description": "Build and page through the PLC variable catalog, preferring fresh Automation Studio build artifacts and falling back to source scanning. The complete catalog is saved locally; MCP responses are bounded.",
+        "inputSchema": object_schema(
+            {
+                "offset": {"type": "integer", "minimum": 0, "default": 0},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 500, "default": 200},
+            }
+        ),
     },
     {
         "name": "plc_search_variables",
@@ -595,6 +600,8 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                     "description": "Optional access filter.",
                     "enum": ["read", "write"],
                 },
+                "offset": {"type": "integer", "minimum": 0, "default": 0},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 500, "default": 200},
             }
         ),
     },

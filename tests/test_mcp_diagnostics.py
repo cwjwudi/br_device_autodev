@@ -125,6 +125,45 @@ class McpDiagnosticsTests(unittest.TestCase):
             }.issubset(names)
         )
 
+    def test_arsim_loader_is_discovered_from_unique_build_artifact(self) -> None:
+        loader = (
+            self.project_root
+            / "Temp"
+            / "Simulation"
+            / "sim"
+            / "Cpu"
+            / "ar000loader.exe"
+        )
+        loader.parent.mkdir(parents=True)
+        loader.write_bytes(b"")
+
+        resolved, source = diagnostics.resolve_arsim_loader(
+            {"arsim_loader_exe": "<path-to-ar000loader.exe>"}, self.project, "sim"
+        )
+
+        self.assertEqual(loader.resolve(), resolved)
+        self.assertEqual("project_build_artifact", source)
+
+    def test_arsim_loader_discovery_rejects_ambiguous_build_artifacts(self) -> None:
+        for cpu in ("Cpu1", "Cpu2"):
+            loader = (
+                self.project_root
+                / "Temp"
+                / "Simulation"
+                / "sim"
+                / cpu
+                / "ar000loader.exe"
+            )
+            loader.parent.mkdir(parents=True)
+            loader.write_bytes(b"")
+
+        resolved, source = diagnostics.resolve_arsim_loader(
+            {"arsim_loader_exe": "<path-to-ar000loader.exe>"}, self.project, "sim"
+        )
+
+        self.assertIsNone(resolved)
+        self.assertEqual("ambiguous", source)
+
     def test_report_listing_filters_kind_status_and_limit(self) -> None:
         self.write_report(
             "new_io_test.json",

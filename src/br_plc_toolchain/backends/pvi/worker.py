@@ -20,10 +20,12 @@ LOG = logging.getLogger(__name__)
 _GENERATION_LOCK = threading.Lock()
 _GENERATION_COUNTER = 0
 _PVI_TRANSPORT_MARKERS = (
+    "Pvi-Error 12004",
     "Pvi-Error 12059",
     "Pvi-Error 12060",
     "Pvi-Error 11021",
     "PVI_OPERATION_TIMEOUT",
+    "PVI_CONNECTION_UNAVAILABLE",
 )
 
 
@@ -133,6 +135,11 @@ class PviWorker:
         try:
             self._initialize_pvi()
             self._pump_until_cpu_ready(self.target.startup_wait_s)
+            if not self._manager_connected or not self._cpu_connected:
+                raise RuntimeError(
+                    "PVI_CONNECTION_UNAVAILABLE: PVI Manager or target CPU did not connect "
+                    f"within {self.target.startup_wait_s:.1f}s"
+                )
         except BaseException as exc:
             self._startup_error = exc
             LOG.exception("PVI initialization failed for %s", self.target.name)
@@ -192,11 +199,18 @@ class PviWorker:
         self._generation = _next_connection_generation()
 
     def _on_manager_connection(self, connected: bool) -> None:
+        was_connected = self._manager_connected
         self._manager_connected = bool(connected)
         if not connected:
             self._cpu_connected = False
             self._tasks.clear()
             self._variables.clear()
+            # pvipy drops its registered object list when PVI Manager
+            # disconnects.  Reusing this hierarchy produces invalid LinkID
+            # errors after the manager restarts, so force a fresh worker.
+            if was_connected:
+                self._dirty = True
+                self._stop.set()
 
     def _on_cpu_error(self, error: int) -> None:
         if error == 0 and not self._cpu_connected:

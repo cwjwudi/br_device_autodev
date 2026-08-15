@@ -68,6 +68,20 @@ def load_targets(path: Path) -> tuple[dict[str, Any] | None, str | None]:
     return value, None
 
 
+def resolve_arsim_loader(
+    target_config: dict[str, Any], project_path: Path | None, config_name: str
+) -> tuple[Path | None, str]:
+    configured = str(target_config.get("arsim_loader_exe") or "").strip()
+    if configured and not configured.startswith("<"):
+        path = repo_path(configured).resolve()
+        return path, "target_config"
+    if not project_path or not config_name:
+        return None, "unresolved"
+    simulation_root = project_path.parent / "Temp" / "Simulation" / config_name
+    matches = sorted(simulation_root.rglob("ar000loader.exe")) if simulation_root.is_dir() else []
+    return (matches[0].resolve(), "project_build_artifact") if len(matches) == 1 else (None, "ambiguous" if matches else "unresolved")
+
+
 def validate_environment(options: dict[str, str]) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
     targets_path = repo_path(options["targets_path"]).resolve()
@@ -289,16 +303,14 @@ def run_doctor(options: dict[str, str]) -> dict[str, Any]:
 
     target_config = ((targets or {}).get("targets") or {}).get(options["target"])
     if isinstance(target_config, dict) and str(target_config.get("role") or "").lower() == "arsim":
-        loader_raw = target_config.get("arsim_loader_exe")
-        loader_value = str(loader_raw or "").strip()
-        loader = repo_path(loader_value).resolve() if loader_value and not loader_value.startswith("<") else None
+        loader, loader_source = resolve_arsim_loader(target_config, Path(environment_result["project_path"]) if environment_result.get("project_path") else None, options["config"])
         add_check(
             checks,
             "arsim_loader",
             bool(loader and loader.is_file()),
-            "ARsim loader exists."
+            f"ARsim loader exists ({loader_source})."
             if loader and loader.is_file()
-            else "ARsim target is selected but arsim_loader_exe is missing or invalid.",
+            else "ARsim loader is missing or ambiguous; build the selected simulation config or configure arsim_loader_exe explicitly.",
             path=loader,
         )
 

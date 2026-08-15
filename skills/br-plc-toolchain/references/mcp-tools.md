@@ -32,7 +32,7 @@ MCP server version: `0.14.0`
 | `plc_get_target_config` | `readonly` | `GetTargetConfig` | - | Read the configured target entry, OPC UA whitelist, and PVI whitelist for a target. |
 | `plc_list_targets` | `readonly` | `ListTargets` | - | List configured PLC/ARsim targets with IP, role, and automatic-download permission. |
 | `plc_list_environments` | `readonly` | `MCP native` | - | List named PLC toolchain environments from config/environments/environments.json. |
-| `plc_list_variables` | `local_write` | `plc_symbol_index.py` | - | Build and list the PLC variable catalog, preferring fresh Automation Studio build artifacts and falling back to source scanning. Returns source, confidence, provenance, and warnings. |
+| `plc_list_variables` | `local_write` | `plc_symbol_index.py` | - | Build and page through the PLC variable catalog, preferring fresh Automation Studio build artifacts and falling back to source scanning. The complete catalog is saved locally; MCP responses are bounded. |
 | `plc_search_variables` | `local_write` | `plc_symbol_index.py` | - | Search PLC variables by text, module/task, and read/write access while preserving catalog source, confidence, provenance, and warnings. |
 | `plc_list_toolchains` | `readonly` | `structured config` | - | List configured AS4/AS6 toolchains, selected paths, PVI family and local availability. |
 | `plc_get_toolchain` | `readonly` | `structured config` | - | Resolve one global AS4/AS6 toolchain and return its compiler, libraries and PVI paths. |
