@@ -11,6 +11,7 @@ MCP_SERVER_DIR = ROOT / "tools" / "mcp_server"
 sys.path.insert(0, str(MCP_SERVER_DIR))
 
 from schemas import TOOL_DEFINITIONS  # noqa: E402
+from tool_visibility import disabled_definitions, visible_definitions  # noqa: E402
 from version import __version__  # noqa: E402
 
 
@@ -57,7 +58,7 @@ def markdown_escape(value: object) -> str:
 
 def tool_rows() -> list[str]:
     rows = []
-    for definition in TOOL_DEFINITIONS:
+    for definition in visible_definitions():
         name = definition["name"]
         schema = definition["inputSchema"]
         meta = definition.get("_meta") or {}
@@ -75,6 +76,24 @@ def tool_rows() -> list[str]:
             )
         )
     return rows
+
+
+def hidden_note() -> str:
+    hidden = [definition["name"] for definition in disabled_definitions()]
+    if not hidden:
+        return ""
+    names = ", ".join(f"`{markdown_escape(name)}`" for name in hidden)
+    return "\n".join(
+        [
+            "",
+            "## Hidden Tools",
+            "",
+            f"以下 {len(hidden)} 个工具被 `config/mcp/tool_filter.json` 隐藏（实现仍注册，仅供内部编排调用，MCP 列表与直接调用不可用）：",
+            "",
+            names,
+            "",
+        ]
+    )
 
 
 def render_table() -> str:
@@ -98,6 +117,7 @@ def render_catalog() -> str:
             "",
             render_table(),
             "",
+            hidden_note(),
             "## Risk Levels",
             "",
             "- `readonly`: reads configuration or artifacts without writing local state.",
@@ -119,6 +139,8 @@ def render_embedded(target: EmbeddedTarget) -> str:
             f"MCP server version: `{__version__}`. Full catalog: [{target.catalog_link}]({target.catalog_link})",
             "",
             render_table(),
+            "",
+            hidden_note(),
         ]
     )
 

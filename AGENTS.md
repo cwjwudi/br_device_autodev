@@ -32,7 +32,7 @@
 
 该目录由 `scripts/maintenance/generate_mcp_docs.py` 从 MCP schema 自动生成，不手工维护工具表。
 
-标准闭环顺序：doctor / validate_environment -> 确认实际 config 和 Simulation 设置 -> build -> start_arsim(target=arsim, execute=true) -> probe -> describe_package -> check_download -> download(target=arsim, execute=true) -> verify_opcua / read_pvi
+标准闭环顺序：doctor / validate_environment -> 确认实际 config 和 Simulation 设置 -> build -> start_arsim(target=arsim, execute=true) -> probe -> describe_package -> check_download -> download(target=arsim, execute=true) -> verify_opcua / read_runtime_variable
 
 缺失 Library 顺序：build 获取缺失符号 -> find_library_for_symbol -> plan_project_library -> add_project_library(execute=true)。只允许使用本机可信 AS 安装库，禁止自动添加 Safety 库。
 
@@ -41,7 +41,7 @@
 - `plc_download_ruc` 必须显式传入 `execute=true`，否则只做安全检查不下载。
 - 生产角色目标（role=production）自动拒绝下载。
 - ARsim RUC 包不能下载到物理 PLC；物理包下载到 ARsim 默认拒绝，只有用户明确授权并传入 `force_arsim_download=true` 时才允许对 ARsim 强制下载。
-- OPC UA 仅支持读取；PVI 默认只读，只有 `plc_write_pvi` 在 `access_policy`、目标角色、变量黑名单和 `execute=true` 全部通过时才允许写入。
+- OPC UA 仅支持读取；PVI 默认只读，只有 `plc_write_runtime_variable` 在 `access_policy`、目标角色、变量黑名单和 `execute=true` 全部通过时才允许写入。
 - 不自动修改 Safety 工程。
 - 不开放全部 OPC UA 变量。
 - 动态 PVI 写入优先采用“读当前值 -> 写同值或低风险测试值 -> 独立读回”的闭环；除非用户明确要求改变状态，否则不要随意改变控制变量。

@@ -29,11 +29,13 @@ from toolchain import (
 )
 from validation import validate_json_schema
 from version import SERVER_RUNTIME, __version__
+from tool_visibility import load_disabled_tools, visible_definitions
 
 
 SERVER_INFO = {"name": "br-plc-toolchain", "version": __version__, **SERVER_RUNTIME}
 PROTOCOL_VERSION = "2024-11-05"
 TOOL_DEFINITIONS_BY_NAME = {definition["name"]: definition for definition in TOOL_DEFINITIONS}
+DISABLED_TOOLS = load_disabled_tools()
 AUDIT_DIR = DEFAULT_AUDIT_DIR
 LOCK_DIR = DEFAULT_LOCK_DIR
 ERROR_LOG = Path(__file__).resolve().parents[2] / "var" / "reports" / "mcp_server_errors.log"
@@ -141,6 +143,21 @@ def check_target_change_rate_limit(lock_keys: list[str], *, now: float | None = 
 
 def handle_tools_call(params: dict[str, Any], operation_id: str | None = None) -> dict[str, Any]:
     name = params.get("name")
+    if str(name) in DISABLED_TOOLS:
+        return text_result(
+            {
+                "ok": False,
+                "tool": name,
+                "error": f"Tool is disabled by config/mcp/tool_filter.json: {name}",
+                "error_code": "TOOL_DISABLED",
+                "retryable": False,
+                "stage": "validation",
+                "remediation": [
+                    "Use the enabled alternative for this operation (see skills/br-plc-toolchain/references/mcp-tools.md), or re-enable the tool in config/mcp/tool_filter.json."
+                ],
+            },
+            is_error=True,
+        )
     tool = TOOLS.get(str(name))
     definition = TOOL_DEFINITIONS_BY_NAME.get(str(name))
     if tool is None or definition is None:
@@ -352,7 +369,7 @@ def handle_request(message: dict[str, Any], operation_id: str | None = None) -> 
     if method == "initialize":
         return make_response(request_id, handle_initialize(params))
     if method == "tools/list":
-        return make_response(request_id, {"tools": TOOL_DEFINITIONS})
+        return make_response(request_id, {"tools": visible_definitions(DISABLED_TOOLS)})
     if method == "tools/call":
         return make_response(request_id, handle_tools_call(params, operation_id=operation_id))
 

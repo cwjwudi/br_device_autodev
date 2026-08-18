@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -15,6 +16,20 @@ import toolchain  # noqa: E402
 
 
 class TargetDefaultTests(unittest.TestCase):
+    def setUp(self) -> None:
+        # Isolate audit/lock output in a temp dir so server-level calls never
+        # write into the repo's var/ (keeps tests sandbox-safe and side-effect free).
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        root = Path(self.temp_dir.name)
+        self.server_patches = [
+            patch.object(server, "AUDIT_DIR", root / "audit"),
+            patch.object(server, "LOCK_DIR", root / "locks"),
+        ]
+        for item in self.server_patches:
+            item.start()
+            self.addCleanup(item.stop)
+
     def test_schema_does_not_advertise_an_implicit_target(self) -> None:
         for definition in schemas.TOOL_DEFINITIONS:
             with self.subTest(tool=definition["name"]):

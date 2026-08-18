@@ -62,8 +62,8 @@ plc_run_arsim_closed_loop(arguments: { "config": "<actual_config>", "target": "a
    成功条件: ok=true, 所有节点 ok=true
    失败: 转到步骤 8 (PVI 备用)
 
-8. plc_read_pvi (备用)
-   arguments: { "config": "<actual_config>", "target": "arsim" }
+8. plc_read_runtime_variable (备用)
+   arguments: { "config": "<actual_config>", "target": "arsim", "name": "<变量名>" }
    成功条件: ok=true, 所有变量 ok=true
    失败: 检查 PVI Manager
 ```
@@ -140,7 +140,7 @@ plc_run_arsim_closed_loop(arguments: { "config": "<actual_config>", "target": "a
 ```
 1. plc_probe_target(target="test_plc")
 2. plc_verify_opcua(target="test_plc")
-3. plc_read_pvi(target="test_plc")  (备用)
+3. plc_read_runtime_variable(target="test_plc", name="<变量>")  (备用)
 ```
 
 注意：
@@ -210,7 +210,7 @@ plc_run_arsim_closed_loop(arguments: { "config": "<actual_config>", "target": "a
 
 - 先读取当前 `config/targets/default-safe.json` 或 `targets_path`，确认本次实际模式和 `allow_dynamic_pvi_read/write`。
 - 目标必须是 `role=arsim` 或 `role=dedicated_test_plc`，禁止 production。
-- 白名单外变量必须先通过 `plc_search_variables` 或 `plc_list_variables` 找到，不凭空猜测。
+- 白名单外变量必须先通过 `plc_search_variables` 找到，不凭空猜测。
 
 推荐流程：
 
@@ -218,17 +218,18 @@ plc_run_arsim_closed_loop(arguments: { "config": "<actual_config>", "target": "a
 1. plc_search_variables(target="<target>", module="<module>", writable=true)
    → 找到候选变量，避开 Safety/物理 I/O/system 名称
 
-2. plc_read_pvi(target="<target>", pvi_variables=["Task:Var"])
+2. plc_read_runtime_variable(target="<target>", name="Task:Var")
    → 读取当前值、数据类型和 PVI 路径
 
-3. plc_write_pvi(
+3. plc_write_runtime_variable(
      target="<target>",
-     writes=[{"variable":"Task:Var","value":<current_value>}],
+     name="Task:Var",
+     value=<current_value>,
      execute=true
    )
    → 优先写回当前值，证明写入通路且降低副作用
 
-4. plc_read_pvi(target="<target>", pvi_variables=["Task:Var"])
+4. plc_read_runtime_variable(target="<target>", name="Task:Var")
    → 独立读回，确认值一致
 ```
 

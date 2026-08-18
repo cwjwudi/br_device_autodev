@@ -55,12 +55,9 @@ plc_verify_opcua(arguments: {
 ### 指定自定义变量
 
 ```
-plc_read_pvi(arguments: {
+plc_read_runtime_variable(arguments: {
   "target": "arsim",
-  "pvi_variables": [
-    "gstHmi.stOutputs.diSImage",
-    "SVG:strTransform"
-  ]
+  "name": "gstHmi.stOutputs.diSImage"
 })
 ```
 
@@ -85,9 +82,9 @@ PVI 动态读取失败时，先区分两类问题：
 动态写入必须形成读写闭环：
 
 ```text
-plc_read_pvi       → 记录 before、数据类型和变量属性
-plc_write_pvi      → 传 execute=true，优先写入 before 的同值
-plc_read_pvi       → 独立读回，确认 readback
+plc_read_runtime_variable → 记录 before、数据类型和变量属性
+plc_write_runtime_variable → 传 execute=true，优先写入 before 的同值
+plc_read_runtime_variable → 独立读回，确认 readback
 ```
 
 默认优先写同值，因为它能验证 PVI 写入通路，同时避免改变控制逻辑状态。只有用户明确要求改变状态，或测试 suite 提供 restore/reset，才写入不同值。

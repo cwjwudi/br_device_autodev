@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "mode": "disabled",
+  "disabled_tools": [
+    "plc_read_pvi",
+    "plc_write_pvi",
+    "plc_read_pvi_batch",
+    "plc_open_test_session",
+    "plc_close_test_session",
+    "plc_start_pvi_trace",
+    "plc_get_pvi_trace_status",
+    "plc_read_pvi_trace",
+    "plc_stop_pvi_trace",
+    "plc_get_target_config",
+    "plc_list_environments",
+    "plc_list_toolchains",
+    "plc_get_toolchain",
+    "plc_list_variables",
+    "plc_run_io_test_case",
+    "plc_run_verification_suite",
+    "plc_save_runtime_target",
+    "plc_runtime_health",
+    "plc_list_runtime_tasks",
+    "plc_list_runtime_variables",
+    "plc_get_runtime_variable_info"
+  ],
+  "note": "2026-08-18 精简：隐藏 legacy 会话、PVI Trace、Runtime 探索、纯配置查看与冗余低频工具。实现保留，仅从 tools/list 隐藏并对调用返回明确拒绝。",
+  "visibility": {
+    "tools_list": "filtered",
+    "tools_call_disabled": "explicit error",
+    "runtime_scope": "plc_discover_runtime_target / plc_read_runtime_variable / plc_write_runtime_variable 保留为在线读写主力"
+  }
+}

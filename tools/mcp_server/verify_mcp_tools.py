@@ -105,30 +105,16 @@ def verify_plc_server(
 
     read_only_calls: dict[str, dict[str, Any]] = {
         "plc_list_targets": scoped(),
-        "plc_list_environments": {},
-        "plc_get_target_config": scoped(),
-        "plc_list_variables": scoped(),
-        "plc_search_variables": scoped({"query": "LQR", "module": "LQR"}),
         "plc_describe_ruc_package": scoped(),
         "plc_check_download": scoped(),
         "plc_probe_target": scoped({"timeout_seconds": 30}),
         "plc_verify_opcua": scoped({"timeout_seconds": 30}),
-        "plc_read_pvi": scoped({"timeout_seconds": 30}),
         "plc_read_logger": scoped({"timeout_seconds": 30}),
-        "plc_run_verification_suite": scoped({"timeout_seconds": 60}),
     }
 
     gated_calls: dict[str, dict[str, Any]] = {
         "plc_download_ruc": scoped({"execute": False}),
-        "plc_write_pvi": scoped({
-            "execute": False,
-            "writes": [{"variable": "LQR:bLqrEnable", "value": True}],
-        }),
         "plc_reset_test_harness": scoped({"execute": False}),
-        "plc_run_io_test_case": scoped({
-            "execute": False,
-            "case_name": "zero_state_zero_output",
-        }),
         "plc_run_test_suite": scoped({"execute": False}),
         "plc_run_arsim_closed_loop": scoped({"execute": False}),
     }

@@ -48,7 +48,7 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 
 ### AS4 / AS6 工具链选择
 
-- 构建前先调用 `plc_get_toolchain` 或 `plc_validate_environment`，确认 environment 的 `toolchain`。
+- 构建前先调用 `plc_validate_environment`，确认 environment 的 `toolchain`。
 - AS4 工程只能选择 `family=AS4`，AS6 工程只能选择 `family=AS6`；major version 不一致时停止。
 - 编译器、Library、PVITransfer 和 PVI DLL 统一来自同一个全局 toolchain 条目，不从 targets 文件读取。
 - PVI4 与 PVI6 不得在同一个 MCP Server 进程中混用；切换主版本必须重启 MCP Server。
@@ -78,7 +78,7 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 6. plc_describe_ruc_package(config=<config>)                 → 读取包信息
 7. plc_check_download(config=<config>)                       → 安全检查
 8. plc_download_ruc(target=arsim, config=<config>, execute=true) → 下载到 ARsim
-9. plc_verify_opcua(config=<config>) / plc_read_pvi(config=<config>) → 反馈验证
+9. plc_verify_opcua(config=<config>) / plc_read_runtime_variable(target=arsim, name=<变量>) → 反馈验证
 ```
 
 历史结果先用 `plc_list_reports` 定位，再用 `plc_read_report_summary` 读取紧凑摘要；不要通过报告工具读取大型日志正文。
@@ -99,7 +99,7 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 1. plc_build_project(build_ruc_package=true)       → 构建 + 生成包
 2. plc_probe_target + plc_check_download           → 下载前安全检查
 3. plc_download_ruc(target=<明确目标>, execute=true) → 下载到 ARsim 或测试 PLC
-4. plc_search_variables / plc_list_variables       → Agent 查询变量目录并选择输入/输出变量
+4. plc_search_variables                     → Agent 查询变量目录并选择输入/输出变量
 5. plc_reset_test_harness(target=<明确目标>, execute=true) → 测试前复位
 6. plc_run_test_suite(target=<明确目标>, execute=true)     → 写输入、读输出、断言
 7. plc_reset_test_harness(target=<明确目标>, execute=true) → 测试后恢复
@@ -115,17 +115,17 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 - `catalog_policy`：允许 Agent 从变量目录中选择变量，但变量必须在 catalog 中声明对应 `read`/`write` 能力。
 - `agent_directed`：允许 Agent 自行搜索变量并传入读写请求；底层仍会拒绝 production 目标、Safety/物理 I/O/system 名称，写入仍必须 `execute=true`。
 
-在 `catalog_policy` 或 `agent_directed` 模式下，Agent 不应凭空猜测变量名。标准顺序是先调用 `plc_search_variables` 或 `plc_list_variables`，再把选出的变量名传给 `plc_read_pvi`、`plc_verify_opcua`、`plc_write_pvi` 或 IO 测试工具。
+在 `catalog_policy` 或 `agent_directed` 模式下，Agent 不应凭空猜测变量名。标准顺序是先调用 `plc_search_variables`，再把选出的变量名传给 `plc_read_runtime_variable`、`plc_verify_opcua`、`plc_write_runtime_variable` 或 IO 测试工具。在线读写运行中映像的变量前，先 `plc_discover_runtime_target` 建立 Runtime PVI 目标。
 
 使用 catalog 前必须检查 `catalog_source`、`confidence`、`generated_from` 和 `warnings`。优先使用新鲜 Automation Studio 构建产物产生的高可信目录；`source_scan/low` 只作为候选发现依据，实际访问仍需策略校验和读回确认。
 
 动态 PVI 写入的默认验证方式是：
 
 ```
-1. plc_search_variables / plc_list_variables  → 找到候选变量
-2. plc_read_pvi                               → 读取当前值和数据类型
-3. plc_write_pvi(execute=true)                → 优先写回当前值，证明写通路
-4. plc_read_pvi                               → 独立读回确认
+1. plc_search_variables                     → 找到候选变量
+2. plc_read_runtime_variable(target=..., name=...)  → 读取当前值和数据类型
+3. plc_write_runtime_variable(target=..., name=..., value=<当前值>, execute=true) → 优先写回当前值，证明写通路
+4. plc_read_runtime_variable(target=..., name=...)  → 独立读回确认
 ```
 
 除非用户明确要求改变状态，否则优先写同值或测试 harness 中有 restore/reset 保护的低风险值。
@@ -156,7 +156,7 @@ description: B&R Automation Studio PLC 构建、下载、反馈验证的自动�
 | ARsim CPU/型号不匹配 | 默认停止；只有用户明确授权 ARsim 强制下载时，才可用 `force_arsim_download=true` 重新检查和下载 |
 | ARsim 首次安装被拒绝 | 报告 PVITransfer 日志；强制 ARsim 模式会生成临时 `Transfer_force_arsim_*.pil` 使用初装限制 |
 | 下载失败 | 报告 `log_path` 中的下载日志，检查目标连通性 |
-| OPC UA 验证失败 | 尝试 `plc_read_pvi` 作为备用验证 |
+| OPC UA 验证失败 | 尝试 `plc_read_runtime_variable` 作为备用验证 |
 | PVI 验证失败 | 检查 PVI Manager、目标连通性、变量名拼写；`Object not found` 通常还要检查当前运行映像是否包含对应任务/变量 |
 | ARsim 未启动 | 调用 `plc_start_arsim` 启动，等 3 秒后重试 |
 

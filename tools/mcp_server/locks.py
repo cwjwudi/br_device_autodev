@@ -49,8 +49,16 @@ class FileLock:
             payload = json.loads(self.path.read_text(encoding="utf-8"))
         except (FileNotFoundError, json.JSONDecodeError, OSError):
             return
-        if payload.get("token") == self.token:
+        if payload.get("token") != self.token:
+            return
+        try:
             self.path.unlink(missing_ok=True)
+        except OSError:
+            # Deleting the lock file is best-effort: a stale lock is reclaimed
+            # by acquire_lock() once it exceeds stale_after_seconds, so an
+            # unlink failure (e.g. a sandboxed/recycle-bin-less environment)
+            # must never turn a successful operation into an error.
+            pass
 
 
 def _repo_path(value: str) -> Path:

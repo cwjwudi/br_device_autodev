@@ -40,14 +40,15 @@ class AuditLogTests(unittest.TestCase):
         return {
             "target": "arsim",
             "execute": True,
-            "writes": [{"variable": "Harness:Input", "value": 123.456}],
+            "name": "Harness:Input",
+            "value": 123.456,
         }
 
     def test_success_is_locked_and_audited_without_values(self) -> None:
         handler = Mock(
             return_value={
                 "ok": True,
-                "tool": "plc_write_pvi",
+                "tool": "plc_write_runtime_variable",
                 "target": "arsim",
                 "summary": "write completed",
                 "data": {"report_path": "var/reports/write.json"},
@@ -55,9 +56,12 @@ class AuditLogTests(unittest.TestCase):
                 "warnings": [],
             }
         )
-        with patch.dict(server.TOOLS, {"plc_write_pvi": handler}):
+        with patch.dict(server.TOOLS, {"plc_write_runtime_variable": handler}):
             response = server.handle_tools_call(
-                {"name": "plc_write_pvi", "arguments": self.valid_write_arguments()}
+                {
+                    "name": "plc_write_runtime_variable",
+                    "arguments": self.valid_write_arguments(),
+                }
             )
 
         payload = response["structuredContent"]
@@ -70,10 +74,8 @@ class AuditLogTests(unittest.TestCase):
         self.assertEqual("arsim", completed["target"])
         self.assertEqual("trusted_role_unrestricted", completed["pvi_access_mode"])
         self.assertEqual("write completed", completed["result_summary"]["summary"])
-        self.assertEqual(
-            {"count": 1, "variables": ["Harness:Input"]},
-            completed["request_summary"]["writes"],
-        )
+        self.assertEqual("Harness:Input", completed["request_summary"]["name"])
+        self.assertEqual("<redacted>", completed["request_summary"]["value"])
         audit_text = "\n".join(json.dumps(item) for item in records)
         self.assertNotIn("123.456", audit_text)
 
@@ -104,9 +106,12 @@ class AuditLogTests(unittest.TestCase):
 
     def test_handler_failure_is_audited(self) -> None:
         handler = Mock(side_effect=RuntimeError("simulated failure"))
-        with patch.dict(server.TOOLS, {"plc_write_pvi": handler}):
+        with patch.dict(server.TOOLS, {"plc_write_runtime_variable": handler}):
             response = server.handle_tools_call(
-                {"name": "plc_write_pvi", "arguments": self.valid_write_arguments()}
+                {
+                    "name": "plc_write_runtime_variable",
+                    "arguments": self.valid_write_arguments(),
+                }
             )
 
         self.assertTrue(response["isError"])
@@ -119,9 +124,9 @@ class AuditLogTests(unittest.TestCase):
         handler = Mock(return_value={"ok": True})
         arguments = self.valid_write_arguments()
         arguments.pop("target")
-        with patch.dict(server.TOOLS, {"plc_write_pvi": handler}):
+        with patch.dict(server.TOOLS, {"plc_write_runtime_variable": handler}):
             response = server.handle_tools_call(
-                {"name": "plc_write_pvi", "arguments": arguments}
+                {"name": "plc_write_runtime_variable", "arguments": arguments}
             )
 
         self.assertTrue(response["isError"])
@@ -130,14 +135,14 @@ class AuditLogTests(unittest.TestCase):
 
     def test_lock_conflict_is_audited_and_blocks_handler(self) -> None:
         arguments = self.valid_write_arguments()
-        key = locks.lock_keys_for_tool("plc_write_pvi", arguments)[0]
+        key = locks.lock_keys_for_tool("plc_write_runtime_variable", arguments)[0]
         held = locks.acquire_lock(key, directory=self.lock_dir)
         self.addCleanup(held.release)
         handler = Mock(return_value={"ok": True})
 
-        with patch.dict(server.TOOLS, {"plc_write_pvi": handler}):
+        with patch.dict(server.TOOLS, {"plc_write_runtime_variable": handler}):
             response = server.handle_tools_call(
-                {"name": "plc_write_pvi", "arguments": arguments}
+                {"name": "plc_write_runtime_variable", "arguments": arguments}
             )
 
         payload = response["structuredContent"]

@@ -11,6 +11,7 @@ MCP_SERVER_DIR = REPO_ROOT / "tools" / "mcp_server"
 sys.path.insert(0, str(MCP_SERVER_DIR))
 
 from schemas import TOOL_DEFINITIONS  # noqa: E402
+from tool_visibility import disabled_definitions, visible_definitions  # noqa: E402
 from version import __version__  # noqa: E402
 
 
@@ -33,8 +34,15 @@ class McpDocumentationTests(unittest.TestCase):
 
     def test_catalog_contains_every_tool_once(self) -> None:
         catalog = CATALOG_PATH.read_text(encoding="utf-8")
-        for definition in TOOL_DEFINITIONS:
+        hidden_names = {item["name"] for item in disabled_definitions()}
+        for definition in visible_definitions():
             token = f"| `{definition['name']}` |"
+            with self.subTest(tool=definition["name"]):
+                self.assertEqual(1, catalog.count(token))
+        for definition in TOOL_DEFINITIONS:
+            if definition["name"] not in hidden_names:
+                continue
+            token = f"`{definition['name']}`"
             with self.subTest(tool=definition["name"]):
                 self.assertEqual(1, catalog.count(token))
 
