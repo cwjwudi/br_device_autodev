@@ -154,7 +154,7 @@ def handle_tools_call(params: dict[str, Any], operation_id: str | None = None) -
                 "retryable": False,
                 "stage": "validation",
                 "remediation": [
-                    "Use the enabled alternative for this operation (see skills/br-plc-toolchain/references/mcp-tools.md), or re-enable the tool in config/mcp/tool_filter.json."
+                    "Use an enabled alternative listed in README.md, or re-enable the tool in config/mcp/tool_filter.json."
                 ],
             },
             is_error=True,

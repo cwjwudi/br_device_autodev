@@ -31,8 +31,12 @@ class McpContractTests(unittest.TestCase):
     def test_schema_and_handler_names_match(self) -> None:
         self.assertEqual(set(self.definitions_by_name), set(toolchain.TOOLS))
 
-    def test_server_version_has_single_semver_source(self) -> None:
-        self.assertRegex(version.__version__, r"^\d+\.\d+\.\d+$")
+    def test_server_version_matches_package_version(self) -> None:
+        from br_plc_toolchain import __version__ as package_version
+
+        self.assertRegex(version.__version__, r"^\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?$")
+        self.assertEqual(version.__version__, package_version)
+        self.assertIn(f'version = "{package_version}"', (REPO_ROOT / "pyproject.toml").read_text())
         self.assertEqual(version.__version__, server.SERVER_INFO["version"])
 
     def test_every_registered_handler_is_callable(self) -> None:

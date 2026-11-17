@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 
-__version__ = "0.14.0"
+__version__ = "0.15.0a1"
 SERVER_STARTED_AT = datetime.now(UTC).isoformat()
 
 

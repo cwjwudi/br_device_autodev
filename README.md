@@ -1,163 +1,22 @@
-# B&R PLC 构建、下载、反馈验证工具链
+# B&R PLC 自动开发工具链
 
-通过 MCP 把 Automation Studio 构建、RUC 下载、ARsim/测试 PLC 验证交给 Agent 或 CI。真实执行走官方 `BR.AS.Build.exe` 和 `PVITransfer.exe`，不另造一套编译器。
+版本：**0.15.0a1（预发布基线）**。本项目通过 stdio MCP 提供 Automation Studio 构建、RUC 包检查和下载、ARsim 启动，以及 PVI / OPC UA 反馈验证。构建和下载分别调用 B&R 的 `BR.AS.Build.exe`、`PVITransfer.exe`。
 
-```text
-改代码 → 构建 → 生成 RUC 包 → 下载到 ARsim 或测试 PLC → OPC UA / PVI 读反馈 → 报告
-```
+本版本仍是开发基线，尚未完成发布验收；使用前请阅读下方的实际安全限制。项目本身不是 Automation Studio 工程，需要另行准备 `.apj` 工程。
 
-默认只在 **ARsim** 或 **已声明的专用测试 PLC** 上动手。生产目标禁止自动下载。Agent 应使用 MCP，不要直接跑 PowerShell 脚本。
+## 环境与安装
 
----
-
-## 怎么用：人准备，AI 执行
-
-不必为每个 AS/AR 版本从零写一套工具。仓库已经按 AS4 / AS6 两套全局 toolchain 设计。交给 AI 之前，人要把「这台电脑、这个工程、这台 PLC」绑好；AI 进场后先校验配置，再按闭环调用 MCP。
-
-### 人需要做的
-
-1. **本机装好对应的 Automation Studio 和 PVI**，并确认路径写在 toolchain 里。仓库默认：
-   - `as6_default`：AS6 + PVI6
-   - `as4_default`：AS4.12 + PVI4.12  
-   本机路径与仓库不一致时，复制 `config/examples/toolchains/toolchains.local.example.json` 为 `config/local/toolchains.json`（Git 忽略），不要把开发机路径写进 PLC targets。
-2. **为每个工程建一个 environment**，写进 `config/environments/environments.json` 或本机覆盖。至少包含：
-   - `project_path`（`.apj`）
-   - Automation Studio **config 名**（用工程里的真实名字，不要写死 `Config1`）
-   - `toolchain`（与工程 major version 一致：AS4 工程配 AS4，AS6 配 AS6）
-   - `target`（`arsim` 或测试 PLC）
-3. **为每台 PLC 写清角色**：`arsim`、`dedicated_test_plc` 或 `production`。测试机必须由人显式声明，未知 IP 只能只读发现。
-4. **告诉 AI 这次用哪个 `environment`**，以及是否允许 `execute=true`（下载、写变量、启动 ARsim、跑测试套件）。
-5. **旧 Runtime 现场把 toolchain 绑对。** 例如 AR `J4.93` 的办公室 PLC 要用 `as4_default` / PVI4；默认 `as6_default` 的 PVI6 会拒绝 Logger 等诊断命令（错误 28345）。同一 MCP 进程不能混用 PVI4 与 PVI6，切主版本必须重启 MCP。
-6. **ARsim 还要核对仿真路径**：对应 config 的 `Simulation=1`，`arsim_loader_exe` 指向实际生成的 `Temp/Simulation/<config>/<CPU>/ar000loader.exe`。
-
-人**不要**让 AI 猜 AS 版本、猜 config 名、或把未知物理 PLC 当成测试机。
-
-### AI 进场后做的
-
-1. 先调 `plc_doctor` 和 `plc_validate_environment`，确认本机工具、environment、toolchain 与工程 major version 一致。
-2. 缺工程路径或 config 时，只能做发现、读变量、下 logger；不要继续构建或下载。
-3. 不要凭空猜变量名：先 `plc_search_variables` 或 `plc_discover_runtime_target`，再读/写。
-4. 改变目标状态的操作必须带用户授权的 `execute=true`，并显式传 `target` 或 `environment`。
-5. 按下面的任务选流程，失败就停，不要跳过安全检查。
-
----
-
-## 按任务需要准备什么
-
-| 任务 | 人要提前准备 | AI 调用 | 不需要 |
-| --- | --- | --- | --- |
-| 只连 PLC 读变量 / 下 logger | IP、角色、匹配的 toolchain | `plc_discover_runtime_target`、`plc_read_runtime_variable`、`plc_read_logger` | 源工程、变量白名单 |
-| 改代码后构建并下到 ARsim | environment（工程 + config + `as6_default`/`as4_default` + `arsim`）、仿真 loader | doctor → validate → build → start_arsim → probe → describe → check → download → 读反馈 | 全量变量表 |
-| 下到物理测试 PLC | 同上，且 RUC 包 CPU/AR 与实物匹配；`allow_auto_download` | 同上，`target` 指向测试 PLC | ARsim 包；不得对 production 下 |
-| OPC UA 闭环校验 | `opcua.validation_node_ids` | `plc_verify_opcua` | — |
-| IO 测试套件 | 套件 JSON（写入点、期望、restore） | `plc_reset_test_harness` / `plc_run_test_suite`（均需 `execute=true`） | 把 Safety/物理 I/O 放进套件 |
-
-`plc_validate_environment` 报 `PROJECT_CONFIG_REQUIRED` 是缺工程/config，不是工具坏了。无源码的办公室 PLC 可以只做运行时发现和 logger。
-
----
-
-## 四层配置（不必重复造轮子）
-
-项目可使用两层配置：机器级 toolchain 与项目目录的 `br-auto-dev.json`。
-MCP 的 `project_path` 可指向 `.apj` 或包含配置文件的目录；传入 `.apj` 时依次查找同目录和上一级。
-配置中的 `project_path`、`arsim_loader_exe`、显式 `access_policy.catalog_path` 相对于配置文件所在目录解析。
-目标修改仍须显式指定 `target` 或 `environment`，并按工具要求传入 `execute=true`。
-旧 environment 和 targets 参数继续可用。项目文件无效时不会回退到默认目标。
-项目文件本身不能授权对物理目标进行状态修改；物理目标操作需要显式指定可信的 `targets_path`。
-
-```json
-{
-  "project_path": "test_report/test_report.apj",
-  "config": "Config1",
-  "toolchain": "as6_default",
-  "target": "arsim",
-  "targets": {"arsim": {"ip": "127.0.0.1", "role": "arsim", "allow_auto_download": false}},
-  "access_policy": {"mode": "whitelist"}
-}
-```
-
-以下为旧配置和内部策略的兼容说明：
-
-| 层 | 文件 | 谁维护 | 内容 |
-| --- | --- | --- | --- |
-| 本机工具 | `config/toolchains/toolchains.json` 或 `config/local/toolchains.json` | 人，按开发机填一次 | AS/PVI 安装路径、编译器、PVITransfer、PVI DLL |
-| 目标与策略 | `config/targets/*.json` | 团队默认 + `config/local/` 本机覆盖 | IP、`role`、是否允许下载、Logger 模块、OPC UA/PVI 白名单 |
-| 命名环境 | `config/environments/environments.json` | 每个现场/每个工程一份 | 工程 + config + 目标 + toolchain 的捆绑名 |
-| 访问策略 | `access_policy` + `config/profiles/` | 人定，AI 不能改松 | `whitelist` / `catalog_policy` / `agent_directed`；Safety/I/O 黑名单 |
-
-选择顺序：
-
-```text
-本次 MCP 显式参数（toolchain / target / project_path / config）
-  → environment 字段
-  → 仓库 default_toolchain / default-safe.json
-```
-
-新配置从 `config/examples/` 复制，不要改 examples 本身。个人 IP 和凭据只放 `config/local/`。
-
-详细约定见 [docs/CONFIGURATION.md](docs/CONFIGURATION.md) 和 [docs/TOOLCHAINS.md](docs/TOOLCHAINS.md)。
-
-### 白名单要不要写？
-
-- **不必**为「让 AI 能读测试 PLC」先维护全量变量表。已声明的 `arsim` / `dedicated_test_plc` 可用在线发现和 `plc_read_runtime_variable`；写入仍要 `execute=true`，Safety / 物理 I/O / 系统名会被挡住。
-- **要**为这些场景准备名单或套件：
-  - `plc_verify_opcua` 的校验节点
-  - 未知或生产目标（永远受限）
-  - Logger 允许模块（默认 `$arlogsys` / `$arlogusr` / `$arlogconn`，`$safety` 默认禁）
-  - IO 测试的输入、输出、restore 列表
-
-默认 `access_policy.mode=whitelist` 约束的是 OPC UA 和非可信目标，不是拦住测试 PLC 上的全部 PVI。
-
----
-
-## AI 标准调用顺序
-
-**ARsim 构建下载验证**
-
-```text
-plc_doctor / plc_validate_environment
-  → 确认实际 config 与 Simulation=1
-  → plc_build_project(build_ruc_package=true)
-  → plc_start_arsim(target=arsim, execute=true)
-  → plc_probe_target
-  → plc_describe_ruc_package
-  → plc_check_download
-  → plc_download_ruc(target=arsim, execute=true)
-  → plc_verify_opcua 或 plc_read_runtime_variable
-```
-
-快捷入口：`plc_run_arsim_closed_loop(target="arsim", execute=true)`。
-
-**无源码连测试 PLC**
-
-```text
-plc_discover_runtime_target(ip=..., target=..., declared_role="dedicated_test_plc")
-  → plc_read_runtime_variable / plc_write_runtime_variable(execute=true)
-  → plc_read_logger   # 旧 AR 须显式 toolchain=as4_default
-```
-
-**缺 Library**
-
-```text
-plc_build_project → 拿到缺失符号
-  → plc_find_library_for_symbol
-  → plc_plan_project_library
-  → plc_add_project_library(execute=true)
-```
-
-只允许本机已安装的可信库，禁止自动添加 Safety 库。
-
----
-
-## MCP 接入
-
-从仓库根目录启动：
+- Windows、PowerShell、Python 3.11 或更新版本。
+- 与工程主版本匹配的 Automation Studio 4 或 6，以及对应版本的 PVI、PVITransfer 和 PVI DLL。切换 PVI4 / PVI6 时重启 MCP Server。
+- 从仓库根目录安装依赖；运行 MCP Server 需要保留完整仓库，当前 wheel 只包含 `src` 中的 Python 包。
 
 ```powershell
+python -m pip install -e .
+python -m pip install pytest  # 仅运行测试时需要
 python tools\mcp_server\server.py
 ```
 
-客户端配置示例：
+在支持 stdio 的 MCP 客户端中配置，替换为本机绝对路径（JSON 中的 Windows 反斜杠应写成 `\\`，也可使用 `/`）：
 
 ```json
 {
@@ -165,21 +24,107 @@ python tools\mcp_server\server.py
     "br-plc-toolchain": {
       "type": "stdio",
       "command": "python",
-      "args": ["tools/mcp_server/server.py"],
-      "cwd": "<本仓库根目录>"
+      "args": ["C:/path/to/br_device_autodev/tools/mcp_server/server.py"],
+      "cwd": "C:/path/to/br_device_autodev"
     }
   }
 }
 ```
 
-下载、写变量、启动 ARsim、跑测试必须 `execute=true`。工具返回统一 JSON：`ok`、`summary`、`data`、`logs`、`warnings`、`next_actions`。
+## 基本配置
 
-Agent 操作规程：`skills/br-plc-toolchain/SKILL.md`。无源码连办公室 PLC 的补充说明：[docs/OFFICE_TEST_QUICKSTART.md](docs/OFFICE_TEST_QUICKSTART.md)。
+日常 ARsim 工程使用两级配置：一份本机全局工具链注册表，以及每个 AS 工程的 `br-auto-dev.json`。现有实现还有内部策略、默认目标和兼容环境配置，见下文；物理目标变更另有显式授权要求。
+
+### 1. 本机全局工具链
+
+仓库的 [config/toolchains/toolchains.json](config/toolchains/toolchains.json) 包含 AS4 / AS6 的完整示例。建议将它复制到被 Git 忽略的 `config/local/toolchains.json`，按本机安装修改；该本机文件存在时优先使用。也可通过 MCP 的 `toolchains_path` 指定注册表。
+
+示例结构如下，所有路径必须改为实际存在的安装路径：
+
+```json
+{
+  "schema_version": 1,
+  "default_toolchain": "as6_default",
+  "toolchains": {
+    "as6_default": {
+      "enabled": true,
+      "family": "AS6",
+      "version": "6.x",
+      "automation_studio": {
+        "install_root": "C:/Program Files (x86)/BRAutomation/AS6",
+        "bin_dir": "C:/Program Files (x86)/BRAutomation/AS6/bin-en",
+        "build_exe": "C:/Program Files (x86)/BRAutomation/AS6/bin-en/BR.AS.Build.exe",
+        "library_roots": ["C:/Program Files (x86)/BRAutomation/AS6"]
+      },
+      "pvi": {
+        "family": "PVI6",
+        "transfer_exe": "C:/Program Files (x86)/BRAutomation/PVI6/PVI/Tools/PVITransfer/PVITransfer.exe",
+        "dll_dir": "C:/Program Files (x86)/BRAutomation/PVI6/Bin"
+      }
+    }
+  }
+}
+```
+
+### 2. 项目配置
+
+将 [config/examples/br-auto-dev.example.json](config/examples/br-auto-dev.example.json) 复制到工程目录并重命名为 `br-auto-dev.json`。把 `Demo.apj`、`Sim`、`CPU` 换成实际工程、AS config 和 CPU 目录名称；`toolchain` 必须是全局注册表中与工程主版本匹配的 ID。
+
+```json
+{
+  "project_path": "Demo.apj",
+  "config": "Sim",
+  "toolchain": "as6_default",
+  "target": "arsim",
+  "targets": {
+    "arsim": {
+      "ip": "127.0.0.1",
+      "role": "arsim",
+      "allow_auto_download": true,
+      "arsim_loader_exe": "Temp/Simulation/Sim/CPU/ar000loader.exe"
+    }
+  },
+  "access_policy": {"mode": "whitelist"},
+  "opcua": {"endpoint_port": 4840, "validation_node_ids": []},
+  "pvi": {"enabled": true, "read_whitelist": [], "write_whitelist": [], "restore_writes": [], "validation_variables": []}
+}
+```
+
+- MCP 的 `project_path` 可指向含配置的目录或 `.apj`。传 `.apj` 时查找同目录及其上一级；配置里的 `.apj` 必须存在并与传入工程一致。项目配置格式错误时会报错。
+- `project_path`、`arsim_loader_exe` 和显式 `access_policy.catalog_path` 的相对路径以配置文件所在目录为基准。调用中的显式参数优先于项目配置；没有项目配置时仍支持旧 environment 与默认目标回退。
+- ARsim 的 IP 必须是回环地址。检查 `Physical/<实际config>/Hardware.hw` 中 CPU 的 `Simulation` 为 `1`，重新构建后使用实际生成的 `Temp/Simulation/<实际config>/<CPU>/ar000loader.exe`；如果不配置 loader，程序会尝试在该 config 目录下寻找唯一 loader。
+- OPC UA 只读取已配置节点；测试套件需根据实际工程配置输入、断言和恢复值。示例中的空列表不会自动暴露变量，也不能充当实际测试套件。
+- 对物理测试 PLC 的状态变更，项目配置本身不能授权：必须显式传入可信的 `targets_path`，并明确目标角色和用户授权。`config/targets/default-safe.json` 是现有的兼容格式参考，不要直接复用其中的现场地址或变量。
+
+内部文件 `config/defaults/`、`config/profiles/`、`config/mcp/tool_filter.json`、`config/environments/environments.json` 和 `config/targets/default-safe.json` 仍被当前运行时、工具过滤或兼容入口读取；不要删除或把它们误当成无作用的示例。`config/local/` 是本机覆盖，`var/` 保存运行报告、审计、锁、日志等，均不应作为发布配置提交。
+
+## 操作流程
+
+以下是 MCP 工具调用顺序，具体参数以客户端展示的工具 schema 为准。状态变更工具须显式指定 `target` 或 `environment`，并按要求传 `execute=true`；配置中的目标不会代替这一显式选择。
+
+1. 调用 `plc_doctor`、`plc_validate_environment`，传入项目路径，确认 AS major、工具路径、实际 config 和目标。
+2. 调用 `plc_build_project` 并设置 `build_ruc_package=true`。
+3. 调用 `plc_start_arsim`，显式传 `target="arsim"` 和 `execute=true`。
+4. 依次调用 `plc_probe_target`、`plc_describe_ruc_package`、`plc_check_download`，检查目标、包与所有告警。
+5. 确认目标及用户授权后调用 `plc_download_ruc`，显式传 `target="arsim"`、`execute=true`。
+6. 使用 `plc_verify_opcua` 或先 `plc_discover_runtime_target` 再 `plc_read_runtime_variable` 读取实际变量。`Object not found` 时先确认运行映像中是否包含该任务和变量。
+
+缺少 Library 时按 `plc_find_library_for_symbol` → `plc_plan_project_library` → `plc_add_project_library` 处理，只使用可信的本机 AS 安装库，不自动添加 Safety 库。输入输出套件使用 `plc_reset_test_harness` 和 `plc_run_test_suite`；恢复失败必须按失败处理。
+
+## 安全边界与当前实现限制
+
+- 生产角色的自动下载与 PVI 写入被拒绝。下载和写入必须显式传 `execute=true`；ARsim 包和物理 PLC 包不能跨目标类型下载。用户仍须确认目标、包和操作授权。
+- **当前代码对 `arsim` 和 `dedicated_test_plc` 的 PVI 读写按可信目标放行，不对变量名应用 Safety、物理 I/O 和系统名称黑名单。** `execute=true`、PVI 可写性等条件仍适用。不要自动修改 Safety 工程、任务或安全 I/O；在此限制修复和验收前，不应依赖名称黑名单保护测试 PLC。
+- **当前下载检查对可信开发目标会把部分 CPU、版本、配置、分区和安装模式不匹配降为告警**；允许下载、有效探针及包与目标类型仍是硬条件。人工必须审查所有告警，不应把 `ok=true` 当作完整兼容性证明。
+- 代码还暴露 `bypass_download_safety` 和旧参数 `force_arsim_download`，对可信测试目标存在宽松行为；操作规范只允许在用户明确授权后对本机 `role=arsim` 使用强制 ARsim 下载，不把授权扩展到物理 PLC。不要使用绕过参数对物理 PLC 下载。
+- 构建、工程修改、下载、写入和测试应经 MCP 锁和审计执行。测试变量优先先读再写同值并独立读回；不要为了验证随意改变控制状态。
+
+## MCP 工具
 
 <!-- BEGIN GENERATED MCP TOOL CATALOG -->
 当前 MCP 工具清单：
 
-MCP server version: `0.14.0`. Full catalog: [skills/br-plc-toolchain/references/mcp-tools.md](skills/br-plc-toolchain/references/mcp-tools.md)
+MCP server version: `0.15.0a1`
 
 | MCP Tool | Risk | Backend | Confirmation | Description |
 | --- | --- | --- | --- | --- |
@@ -215,37 +160,12 @@ MCP server version: `0.14.0`. Full catalog: [skills/br-plc-toolchain/references/
 `plc_read_pvi`, `plc_read_pvi_batch`, `plc_write_pvi`, `plc_run_verification_suite`, `plc_run_io_test_case`, `plc_get_target_config`, `plc_list_environments`, `plc_list_variables`, `plc_list_toolchains`, `plc_get_toolchain`, `plc_runtime_health`, `plc_save_runtime_target`, `plc_list_runtime_tasks`, `plc_list_runtime_variables`, `plc_get_runtime_variable_info`, `plc_start_pvi_trace`, `plc_get_pvi_trace_status`, `plc_read_pvi_trace`, `plc_stop_pvi_trace`, `plc_open_test_session`, `plc_close_test_session`
 <!-- END GENERATED MCP TOOL CATALOG -->
 
----
+工具目录由 `python scripts/maintenance/generate_mcp_docs.py` 从 MCP schema 生成；用 `--check` 检查文档是否同步。
 
-## 安全边界
+## 测试与输出
 
-- 禁止对 `role=production` 自动下载。
-- 下载前必须 `probe` + `describe_package` + `check_download`；`plc_download_ruc` 不带 `execute=true` 只做检查。
-- ARsim 包不能下到物理 PLC；物理包下到 ARsim 默认拒绝。`force_arsim_download=true` 仅在用户明确授权后用于 `role=arsim`。
-- 不自动修改 Safety 工程、安全任务或安全 I/O。
-- OPC UA 不自动开放全部变量。测试 PLC / ARsim 的 PVI 写入仍要 `execute=true`。
-- 构建、下载、写变量、测试套件走 MCP 锁和审计；锁冲突必须等待，不要绕过。
-
----
-
-## 仓库结构
-
-```text
-config/          工具链、目标、环境、策略；本机覆盖放 local/
-docs/            上下文、配置约定、实现计划
-skills/          Agent Skill 与自动生成的工具目录
-tools/           MCP Server 与 CLI 后端
-scripts/windows/ PVITransfer 等厂商工具包装
-src/             运行时 PVI 与策略实现
-tests/           pytest
-var/             报告、logger、锁、审计（Git 忽略）
+```powershell
+python -m pytest -q
 ```
 
-更多文档：
-
-- [docs/PLC_AUTOMATION_TOOLCHAIN_CONTEXT.md](docs/PLC_AUTOMATION_TOOLCHAIN_CONTEXT.md) — 工具链整体上下文
-- [docs/CONFIGURATION.md](docs/CONFIGURATION.md) — 配置目录与 profile
-- [docs/TOOLCHAINS.md](docs/TOOLCHAINS.md) — AS4/AS6 选择与 PVI 混用限制
-- [docs/OFFICE_TEST_QUICKSTART.md](docs/OFFICE_TEST_QUICKSTART.md) — 无源码连测试 PLC
-- [docs/PLC_TOOLCHAIN_IMPLEMENTATION_PLAN.md](docs/PLC_TOOLCHAIN_IMPLEMENTATION_PLAN.md) — 已验证事实与实现细节
-- [skills/br-plc-toolchain/SKILL.md](skills/br-plc-toolchain/SKILL.md) — Agent 必须遵守的操作顺序
+测试以本地模拟为主，不代表本版本完成实机或 ARsim 验收。测试和调用可能生成 `var/`、`Temp/`、Python 缓存；`var/` 包含审计和历史报告，清理前应先确认保留需求。
