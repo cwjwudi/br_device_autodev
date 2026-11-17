@@ -53,7 +53,7 @@ class TargetDefaultTests(unittest.TestCase):
         )
         handler.assert_not_called()
 
-    def test_explicit_environment_satisfies_target_selection(self) -> None:
+    def test_legacy_environment_is_rejected(self) -> None:
         handler = Mock(return_value={"ok": True})
         with patch.dict(server.TOOLS, {"plc_start_arsim": handler}):
             result = server.handle_tools_call(
@@ -63,8 +63,8 @@ class TargetDefaultTests(unittest.TestCase):
                 }
             )
 
-        self.assertFalse(result["isError"])
-        handler.assert_called_once()
+        self.assertTrue(result["isError"])
+        handler.assert_not_called()
 
     @patch.object(toolchain, "run_plc_toolchain")
     def test_readonly_logger_falls_back_to_arsim(self, run_toolchain) -> None:

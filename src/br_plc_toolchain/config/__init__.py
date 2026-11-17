@@ -3,9 +3,7 @@
 from .loader import (
     ConfigError,
     create_ephemeral_target_config,
-    load_environment_map,
     load_json_config,
-    load_profile,
     save_local_target,
 )
 from .toolchains import (
@@ -20,9 +18,7 @@ from .toolchains import (
 __all__ = [
     "ConfigError",
     "create_ephemeral_target_config",
-    "load_environment_map",
     "load_json_config",
-    "load_profile",
     "save_local_target",
     "DEFAULT_TOOLCHAINS_PATH",
     "LOCAL_TOOLCHAINS_PATH",

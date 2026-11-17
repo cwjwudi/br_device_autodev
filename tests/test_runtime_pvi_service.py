@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from typing import Any
+import json
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -80,7 +83,8 @@ def build_service(tmp_path):
 
 def test_service_discovers_without_source_program(tmp_path) -> None:
     service = build_service(tmp_path)
-    service.register_ephemeral_target(ip="192.168.50.233", name="plc", declared_role="test")
+    service.register_ephemeral_target(ip="192.168.50.233", name="plc", declared_role="test",
+                                      project_config={"pvi": {"write_whitelist": ["Main:bEnable"]}})
     result = service.discover_target("plc")
     assert result["ok"]
     assert result["tasks"] == ["Main"]
@@ -89,7 +93,8 @@ def test_service_discovers_without_source_program(tmp_path) -> None:
 
 def test_same_value_write_does_not_require_session(tmp_path) -> None:
     service = build_service(tmp_path)
-    service.register_ephemeral_target(ip="192.168.50.233", name="plc", declared_role="test")
+    service.register_ephemeral_target(ip="192.168.50.233", name="plc", declared_role="test",
+                                      project_config={"pvi": {"write_whitelist": ["Main:bEnable"]}})
     result = service.write(
         "plc", VariableRef(name="bEnable", task="Main"), False, execute=True
     )
@@ -99,7 +104,8 @@ def test_same_value_write_does_not_require_session(tmp_path) -> None:
 
 def test_changed_value_does_not_require_target_bound_session(tmp_path) -> None:
     service = build_service(tmp_path)
-    service.register_ephemeral_target(ip="192.168.50.233", name="plc", declared_role="test")
+    service.register_ephemeral_target(ip="192.168.50.233", name="plc", declared_role="test",
+                                      project_config={"pvi": {"write_whitelist": ["Main:bEnable"]}})
     ref = VariableRef(name="bEnable", task="Main")
     result = service.write("plc", ref, True, execute=True)
     assert result["ok"]
@@ -120,7 +126,7 @@ def test_unknown_target_can_discover_and_read_but_not_write(tmp_path) -> None:
         "value": False,
         "type": "boolean",
     }
-    with pytest.raises(PermissionError, match="same-value"):
+    with pytest.raises(PermissionError, match="whitelist"):
         service.write("unknown", ref, False, execute=True)
 
 
@@ -138,7 +144,8 @@ def test_save_target_is_explicit_and_uses_ignored_local_config(tmp_path, monkeyp
 def test_trusted_write_ignores_legacy_session_identity_change(tmp_path) -> None:
     manager = FakeManager()
     service = RuntimePviService(manager=manager, discovery_root=tmp_path)
-    service.register_ephemeral_target(ip="192.168.50.233", name="plc", declared_role="test")
+    service.register_ephemeral_target(ip="192.168.50.233", name="plc", declared_role="test",
+                                      project_config={"pvi": {"write_whitelist": ["Main:bEnable"]}})
     opened = service.open_test_session("plc", execute=True)
     manager.generation = 2
     result = service.write(
@@ -176,7 +183,8 @@ def test_read_many_deduplicates_and_submits_one_worker_operation(tmp_path) -> No
 def test_trusted_write_ignores_incomplete_legacy_session_identity(tmp_path) -> None:
     manager = FakeManager()
     service = RuntimePviService(manager=manager, discovery_root=tmp_path)
-    service.register_ephemeral_target(ip="192.168.50.233", name="plc", declared_role="test")
+    service.register_ephemeral_target(ip="192.168.50.233", name="plc", declared_role="test",
+                                      project_config={"pvi": {"write_whitelist": ["Main:bEnable"]}})
     opened = service.open_test_session("plc", execute=True)
     original_call = manager.call
 
@@ -203,3 +211,23 @@ def test_runtime_target_name_cannot_escape_discovery_root(tmp_path) -> None:
         service.register_ephemeral_target(
             ip="192.168.50.233", name="../escaped", declared_role="test"
         )
+
+
+def test_project_policy_is_applied_to_runtime_writes(tmp_path, monkeypatch) -> None:
+    root = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(root / "tools" / "mcp_server"))
+    import toolchain
+    import locks
+
+    (tmp_path / "Demo.apj").write_text("<Project/>", encoding="utf-8")
+    project = {"project_path": "Demo.apj", "config": "PhysicalConfig", "toolchain": "as6_default",
+               "target": "plc", "targets": {"plc": {"ip": "192.0.2.1", "role": "dedicated_test_plc"}},
+               "access_policy": {"mode": "whitelist"}, "pvi": {"write_whitelist": ["Main:bEnable"]}}
+    (tmp_path / "br-auto-dev.json").write_text(json.dumps(project), encoding="utf-8")
+    service = build_service(tmp_path / "discovery")
+    monkeypatch.setattr(toolchain, "_RUNTIME_SERVICE", service)
+    runtime, target = toolchain._ensure_runtime_target({"project_path": str(tmp_path), "target": "plc"})
+    assert locks.lock_keys_for_tool("plc_write_runtime_variable", {"target": "plc"}) == ["target:192.0.2.1"]
+    assert runtime.write(target, VariableRef(name="bEnable", task="Main"), True, execute=True)["ok"]
+    with pytest.raises(PermissionError, match="whitelist"):
+        runtime.write(target, VariableRef(name="Other", task="Main"), True, execute=True)

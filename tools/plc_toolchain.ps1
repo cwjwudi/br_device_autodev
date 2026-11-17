@@ -5,7 +5,7 @@ param(
     [string]$ProjectPath = "",
     [string]$Config = "",
     [string]$Target = "arsim",
-    [string]$TargetsPath = "config\targets\default-safe.json",
+    [string]$TargetsPath = "",
     [string]$Toolchain = "",
     [string]$ToolchainsPath = "config\toolchains\toolchains.json",
     [string]$PackagePath = "",
@@ -296,6 +296,18 @@ function Get-TargetConfig {
     $targetConfig = $ConfigData.targets.$Target
     if (-not $targetConfig) {
         throw "Target '$Target' was not found in $TargetsPath."
+    }
+    if ($targetConfig.role -eq 'arsim') {
+        $ipAddress = $null
+        if (-not [System.Net.IPAddress]::TryParse([string]$targetConfig.ip, [ref]$ipAddress) -or -not [System.Net.IPAddress]::IsLoopback($ipAddress)) {
+            throw "ARsim target must use a loopback IP."
+        }
+    }
+    if (-not $targetConfig.PSObject.Properties['allow_auto_download']) {
+        $targetConfig | Add-Member -NotePropertyName allow_auto_download -NotePropertyValue ($targetConfig.role -eq 'arsim')
+    }
+    elseif ($targetConfig.allow_auto_download -isnot [bool]) {
+        throw "allow_auto_download must be a boolean."
     }
     return $targetConfig
 }
@@ -927,7 +939,7 @@ function Test-DownloadSafety {
     $isArsimTarget = ($targetConfig.role -match "arsim")
     $targetRole = ([string]$targetConfig.role).ToLowerInvariant()
     $isTrustedDevelopmentTarget = $targetRole -in @("arsim", "dedicated_test_plc")
-    $safetyBypassed = [bool](($BypassDownloadSafety -or $ForceArsimDownload) -and $isTrustedDevelopmentTarget)
+    $safetyBypassed = [bool](($BypassDownloadSafety -or $ForceArsimDownload) -and $isArsimTarget)
     $targetPartitionLayout = if ($probe.partition_layout) { [string]$probe.partition_layout } else { [string]$targetConfig.partition_layout }
     $packagePartitionLayout = if ($packageInfo.partition_layout) {
         [string]$packageInfo.partition_layout
@@ -1097,9 +1109,9 @@ function Test-DownloadSafety {
             $reasons.Add("A physical PLC RUC package cannot be downloaded to ARsim.")
         }
     }
-    elseif ($BypassDownloadSafety -or $ForceArsimDownload) {
+    if (($BypassDownloadSafety -or $ForceArsimDownload) -and -not $isArsimTarget) {
         $errorCodes.Add("TARGET_ROLE_MISMATCH")
-        $reasons.Add("Download safety bypass is limited to ARsim and dedicated test PLC targets.")
+        $reasons.Add("Download safety bypass is limited to ARsim targets.")
     }
 
     $ok = ($reasons.Count -eq 0)

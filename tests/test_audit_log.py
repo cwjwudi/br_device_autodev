@@ -72,7 +72,7 @@ class AuditLogTests(unittest.TestCase):
         self.assertEqual({"started", "succeeded"}, {item["status"] for item in records})
         completed = next(item for item in records if item["status"] == "succeeded")
         self.assertEqual("arsim", completed["target"])
-        self.assertEqual("trusted_role_unrestricted", completed["pvi_access_mode"])
+        self.assertEqual("restricted_or_unknown_role", completed["pvi_access_mode"])
         self.assertEqual("write completed", completed["result_summary"]["summary"])
         self.assertEqual("Harness:Input", completed["request_summary"]["name"])
         self.assertEqual("<redacted>", completed["request_summary"]["value"])

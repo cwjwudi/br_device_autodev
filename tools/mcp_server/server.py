@@ -225,10 +225,6 @@ def handle_tools_call(params: dict[str, Any], operation_id: str | None = None) -
     try:
         lock_keys = lock_keys_for_tool(tool_name, arguments)
         context = resolve_scope_context(arguments)
-        if (TOOL_RISK_LEVELS.get(tool_name) == "target_change"
-                and Path(context["targets_path"]).name == "br-auto-dev.json"
-                and context["target_role"] != "arsim"):
-            raise ValueError("Project configuration alone cannot authorize a physical target change; use an explicitly trusted targets_path.")
     except (ValueError, OSError) as exc:
         return text_result({"ok": False, "tool": tool_name, "error": str(exc),
                             "error_code": "CONFIGURATION_ERROR", "stage": "configuration"}, is_error=True)

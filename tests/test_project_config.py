@@ -67,14 +67,20 @@ def test_config_does_not_bypass_explicit_target(project):
         toolchain.resolve_call_options({"project_path": str(apj)}, require_explicit_target=True)
 
 
-def test_physical_target_config_does_not_authorize_changes(project):
+def test_physical_project_target_is_used_by_runtime_discovery(project):
     apj, path, config = project
     config["targets"]["arsim"] = {"ip": "192.0.2.1", "role": "dedicated_test_plc"}
+    config["pvi"] = {"write_whitelist": ["Main:Allowed"]}
     path.write_text(json.dumps(config), encoding="utf-8")
-    result = server.handle_tools_call({"name": "plc_start_arsim", "arguments": {
-        "project_path": str(apj), "target": "arsim", "execute": True}})
-    assert result["isError"]
-    assert "cannot authorize a physical" in result["structuredContent"]["error"]
+    from unittest.mock import Mock, patch
+    service = Mock()
+    service.register_ephemeral_target.return_value = {"target": {"name": "arsim"}}
+    with patch.object(toolchain, "runtime_pvi_service", return_value=service):
+        toolchain._ensure_runtime_target({"project_path": str(apj), "target": "arsim"})
+    assert service.register_ephemeral_target.call_args.kwargs["project_config"]["pvi"] == config["pvi"]
+    with patch.object(toolchain, "runtime_pvi_service", return_value=service):
+        with pytest.raises(ValueError, match="IP does not match"):
+            toolchain._ensure_runtime_target({"project_path": str(apj), "target": "arsim", "ip": "192.0.2.2"})
 
 
 def test_arsim_must_be_loopback(project):
@@ -83,6 +89,14 @@ def test_arsim_must_be_loopback(project):
     path.write_text(json.dumps(config), encoding="utf-8")
     with pytest.raises(ValueError, match="loopback"):
         toolchain.resolve_call_options({"project_path": str(apj)})
+
+
+def test_download_permission_must_be_boolean(project):
+    apj, path, config = project
+    config["targets"]["arsim"]["allow_auto_download"] = "false"
+    path.write_text(json.dumps(config), encoding="utf-8")
+    with pytest.raises(ValueError, match="must be a boolean"):
+        load_project_config(str(apj), ROOT)
 
 
 def test_same_ip_has_same_lock_across_config_files(project, tmp_path):

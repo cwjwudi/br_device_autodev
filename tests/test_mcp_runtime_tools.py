@@ -72,12 +72,17 @@ def call(name: str, arguments: dict):
     return server.handle_tools_call({"name": name, "arguments": arguments})
 
 
+def call_internal(name: str, arguments: dict):
+    with patch.object(server, "DISABLED_TOOLS", frozenset()):
+        return call(name, arguments)
+
+
 def test_mcp_lists_and_resolves_global_toolchains() -> None:
-    listed = call("plc_list_toolchains", {})
+    listed = call_internal("plc_list_toolchains", {})
     assert listed["isError"] is False
     ids = {item["id"] for item in listed["structuredContent"]["data"]["toolchains"]}
     assert {"as4_default", "as6_default"}.issubset(ids)
-    selected = call("plc_get_toolchain", {"toolchain": "as6_default"})
+    selected = call_internal("plc_get_toolchain", {"toolchain": "as6_default"})
     assert selected["structuredContent"]["data"]["toolchain"]["family"] == "AS6"
 
 
@@ -94,13 +99,12 @@ def test_runtime_discovery_bootstraps_without_policy_file() -> None:
     assert fake.registration_kwargs["pvi_dll_path"].endswith("PVI6\\Bin")
 
 
-def test_runtime_discovery_accepts_named_environment_without_explicit_ip() -> None:
+def test_runtime_discovery_rejects_removed_named_environment() -> None:
     fake = FakeRuntimeService()
     with patch.object(toolchain, "_RUNTIME_SERVICE", fake):
         result = call("plc_discover_runtime_target", {"environment": "local_arsim"})
-    assert result["isError"] is False
-    assert fake.registration_kwargs["ip"] == "127.0.0.1"
-    assert fake.registration_kwargs["name"] == "arsim"
+    assert result["isError"] is True
+    assert not fake.registered
 
 
 def test_runtime_variable_tools_use_online_reference() -> None:
@@ -122,7 +126,7 @@ def test_runtime_variable_tools_use_online_reference() -> None:
 def test_runtime_batch_read_returns_compact_map() -> None:
     fake = FakeRuntimeService()
     with patch.object(toolchain, "_RUNTIME_SERVICE", fake):
-        result = call(
+        result = call_internal(
             "plc_read_pvi_batch",
             {
                 "target": "plc",
@@ -136,7 +140,7 @@ def test_runtime_batch_read_returns_compact_map() -> None:
     assert data["errors"] == {}
 
 
-def test_legacy_batch_uses_explicit_environment_reader_and_keeps_errors() -> None:
+def test_legacy_batch_uses_explicit_target_reader_and_keeps_errors() -> None:
     payload = {
         "command": "ReadPvi",
         "ok": False,
@@ -151,11 +155,12 @@ def test_legacy_batch_uses_explicit_environment_reader_and_keeps_errors() -> Non
         {"stdout": json.dumps(payload), "stderr": "", "returncode": 1},
     )()
     with patch.object(toolchain.subprocess, "run", return_value=completed) as run:
-        result = call(
+        result = call_internal(
             "plc_read_pvi_batch",
             {
                 "backend": "legacy",
-                "environment": "office_test_233",
+                "ip": "192.168.50.233",
+                "toolchain": "as4_default",
                 "variables": ["DataSQLBat:bSimEnable", "DataSQLBat:Missing"],
             },
         )
@@ -176,7 +181,7 @@ def test_runtime_write_requires_explicit_execute_at_schema_layer() -> None:
 
 
 def test_save_runtime_target_requires_confirmation_and_is_audited(tmp_path) -> None:
-    rejected = call("plc_save_runtime_target", {"target": "plc", "filename": "plc.json"})
+    rejected = call_internal("plc_save_runtime_target", {"target": "plc", "filename": "plc.json"})
     assert rejected["isError"] is True
     fake = FakeRuntimeService()
     with (
@@ -184,7 +189,7 @@ def test_save_runtime_target_requires_confirmation_and_is_audited(tmp_path) -> N
         patch.object(server, "AUDIT_DIR", tmp_path / "audit"),
         patch.object(server, "LOCK_DIR", tmp_path / "locks"),
     ):
-        saved = call(
+        saved = call_internal(
             "plc_save_runtime_target",
             {"target": "plc", "filename": "plc.json", "execute": True},
         )
@@ -199,7 +204,7 @@ def test_runtime_write_and_test_session_are_audited_target_changes(tmp_path) -> 
         patch.object(server, "AUDIT_DIR", tmp_path / "audit"),
         patch.object(server, "LOCK_DIR", tmp_path / "locks"),
     ):
-        opened = call(
+        opened = call_internal(
             "plc_open_test_session", {"target": "plc", "execute": True, "ttl_minutes": 5}
         )
         written = call(

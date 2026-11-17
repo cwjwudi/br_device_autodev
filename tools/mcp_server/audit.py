@@ -16,7 +16,7 @@ AUDIT_DIR = REPO_ROOT / "var" / "audit"
 SENSITIVE_KEY_PARTS = ("password", "secret", "token", "credential")
 AUDIT_RETENTION_DAYS = 30
 AUDIT_MAX_BYTES = 100 * 1024 * 1024
-TRUSTED_PVI_ROLES = {"arsim", "dedicated_test_plc"}
+TRUSTED_PVI_ROLES = {"arsim"}
 PVI_ACCESS_TOOLS = {
     "plc_read_pvi",
     "plc_read_pvi_batch",

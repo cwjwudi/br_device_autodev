@@ -8,14 +8,7 @@
     "max_write_batch": 20
   },
   "access": {
-    "dynamic_read": true,
-    "same_value_write": false,
-    "changed_value_write": false,
-    "changed_value_requires_session": true,
-    "session_ttl_minutes": 60,
-    "require_execute": true,
-    "require_readback": true,
-    "require_restore_for_suite": true
+    "session_ttl_minutes": 60
   }
 }
 

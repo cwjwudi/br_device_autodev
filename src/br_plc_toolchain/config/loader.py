@@ -12,26 +12,13 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CONFIG_ROOT = REPO_ROOT / "config"
-PROFILE_ROOT = CONFIG_ROOT / "profiles"
 LOCAL_ROOT = CONFIG_ROOT / "local"
-ENVIRONMENTS_PATH = CONFIG_ROOT / "environments" / "environments.json"
 
 IMMUTABLE_SAFETY_BASELINE: dict[str, Any] = {
     "deny_production_write": True,
     "deny_production_download": True,
-    "deny_safety_write": True,
-    "deny_physical_io_write": True,
-    "deny_system_write": True,
     "require_execute_for_write": True,
     "require_readback": True,
-    "blocked_name_patterns": [
-        "*safety*",
-        "*safeio*",
-        "*physicalio*",
-        "*iomap*",
-        "*system*",
-        "sys:*",
-    ],
 }
 
 
@@ -61,22 +48,6 @@ def load_json_config(path: str | Path) -> dict[str, Any]:
     return data
 
 
-def load_profile(name: str) -> dict[str, Any]:
-    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", name):
-        raise ConfigError(f"Invalid profile name: {name!r}")
-    profile = load_json_config(PROFILE_ROOT / f"{name}.json")
-    baseline = load_json_config(CONFIG_ROOT / "defaults" / "base.json")
-    merged = _deep_merge(baseline, profile)
-    # The hard baseline is returned separately and cannot be weakened by JSON.
-    merged["immutable_safety"] = copy.deepcopy(IMMUTABLE_SAFETY_BASELINE)
-    merged["profile"] = name
-    return merged
-
-
-def load_environment_map() -> dict[str, Any]:
-    return load_json_config(ENVIRONMENTS_PATH)
-
-
 def _is_loopback(ip: str) -> bool:
     try:
         return ipaddress.ip_address(ip).is_loopback
@@ -89,6 +60,7 @@ def create_ephemeral_target_config(
     ip: str,
     name: str | None = None,
     declared_role: str | None = None,
+    project_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Create a non-persistent safe target config from user intent and IP.
 
@@ -98,20 +70,22 @@ def create_ephemeral_target_config(
     """
     loopback = _is_loopback(ip)
     role = (declared_role or "").strip().lower()
-    if loopback:
-        profile_name = "arsim-development"
-        target_role = "arsim"
+    if role == "production":
+        profile_name = "production-locked"
+        target_role = "production"
     elif role in {"dedicated_test_plc", "test", "office_test"}:
         profile_name = "office-test"
         target_role = "dedicated_test_plc"
-    elif role == "production":
-        profile_name = "production-locked"
-        target_role = "production"
+    elif loopback and role in {"", "arsim"}:
+        profile_name = "arsim-development"
+        target_role = "arsim"
     else:
         profile_name = "readonly-discovery"
         target_role = "unregistered"
 
-    config = load_profile(profile_name)
+    config = _deep_merge(load_json_config(CONFIG_ROOT / "defaults" / "base.json"), project_config or {})
+    config["immutable_safety"] = copy.deepcopy(IMMUTABLE_SAFETY_BASELINE)
+    config["profile"] = profile_name
     target_name = name or ("arsim" if loopback else f"discovered-{ip.replace('.', '-')}")
     config["target"] = {
         "name": target_name,

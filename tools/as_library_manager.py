@@ -85,11 +85,12 @@ def discover_library_roots(
     targets_file: Path,
     explicit_roots: Iterable[Path] = (),
 ) -> list[Path]:
-    if not path_within(targets_file, repo_root):
-        raise LibraryManagerError(f"targets file must stay inside repository root: {targets_file}")
     explicit = list(explicit_roots)
     if explicit:
         return unique_existing_paths(resolve_path(path, repo_root) for path in explicit)
+
+    if not path_within(targets_file, repo_root):
+        raise LibraryManagerError(f"targets file must stay inside repository root: {targets_file}")
 
     config = read_json(targets_file)
     automation_studio = config.get("automation_studio") or {}
@@ -887,7 +888,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("command", choices=("find", "plan", "add", "rollback"))
     parser.add_argument("--repo-root", default=str(Path(__file__).resolve().parents[1]))
     parser.add_argument("--project-path", default="")
-    parser.add_argument("--targets-file", default="config\\targets\\default-safe.json")
+    parser.add_argument("--targets-file", default="")
     parser.add_argument("--toolchains-file", default="config\\toolchains\\toolchains.json")
     parser.add_argument("--toolchain")
     parser.add_argument("--library-root", action="append", default=[])

@@ -55,7 +55,7 @@ class McpLibraryToolTests(unittest.TestCase):
                 "library": "AsTCP",
                 "execute": True,
                 "project_path": "C:\\workspace\\Demo.apj",
-                "targets_path": "config\\targets\\default-safe.json",
+                "targets_path": "C:\\workspace\\br-auto-dev.json",
             }
         )
 

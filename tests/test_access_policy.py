@@ -135,6 +135,20 @@ class AccessPolicyTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertIn("execute=true", " ".join(result["errors"]))
 
+    def test_physical_whitelist_and_blacklist_match_runtime_policy(self) -> None:
+        self.config["targets"]["test"] = {"ip": "192.0.2.1", "role": "dedicated_test_plc"}
+        self.assertFalse(self.evaluate("pvi_write", ["Main:Other"], target="test", execute=True)["ok"])
+        self.assertTrue(self.evaluate("pvi_write", ["Harness:Input"], target="test", execute=True)["ok"])
+        self.config["pvi"].update(write_policy="blacklist", write_blacklist=["Safety:*"])
+        self.assertFalse(self.evaluate("pvi_write", ["Safety:Input"], target="test", execute=True)["ok"])
+        self.assertTrue(self.evaluate("pvi_write", ["Main:Other"], target="test", execute=True)["ok"])
+
+    def test_arsim_role_cannot_be_used_with_a_physical_ip(self) -> None:
+        self.config["targets"]["arsim"]["ip"] = "192.0.2.1"
+        result = self.evaluate("pvi_write", ["Main:Other"], execute=True)
+        self.assertFalse(result["ok"])
+        self.assertIn("loopback", " ".join(result["errors"]))
+
     def test_policy_payload_contains_required_contract_fields(self) -> None:
         result = self.run_cli("pvi_read", ["Safety:Input"], explicit=True)
 

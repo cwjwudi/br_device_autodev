@@ -4,9 +4,13 @@
 from __future__ import annotations
 
 import fnmatch
+import ipaddress
+import sys
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from br_plc_toolchain.policy.runtime import pvi_write_error
 from pvi_read import parse_variable_spec
 
 
@@ -20,7 +24,6 @@ DEFAULT_BLOCKED_NAME_PATTERNS = [
     "sys:*",
 ]
 DEFAULT_ALLOWED_TARGET_ROLES = ["arsim", "dedicated_test_plc"]
-TRUSTED_PVI_ROLES = {"arsim", "dedicated_test_plc"}
 
 
 def canonical_variable(spec: Any) -> str:
@@ -55,10 +58,13 @@ def is_production_target(target_config: dict[str, Any]) -> bool:
     return str(target_config.get("role") or "").lower() == "production"
 
 
-def has_full_pvi_access(target_config: dict[str, Any]) -> bool:
-    """Trusted development targets may access every PVI variable."""
-
-    return str(target_config.get("role") or "").lower() in TRUSTED_PVI_ROLES
+def invalid_arsim_target(target_config: dict[str, Any]) -> bool:
+    if str(target_config.get("role") or "").lower() != "arsim":
+        return False
+    try:
+        return not ipaddress.ip_address(target_config.get("ip", "")).is_loopback
+    except ValueError:
+        return True
 
 
 def matches_blocked_name(name: str, policy: dict[str, Any]) -> bool:
@@ -157,35 +163,11 @@ def validate_pvi_read(
     variables: list[str],
     explicit: bool,
 ) -> list[str]:
-    policy = access_policy(config)
     errors: list[str] = []
     if (config.get("pvi") or {}).get("enabled") is False:
         errors.append("PVI is disabled in pvi.enabled.")
-    if is_production_target(target_config):
-        errors.append("Refusing dynamic PVI reads on a production target.")
-    if not target_role_allowed(policy, target_config):
-        errors.append(f"Target role '{target_config.get('role')}' is not allowed by access_policy.allowed_target_roles.")
-    if errors or has_full_pvi_access(target_config):
-        return errors
-
-    read_allowed = pvi_read_map(config)
-    catalog = catalog_variable_map(config, targets_file)
-    for variable in variables:
-        key = canonical_variable(variable)
-        if matches_blocked_name(key, policy):
-            errors.append(f"Variable '{key}' matches access_policy.blocked_name_patterns.")
-            continue
-        if covered_by_map(key, read_allowed):
-            continue
-        if policy["mode"] == "catalog_policy":
-            item = covered_by_map(key, catalog)
-            if not item or "read" not in set(item.get("access") or []):
-                errors.append(f"Variable '{key}' is not readable according to the symbol catalog.")
-        elif policy["mode"] == "agent_directed":
-            if not explicit or not policy["allow_dynamic_pvi_read"]:
-                errors.append(f"Dynamic PVI read is disabled for variable '{key}'.")
-        else:
-            errors.append(f"Variable '{key}' is not in pvi.read_whitelist.")
+    if invalid_arsim_target(target_config):
+        errors.append("ARsim target must use a loopback IP.")
     return errors
 
 
@@ -197,38 +179,17 @@ def validate_pvi_write(
     variables: list[str],
     execute: bool,
 ) -> list[str]:
-    policy = access_policy(config)
     errors: list[str] = []
     if (config.get("pvi") or {}).get("enabled") is False:
         errors.append("PVI is disabled in pvi.enabled.")
-    if is_production_target(target_config):
-        errors.append("Refusing to write PVI variables to a production target.")
-    if not target_role_allowed(policy, target_config):
-        errors.append(f"Target role '{target_config.get('role')}' is not allowed by access_policy.allowed_target_roles.")
-    if not execute:
-        errors.append("PVI writes require explicit execute=true.")
-    if errors or has_full_pvi_access(target_config):
-        return errors
-
-    write_allowed = pvi_write_map(config)
-    catalog = catalog_variable_map(config, targets_file)
+    if invalid_arsim_target(target_config):
+        errors.append("ARsim target must use a loopback IP.")
     for variable in variables:
         key = canonical_variable(variable)
-        if matches_blocked_name(key, policy):
-            errors.append(f"Variable '{key}' matches access_policy.blocked_name_patterns.")
-            continue
-        if covered_by_map(key, write_allowed):
-            continue
-        if policy["mode"] == "catalog_policy":
-            item = covered_by_map(key, catalog)
-            access = set(item.get("access") or []) if item else set()
-            if not item or "write" not in access:
-                errors.append(f"Variable '{key}' is not writable according to the symbol catalog.")
-        elif policy["mode"] == "agent_directed":
-            if not policy["allow_dynamic_pvi_write"]:
-                errors.append(f"Dynamic PVI write is disabled for variable '{key}'.")
-        else:
-            errors.append(f"Variable '{key}' is not in pvi.write_whitelist.")
+        error = pvi_write_error(config, str(target_config.get("role") or "").lower(), key,
+                                execute=execute, writable=True)
+        if error:
+            errors.append(f"Variable '{key}': {error}")
     return errors
 
 

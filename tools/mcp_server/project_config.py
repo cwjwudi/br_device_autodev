@@ -50,6 +50,8 @@ def load_project_config(project: str, repo_root: Path) -> tuple[dict[str, Any], 
     for name, target in targets.items():
         if not isinstance(target, dict) or target.get("role") not in {"arsim", "dedicated_test_plc", "production"}:
             raise ValueError(f"Invalid role for target {name!r} in {path}")
+        if "allow_auto_download" in target and not isinstance(target["allow_auto_download"], bool):
+            raise ValueError(f"allow_auto_download for target {name!r} must be a boolean")
         try:
             ip = ipaddress.ip_address(target.get("ip", ""))
         except (TypeError, ValueError) as exc:
@@ -59,5 +61,11 @@ def load_project_config(project: str, repo_root: Path) -> tuple[dict[str, Any], 
     policy = data.get("access_policy")
     if not isinstance(policy, dict) or policy.get("mode") not in {"whitelist", "catalog_policy", "agent_directed"}:
         raise ValueError(f"Project configuration {path} requires a valid access_policy.mode")
+    pvi = data.get("pvi", {})
+    if not isinstance(pvi, dict) or pvi.get("write_policy", "whitelist") not in ("whitelist", "blacklist"):
+        raise ValueError(f"Project configuration {path} requires a valid pvi.write_policy")
+    for key in ("write_whitelist", "write_blacklist"):
+        if key in pvi and not isinstance(pvi[key], list):
+            raise ValueError(f"Project configuration {path} requires {key} to be an array")
     data["project_path"] = str(project_path)
     return data, path

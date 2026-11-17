@@ -7,10 +7,44 @@ from dataclasses import dataclass
 from typing import Any
 
 from br_plc_toolchain.backends.pvi.values import values_equal
-from br_plc_toolchain.config.loader import IMMUTABLE_SAFETY_BASELINE
 
 
-TRUSTED_PVI_ROLES = {"arsim", "dedicated_test_plc"}
+def pvi_write_error(config: dict[str, Any], role: str, variable: str, *, execute: bool, writable: bool) -> str | None:
+    if (config.get("pvi") or {}).get("enabled") is False:
+        return "PVI is disabled"
+    if role == "production":
+        return "Production writes are permanently denied"
+    if not execute:
+        return "Variable writes require execute=true"
+    if not writable:
+        return "PVI reports the variable is not writable"
+    if role == "arsim":
+        return None
+    pvi = config.get("pvi") or {}
+    mode = pvi.get("write_policy", "whitelist")
+    if mode not in ("whitelist", "blacklist"):
+        return "Invalid PVI write policy"
+    entries = pvi.get("write_whitelist" if mode == "whitelist" else "write_blacklist", [])
+    if not isinstance(entries, list):
+        return "PVI write policy entries must be a list"
+    names = []
+    for entry in entries:
+        if isinstance(entry, str):
+            names.append(entry)
+        elif isinstance(entry, dict) and isinstance(entry.get("name"), str):
+            names.append(f"{entry['task']}:{entry['name']}" if entry.get("task") else entry["name"])
+        elif isinstance(entry, dict) and isinstance(entry.get("variable"), str):
+            names.append(entry["variable"])
+        else:
+            return "Invalid PVI write policy entry"
+    var = variable.lower()
+    matched = any(fnmatch.fnmatchcase(var, name.lower()) or var.startswith(name.lower() + ".")
+                  or var.startswith(name.lower() + "[") for name in names)
+    if mode == "whitelist" and not matched:
+        return "Variable is not in the PVI write whitelist"
+    if mode == "blacklist" and matched:
+        return "Variable matches the PVI write blacklist"
+    return None
 
 
 class AccessDenied(PermissionError):
@@ -36,22 +70,10 @@ class AccessDecision:
 
 
 class RuntimePolicy:
-    def _blocked(self, variable: str) -> str | None:
-        lowered = variable.lower()
-        for pattern in IMMUTABLE_SAFETY_BASELINE["blocked_name_patterns"]:
-            if fnmatch.fnmatch(lowered, str(pattern).lower()):
-                return str(pattern)
-        return None
-
     def authorize_read(self, *, config: dict[str, Any], variable: str) -> AccessDecision:
-        role = str((config.get("target") or {}).get("role") or "unregistered").lower()
-        if role in TRUSTED_PVI_ROLES:
-            return AccessDecision(True, "read", "readonly", ("Trusted development target permits unrestricted PVI read",))
-        if role == "production" and not config.get("access", {}).get("dynamic_read", False):
-            return AccessDecision(False, "read", "denied", ("Production profile disables dynamic reads",))
-        if not config.get("access", {}).get("dynamic_read", True):
-            return AccessDecision(False, "read", "denied", ("Dynamic read is disabled by the profile",))
-        return AccessDecision(True, "read", "readonly", ("Runtime discovery read is enabled",))
+        if (config.get("pvi") or {}).get("enabled") is False:
+            return AccessDecision(False, "read", "denied", ("PVI is disabled",))
+        return AccessDecision(True, "read", "readonly", ("PVI reads are enabled",))
 
     def authorize_write(
         self,
@@ -65,59 +87,15 @@ class RuntimePolicy:
         session_valid: bool,
     ) -> AccessDecision:
         role = str((config.get("target") or {}).get("role") or "unregistered").lower()
-        if role == "production":
-            return AccessDecision(False, "write", "denied", ("Production writes are permanently denied",))
-        if role in TRUSTED_PVI_ROLES:
-            if not writable:
-                return AccessDecision(False, "write", "denied", ("PVI reports the variable is not writable",))
-            if not execute:
-                return AccessDecision(False, "write", "denied", ("Variable writes require execute=true",))
-            same_value = values_equal(current_value, requested_value)
-            return AccessDecision(
-                True,
-                "same_value_write" if same_value else "changed_value_write",
-                "low" if same_value else "target_change",
-                ("Trusted development target permits unrestricted PVI write",),
-                requires_session=False,
-            )
-        blocked = self._blocked(variable)
-        if blocked:
-            return AccessDecision(
-                False, "write", "denied", (f"Variable matches immutable blocked pattern {blocked!r}",)
-            )
-        if not writable:
-            return AccessDecision(False, "write", "denied", ("PVI reports the variable is not writable",))
-        if not execute:
-            return AccessDecision(False, "write", "denied", ("Variable writes require execute=true",))
-
+        error = pvi_write_error(config, role, variable, execute=execute, writable=writable)
+        if error:
+            return AccessDecision(False, "write", "denied", (error,))
         same_value = values_equal(current_value, requested_value)
-        access = config.get("access") or {}
-        if same_value:
-            if access.get("same_value_write", False):
-                return AccessDecision(
-                    True,
-                    "same_value_write",
-                    "low",
-                    ("Target profile permits same-value write verification",),
-                )
-            return AccessDecision(False, "write", "denied", ("Profile disables same-value writes",))
-
-        if not access.get("changed_value_write", False):
-            return AccessDecision(False, "write", "denied", ("Profile disables changed-value writes",))
-        if access.get("changed_value_requires_session", True) and not session_valid:
-            return AccessDecision(
-                False,
-                "changed_value_write",
-                "target_change",
-                ("Changed-value write requires an active target-bound test session",),
-                requires_session=True,
-            )
         return AccessDecision(
             True,
-            "changed_value_write",
-            "target_change",
-            ("Dedicated test session permits changed-value write",),
-            requires_session=True,
+            "same_value_write" if same_value else "changed_value_write",
+            "low" if same_value else "target_change",
+            ("PVI write policy permits the variable",),
         )
 
     @staticmethod

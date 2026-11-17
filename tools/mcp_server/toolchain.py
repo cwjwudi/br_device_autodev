@@ -28,8 +28,7 @@ AS_LIBRARY_MANAGER = REPO_ROOT / "tools" / "as_library_manager.py"
 GENERATED_DIR = REPO_ROOT / "var"
 DEFAULT_PROJECT_PATH = ""
 DEFAULT_CONFIG = ""
-DEFAULT_TARGETS_PATH = "config\\targets\\default-safe.json"
-DEFAULT_ENVIRONMENTS_PATH = "config\\environments\\environments.json"
+DEFAULT_TARGETS_PATH = ""
 DEFAULT_TOOLCHAINS_PATH = "config\\toolchains\\toolchains.json"
 
 _RUNTIME_SERVICE = None
@@ -176,19 +175,7 @@ def write_json_argument_file(prefix: str, payload: Any) -> str:
 def load_environment(name: str | None) -> dict[str, Any]:
     if not name:
         return {}
-
-    path = REPO_ROOT / DEFAULT_ENVIRONMENTS_PATH
-    if not path.exists():
-        raise ValueError(f"Environment map was not found: {DEFAULT_ENVIRONMENTS_PATH}")
-
-    environments = json.loads(path.read_text(encoding="utf-8-sig"))
-    if name not in environments:
-        choices = ", ".join(sorted(environments))
-        raise ValueError(f"Unknown PLC environment '{name}'. Available environments: {choices}")
-    env = environments[name]
-    if not isinstance(env, dict):
-        raise ValueError(f"PLC environment '{name}' must be a JSON object.")
-    return env
+    raise ValueError("Named environments are no longer supported; use project_path and target.")
 
 
 def resolve_call_options(
@@ -1584,40 +1571,8 @@ def plc_list_targets(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def plc_list_environments(arguments: dict[str, Any]) -> dict[str, Any]:
-    path = REPO_ROOT / DEFAULT_ENVIRONMENTS_PATH
-    if not path.exists():
-        data = {
-            "command": "ListEnvironments",
-            "ok": False,
-            "environments_path": str(path),
-            "error": f"Environment map was not found: {DEFAULT_ENVIRONMENTS_PATH}",
-        }
-        return wrap_result("plc_list_environments", "ListEnvironments", data, "")
-
-    raw = json.loads(path.read_text(encoding="utf-8-sig"))
-    environments = []
-    for name, env in sorted(raw.items()):
-        if not isinstance(env, dict):
-            continue
-        environments.append(
-            {
-                "name": name,
-                "description": env.get("description"),
-                "project_path": env.get("project_path"),
-                "config": env.get("config"),
-                "target": env.get("target"),
-                "targets_path": env.get("targets_path"),
-                "toolchain": env.get("toolchain"),
-                "toolchains_path": env.get("toolchains_path"),
-            }
-        )
-
-    data = {
-        "command": "ListEnvironments",
-        "ok": True,
-        "environments_path": str(path),
-        "environments": environments,
-    }
+    data = {"command": "ListEnvironments", "ok": False,
+            "error": "Named environments are no longer supported; use project_path and target."}
     return wrap_result("plc_list_environments", "ListEnvironments", data, "")
 
 
@@ -1760,10 +1715,20 @@ def plc_search_variables(arguments: dict[str, Any]) -> dict[str, Any]:
 def _ensure_runtime_target(arguments: dict[str, Any]) -> tuple[Any, str]:
     service = runtime_pvi_service()
     environment = load_environment(arguments.get("environment"))
-    target = str(arguments.get("target") or environment.get("target") or "").strip()
+    project, project_path = load_project_config(str(arguments.get("project_path") or ""), REPO_ROOT)
+    target = str(arguments.get("target") or project.get("target") or environment.get("target") or "").strip()
     ip = arguments.get("ip") or environment.get("ip")
     declared_role = arguments.get("declared_role") or environment.get("declared_role")
-    selected_toolchain_id = str(arguments.get("toolchain") or environment.get("toolchain") or "")
+    if project_path:
+        target_config = (project.get("targets") or {}).get(target)
+        if not isinstance(target_config, dict):
+            raise ValueError(f"Target '{target}' is not configured in the project")
+        if ip and str(ip) != target_config["ip"]:
+            raise ValueError("Runtime IP does not match the project target")
+        if declared_role and declared_role != target_config["role"]:
+            raise ValueError("Runtime role does not match the project target")
+        ip, declared_role = target_config["ip"], target_config["role"]
+    selected_toolchain_id = str(arguments.get("toolchain") or project.get("toolchain") or environment.get("toolchain") or "")
     if ip:
         from br_plc_toolchain.config import resolve_toolchain
 
@@ -1777,6 +1742,7 @@ def _ensure_runtime_target(arguments: dict[str, Any]) -> tuple[Any, str]:
             ip=str(ip),
             name=target or None,
             declared_role=declared_role,
+            **({"project_config": project} if project_path else {}),
             pvi_dll_path=(
                 str(selected_toolchain.pvi_dll_dir)
                 if selected_toolchain.pvi_dll_dir

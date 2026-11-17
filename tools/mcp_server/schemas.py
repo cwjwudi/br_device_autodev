@@ -6,11 +6,11 @@ from typing import Any
 COMMON_PROPERTIES: dict[str, Any] = {
     "environment": {
         "type": "string",
-        "description": "Named PLC toolchain environment from config/environments/environments.json. Explicit arguments override environment defaults.",
+        "description": "Deprecated; use project_path and target instead.",
     },
     "target": {
         "type": "string",
-        "description": "Target name from the selected targets file. Target-changing tools require an explicit target or environment; read-only and local tools fall back to arsim.",
+        "description": "Target name from the project configuration. Target-changing tools require an explicit target.",
         "minLength": 1,
     },
     "project_path": {
@@ -23,12 +23,11 @@ COMMON_PROPERTIES: dict[str, Any] = {
     },
     "targets_path": {
         "type": "string",
-        "description": "Toolchain target configuration JSON path. Overrides environment.targets_path when supplied.",
-        "default": "config\\targets\\default-safe.json",
+        "description": "Explicit target configuration JSON path; project configuration is used by default.",
     },
     "toolchain": {
         "type": "string",
-        "description": "Global AS4/AS6 toolchain id. Overrides environment.toolchain.",
+        "description": "Global AS4/AS6 toolchain id. Overrides project toolchain.",
         "minLength": 1,
     },
     "toolchains_path": {
@@ -92,9 +91,13 @@ def build_schema(
 
 
 RUNTIME_TARGET_PROPERTIES: dict[str, Any] = {
+    "project_path": {
+        "type": "string",
+        "description": "Project directory or .apj whose br-auto-dev.json supplies target and PVI policy.",
+    },
     "environment": {
         "type": "string",
-        "description": "Optional named runtime environment used for first discovery.",
+        "description": "Deprecated; use project_path and target instead.",
     },
     "target": {
         "type": "string",
@@ -104,7 +107,7 @@ RUNTIME_TARGET_PROPERTIES: dict[str, Any] = {
     },
     "toolchain": {
         "type": "string",
-        "description": "Global AS4/AS6 toolchain id. Overrides environment.toolchain.",
+        "description": "Global AS4/AS6 toolchain id. Overrides project toolchain.",
         "minLength": 1,
     },
     "toolchains_path": {
@@ -154,7 +157,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "plc_validate_environment",
-        "description": "Validate the selected environment or explicit project/config/target/targets_path mapping without connecting to a PLC.",
+        "description": "Validate the project configuration, toolchain, and target without connecting to a PLC.",
         "inputSchema": object_schema({}),
     },
     {
@@ -336,7 +339,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 },
                 "bypass_download_safety": {
                     "type": "boolean",
-                    "description": "Skip optional RUC compatibility checks for an explicit ARsim or dedicated test PLC target. Production, role, reachability, package, and execute guards remain enforced.",
+                    "description": "Explicit ARsim-only bypass; never allowed on physical or production targets.",
                     "default": False,
                 },
             }
@@ -362,7 +365,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 },
                 "bypass_download_safety": {
                     "type": "boolean",
-                    "description": "Skip optional RUC compatibility checks for an explicit ARsim or dedicated test PLC target. Production, role, reachability, package, and execute guards remain enforced.",
+                    "description": "Explicit ARsim-only bypass; never allowed on physical or production targets.",
                     "default": False,
                 },
             },
@@ -569,7 +572,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "plc_list_environments",
-        "description": "List named PLC toolchain environments from config/environments/environments.json.",
+        "description": "Deprecated; named environments are no longer supported.",
         "inputSchema": object_schema({}),
     },
     {
@@ -750,7 +753,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "plc_write_runtime_variable",
-        "description": "Write a discovered variable with before/readback diagnostics. ARsim and dedicated test PLC writes require execute=true but no test session.",
+        "description": "Write a discovered variable under the project PVI policy; requires execute=true.",
         "inputSchema": runtime_schema(
             {
                 "scope": {"type": "string", "enum": ["task", "global"], "default": "task"},

@@ -16,8 +16,7 @@ from schemas import TOOL_RISK_LEVELS
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LOCK_DIR = REPO_ROOT / "var" / "locks"
-DEFAULT_ENVIRONMENTS_PATH = REPO_ROOT / "config" / "environments" / "environments.json"
-DEFAULT_TARGETS_PATH = "config\\targets\\default-safe.json"
+DEFAULT_TARGETS_PATH = ""
 DEFAULT_PROJECT_PATH = ""
 DEFAULT_CONFIG = ""
 
@@ -67,9 +66,9 @@ def _repo_path(value: str) -> Path:
 
 
 def resolve_scope_context(arguments: dict[str, Any]) -> dict[str, Any]:
-    from toolchain import resolve_call_options
+    import toolchain
 
-    options = resolve_call_options(arguments)
+    options = toolchain.resolve_call_options(arguments)
     context = {
         "environment": arguments.get("environment"),
         "target": options["target"],
@@ -87,6 +86,14 @@ def resolve_scope_context(arguments: dict[str, Any]) -> dict[str, Any]:
             context["target_ip"] = target_config.get("ip")
     except (json.JSONDecodeError, OSError):
         pass
+    if arguments.get("ip"):
+        context["target_ip"] = str(arguments["ip"])
+    elif not context["target_ip"] and toolchain._RUNTIME_SERVICE is not None:
+        try:
+            target, _ = toolchain._RUNTIME_SERVICE._resolve(context["target"])
+            context["target_ip"], context["target_role"] = target.ip, target.role
+        except (AttributeError, KeyError):
+            pass
     return context
 
 

@@ -1,0 +1,19 @@
+{
+  "project_path": "Demo.apj",
+  "config": "PhysicalConfig",
+  "toolchain": "as6_default",
+  "target": "test_plc",
+  "targets": {
+    "test_plc": {
+      "ip": "192.0.2.10",
+      "role": "dedicated_test_plc"
+    }
+  },
+  "access_policy": {"mode": "whitelist"},
+  "pvi": {
+    "enabled": true,
+    "write_policy": "blacklist",
+    "write_blacklist": ["Safety:*", "sys:*", "*physicalio*"]
+  },
+  "opcua": {"validation_node_ids": []}
+}

@@ -28,7 +28,8 @@ def test_unknown_target_can_read_but_cannot_write() -> None:
 def test_office_test_allows_same_value_without_session() -> None:
     policy = RuntimePolicy()
     config = create_ephemeral_target_config(
-        ip="192.168.50.233", declared_role="dedicated_test_plc"
+        ip="192.168.50.233", declared_role="dedicated_test_plc",
+        project_config={"pvi": {"write_whitelist": ["Main:value"]}}
     )
     decision = policy.authorize_write(
         config=config,
@@ -46,7 +47,8 @@ def test_office_test_allows_same_value_without_session() -> None:
 def test_changed_value_requires_execute_but_not_session() -> None:
     policy = RuntimePolicy()
     config = create_ephemeral_target_config(
-        ip="192.168.50.233", declared_role="dedicated_test_plc"
+        ip="192.168.50.233", declared_role="dedicated_test_plc",
+        project_config={"pvi": {"write_whitelist": ["Main:value"]}}
     )
     no_session = policy.authorize_write(
         config=config,
@@ -122,6 +124,39 @@ def test_production_write_is_always_denied() -> None:
         execute=True,
         session_valid=True,
     )
+    assert not decision.allowed
+
+
+@pytest.mark.parametrize("mode, entries, variable, expected", [
+    ("whitelist", [], "Main:Input", False),
+    ("whitelist", ["Main:Input"], "Main:Input", True),
+    ("whitelist", ["Main:Input"], "Main:Other", False),
+    ("blacklist", ["Safety:*"], "Safety:Enable", False),
+    ("blacklist", ["Safety:*"], "Main:Input", True),
+    ("invalid", [], "Main:Input", False),
+])
+def test_physical_target_project_write_policy(mode, entries, variable, expected) -> None:
+    key = "write_blacklist" if mode == "blacklist" else "write_whitelist"
+    config = create_ephemeral_target_config(
+        ip="192.0.2.1", declared_role="dedicated_test_plc",
+        project_config={"pvi": {"write_policy": mode, key: entries}},
+    )
+    decision = RuntimePolicy().authorize_write(config=config, variable=variable,
+        current_value=0, requested_value=1, writable=True, execute=True, session_valid=False)
+    assert decision.allowed is expected
+
+
+def test_physical_read_unrestricted_even_for_production() -> None:
+    config = create_ephemeral_target_config(ip="192.0.2.1", declared_role="production")
+    assert RuntimePolicy().authorize_read(config=config, variable="Safety:Input").allowed
+
+
+def test_loopback_does_not_override_an_explicit_production_role() -> None:
+    config = create_ephemeral_target_config(ip="127.0.0.1", declared_role="production",
+                                            project_config={"pvi": {"write_policy": "blacklist"}})
+    decision = RuntimePolicy().authorize_write(config=config, variable="Main:Input",
+        current_value=0, requested_value=1, writable=True, execute=True, session_valid=False)
+    assert config["target"]["role"] == "production"
     assert not decision.allowed
 
 

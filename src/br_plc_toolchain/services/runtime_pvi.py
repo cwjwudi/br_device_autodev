@@ -73,10 +73,12 @@ class RuntimePviService:
         name: str | None = None,
         declared_role: str | None = None,
         pvi_dll_path: str | None = None,
+        project_config: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         if name:
             validate_target_name(name)
-        config = create_ephemeral_target_config(ip=ip, name=name, declared_role=declared_role)
+        config = create_ephemeral_target_config(ip=ip, name=name, declared_role=declared_role,
+                                                project_config=project_config)
         target_data = config["target"]
         target = PviTarget(
             name=target_data["name"],
@@ -295,25 +297,6 @@ class RuntimePviService:
             if bool(info.get("readable", True))
             else {"value": None}
         )
-        trusted_role = target.role.lower() in {"arsim", "dedicated_test_plc"}
-        session_valid = False
-        if session_id and not trusted_role:
-            current_health = self.manager.call(target, "health")
-            if not current_health.get("ok"):
-                raise PermissionError("PVI_SESSION_FINGERPRINT_MISMATCH: target health is unavailable")
-            current_fingerprint = target_fingerprint(target, current_health)
-            missing = missing_fingerprint_fields(current_fingerprint)
-            if missing:
-                raise PermissionError(
-                    "PVI_SESSION_FINGERPRINT_MISMATCH: complete target identity is unavailable "
-                    f"({', '.join(missing)})"
-                )
-            self.sessions.require(
-                session_id,
-                target_key=target.key,
-                fingerprint=current_fingerprint,
-            )
-            session_valid = True
         decision = self.policy.authorize_write(
             config=config,
             variable=ref.canonical,
@@ -321,7 +304,7 @@ class RuntimePviService:
             requested_value=value,
             writable=bool(info.get("writable")),
             execute=execute,
-            session_valid=session_valid,
+            session_valid=False,
         )
         self.policy.require(decision)
         result = self.manager.call(target, "write", ref=ref, value=value)
