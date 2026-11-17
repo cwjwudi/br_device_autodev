@@ -17,6 +17,7 @@ from locks import (
     LockConflict,
     acquire_locks,
     lock_keys_for_tool,
+    resolve_scope_context,
 )
 from schemas import EXPLICIT_TARGET_RISK_LEVELS, TOOL_DEFINITIONS, TOOL_RISK_LEVELS
 from toolchain import (
@@ -221,7 +222,16 @@ def handle_tools_call(params: dict[str, Any], operation_id: str | None = None) -
 
     assert isinstance(arguments, dict)
     tool_name = str(name)
-    lock_keys = lock_keys_for_tool(tool_name, arguments)
+    try:
+        lock_keys = lock_keys_for_tool(tool_name, arguments)
+        context = resolve_scope_context(arguments)
+        if (TOOL_RISK_LEVELS.get(tool_name) == "target_change"
+                and Path(context["targets_path"]).name == "br-auto-dev.json"
+                and context["target_role"] != "arsim"):
+            raise ValueError("Project configuration alone cannot authorize a physical target change; use an explicitly trusted targets_path.")
+    except (ValueError, OSError) as exc:
+        return text_result({"ok": False, "tool": tool_name, "error": str(exc),
+                            "error_code": "CONFIGURATION_ERROR", "stage": "configuration"}, is_error=True)
     if TOOL_RISK_LEVELS.get(tool_name) == "target_change":
         allowed, retry_after = check_target_change_rate_limit(lock_keys)
         if not allowed:

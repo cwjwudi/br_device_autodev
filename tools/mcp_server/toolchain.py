@@ -10,6 +10,7 @@ import uuid
 from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
+from project_config import load_project_config
 
 from diagnostics import (
     list_reports as diagnostic_list_reports,
@@ -200,6 +201,9 @@ def resolve_call_options(
     if env_name is not None and not isinstance(env_name, str):
         raise ValueError("environment must be a string.")
     env = load_environment(env_name)
+    project_config, project_config_path = load_project_config(
+        str(arguments.get("project_path") or env.get("project_path") or ""), REPO_ROOT
+    )
 
     explicit_target = arguments.get("target")
     has_target = isinstance(explicit_target, str) and bool(explicit_target.strip())
@@ -212,7 +216,12 @@ def resolve_call_options(
     def pick(name: str, default: str) -> str:
         value = arguments.get(name)
         if value not in (None, ""):
+            if name == "project_path" and project_config_path:
+                return project_config["project_path"]
             return str(value)
+        project_value = project_config.get(name)
+        if project_value not in (None, ""):
+            return str(project_value)
         env_value = env.get(name)
         if env_value not in (None, ""):
             return str(env_value)
@@ -222,9 +231,10 @@ def resolve_call_options(
         "target": pick("target", default_target),
         "project_path": pick("project_path", DEFAULT_PROJECT_PATH),
         "config": pick("config", DEFAULT_CONFIG),
-        "targets_path": pick("targets_path", DEFAULT_TARGETS_PATH),
+        "targets_path": str(arguments.get("targets_path") or project_config_path or env.get("targets_path") or DEFAULT_TARGETS_PATH),
         "toolchain": pick("toolchain", ""),
         "toolchains_path": pick("toolchains_path", DEFAULT_TOOLCHAINS_PATH),
+        "project_config_path": str(project_config_path or ""),
     }
 
 

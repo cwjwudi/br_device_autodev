@@ -67,42 +67,24 @@ def _repo_path(value: str) -> Path:
 
 
 def resolve_scope_context(arguments: dict[str, Any]) -> dict[str, Any]:
-    environment = arguments.get("environment")
-    env: dict[str, Any] = {}
-    if isinstance(environment, str) and environment.strip() and DEFAULT_ENVIRONMENTS_PATH.exists():
-        try:
-            environments = json.loads(
-                DEFAULT_ENVIRONMENTS_PATH.read_text(encoding="utf-8-sig")
-            )
-            candidate = environments.get(environment)
-            if isinstance(candidate, dict):
-                env = candidate
-        except (json.JSONDecodeError, OSError):
-            env = {}
+    from toolchain import resolve_call_options
 
-    def pick(name: str, default: str) -> str:
-        value = arguments.get(name)
-        if value not in (None, ""):
-            return str(value)
-        if env.get(name) not in (None, ""):
-            return str(env[name])
-        return default
-
+    options = resolve_call_options(arguments)
     context = {
-        "environment": environment if isinstance(environment, str) else None,
-        "target": pick("target", "arsim"),
-        "project_path": pick("project_path", DEFAULT_PROJECT_PATH),
-        "config": pick("config", DEFAULT_CONFIG),
-        "targets_path": pick("targets_path", DEFAULT_TARGETS_PATH),
+        "environment": arguments.get("environment"),
+        "target": options["target"],
+        "project_path": options["project_path"],
+        "config": options["config"],
+        "targets_path": options["targets_path"],
         "target_role": None,
+        "target_ip": None,
     }
     try:
-        targets = json.loads(
-            _repo_path(context["targets_path"]).read_text(encoding="utf-8-sig")
-        )
+        targets = json.loads(_repo_path(context["targets_path"]).read_text(encoding="utf-8-sig"))
         target_config = (targets.get("targets") or {}).get(context["target"])
         if isinstance(target_config, dict):
             context["target_role"] = target_config.get("role")
+            context["target_ip"] = target_config.get("ip")
     except (json.JSONDecodeError, OSError):
         pass
     return context
@@ -116,7 +98,8 @@ def lock_keys_for_tool(tool: str, arguments: dict[str, Any]) -> list[str]:
         keys.append(f"project:{project}:{context['config']}")
     if tool in TARGET_SCOPED_TOOLS:
         targets = _repo_path(context["targets_path"]).resolve()
-        keys.append(f"target:{targets}:{context['target']}")
+        identity = context.get("target_ip") or f"{targets}:{context['target']}"
+        keys.append(f"target:{identity}")
     return sorted(set(keys))
 
 

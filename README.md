@@ -58,6 +58,26 @@
 
 ## 四层配置（不必重复造轮子）
 
+项目可使用两层配置：机器级 toolchain 与项目目录的 `br-auto-dev.json`。
+MCP 的 `project_path` 可指向 `.apj` 或包含配置文件的目录；传入 `.apj` 时依次查找同目录和上一级。
+配置中的 `project_path`、`arsim_loader_exe`、显式 `access_policy.catalog_path` 相对于配置文件所在目录解析。
+目标修改仍须显式指定 `target` 或 `environment`，并按工具要求传入 `execute=true`。
+旧 environment 和 targets 参数继续可用。项目文件无效时不会回退到默认目标。
+项目文件本身不能授权对物理目标进行状态修改；物理目标操作需要显式指定可信的 `targets_path`。
+
+```json
+{
+  "project_path": "test_report/test_report.apj",
+  "config": "Config1",
+  "toolchain": "as6_default",
+  "target": "arsim",
+  "targets": {"arsim": {"ip": "127.0.0.1", "role": "arsim", "allow_auto_download": false}},
+  "access_policy": {"mode": "whitelist"}
+}
+```
+
+以下为旧配置和内部策略的兼容说明：
+
 | 层 | 文件 | 谁维护 | 内容 |
 | --- | --- | --- | --- |
 | 本机工具 | `config/toolchains/toolchains.json` 或 `config/local/toolchains.json` | 人，按开发机填一次 | AS/PVI 安装路径、编译器、PVITransfer、PVI DLL |

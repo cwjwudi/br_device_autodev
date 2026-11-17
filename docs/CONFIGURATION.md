@@ -1,5 +1,15 @@
 # 配置与运行数据约定
 
+## 项目级配置
+
+使用全局 toolchain 配置机器的 AS/PVI 路径；工程、config、工具链 ID、目标和访问策略可集中放在 `br-auto-dev.json`。MCP 的 `project_path` 可指向该文件所在目录或 `.apj`。指定 `.apj` 时先查找同目录，再查找其上一级；配置的 `project_path` 必须与指定的 `.apj` 一致。
+
+`project_path`、目标的 `arsim_loader_exe` 和显式设置的 `access_policy.catalog_path` 相对于项目配置文件所在目录解析。显式 MCP 参数优先，其次项目配置，再其次旧 environment 和默认设置。已经找到的项目配置若无效则报错，不回退。未传项目路径时不按 MCP 进程的工作目录猜测工程。
+
+项目配置须包含非空 `project_path`、`config`、`toolchain`、`target`，以及选定目标的 `targets` 条目和 `access_policy.mode`。ARsim 必须使用回环 IP。目标变更仍需显式 target/environment 和 execute；项目配置本身不能授权物理目标变更，需显式传入可信 `targets_path`。完整示例见 README。
+
+旧目录和配置仍作为兼容入口保留：
+
 ## 目录职责
 
 ```text

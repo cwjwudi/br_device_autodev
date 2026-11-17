@@ -99,6 +99,8 @@ def catalog_path(config: dict[str, Any], targets_file: str) -> Path:
     path = Path(str(raw))
     if path.is_absolute():
         return path
+    if Path(targets_file).name == "br-auto-dev.json" and (config.get("access_policy") or {}).get("catalog_path"):
+        return Path(targets_file).resolve().parent / path
     return Path(targets_file).resolve().parents[1] / path
 
 

@@ -15,7 +15,7 @@ COMMON_PROPERTIES: dict[str, Any] = {
     },
     "project_path": {
         "type": "string",
-        "description": "Automation Studio project path, relative to the repository root unless absolute.",
+        "description": "Automation Studio .apj or project configuration directory; relative to the toolchain repository unless absolute. A br-auto-dev.json beside the .apj or one directory above supplies project settings.",
     },
     "config": {
         "type": "string",

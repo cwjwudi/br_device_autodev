@@ -84,6 +84,9 @@ function Resolve-ArsimLoaderPath {
 
     $configured = [string]$TargetConfig.arsim_loader_exe
     if ($configured -and $configured -notlike '<*') {
+        if ((Split-Path -Leaf $TargetsPath) -eq 'br-auto-dev.json' -and -not [System.IO.Path]::IsPathRooted($configured)) {
+            return [System.IO.Path]::GetFullPath((Join-Path (Split-Path -Parent (Resolve-RepoPath $TargetsPath)) $configured))
+        }
         return Resolve-RepoPath $configured
     }
     if (-not $ProjectPath -or -not $Config) {

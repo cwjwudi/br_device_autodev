@@ -69,11 +69,16 @@ def load_targets(path: Path) -> tuple[dict[str, Any] | None, str | None]:
 
 
 def resolve_arsim_loader(
-    target_config: dict[str, Any], project_path: Path | None, config_name: str
+    target_config: dict[str, Any], project_path: Path | None, config_name: str, config_path: str = ""
 ) -> tuple[Path | None, str]:
     configured = str(target_config.get("arsim_loader_exe") or "").strip()
     if configured and not configured.startswith("<"):
-        path = repo_path(configured).resolve()
+        path = Path(configured)
+        if not path.is_absolute() and config_path and Path(config_path).name == "br-auto-dev.json":
+            path = Path(config_path).parent / path
+        else:
+            path = repo_path(str(path))
+        path = path.resolve()
         return path, "target_config"
     if not project_path or not config_name:
         return None, "unresolved"
@@ -228,6 +233,7 @@ def validate_environment(options: dict[str, str]) -> dict[str, Any]:
         "target": target_name,
         "target_role": role or None,
         "project_path": str(project_path) if project_path else None,
+        "project_config_path": options.get("project_config_path") or None,
         "project_candidates": [str(path) for path in candidates],
         "config": config_name,
         "targets_path": str(targets_path),
@@ -303,7 +309,7 @@ def run_doctor(options: dict[str, str]) -> dict[str, Any]:
 
     target_config = ((targets or {}).get("targets") or {}).get(options["target"])
     if isinstance(target_config, dict) and str(target_config.get("role") or "").lower() == "arsim":
-        loader, loader_source = resolve_arsim_loader(target_config, Path(environment_result["project_path"]) if environment_result.get("project_path") else None, options["config"])
+        loader, loader_source = resolve_arsim_loader(target_config, Path(environment_result["project_path"]) if environment_result.get("project_path") else None, options["config"], options.get("project_config_path", ""))
         add_check(
             checks,
             "arsim_loader",
