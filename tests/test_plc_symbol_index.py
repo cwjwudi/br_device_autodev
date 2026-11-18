@@ -6,6 +6,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -82,6 +83,16 @@ class PlcSymbolIndexTests(unittest.TestCase):
         variable = next(item for item in catalog["variables"] if item["name"] == "Input")
         self.assertEqual("source_scan", variable["catalog_source"])
         self.assertEqual("low", variable["confidence"])
+
+    def test_large_source_catalog_resolves_path_per_file(self) -> None:
+        self.source.write_text(
+            "VAR\n" + "".join(f"    Point{i:05d} : DINT;\n" for i in range(11000)) + "END_VAR\n",
+            encoding="utf-8",
+        )
+        with patch.object(symbol_index, "relative_path", wraps=symbol_index.relative_path) as resolve:
+            catalog = self.build()
+        self.assertEqual(11001, len(catalog["variables"]))  # includes configured Harness:Input
+        self.assertLess(resolve.call_count, 10)
 
     def test_fresh_build_headers_are_preferred_with_high_confidence(self) -> None:
         header = self.create_build_artifacts(newer_than_source=True)

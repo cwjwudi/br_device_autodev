@@ -74,6 +74,7 @@ def iter_var_blocks(text: str) -> list[tuple[str, list[str]]]:
 def parse_variables_file(path: Path) -> list[dict[str, Any]]:
     text = path.read_text(encoding="utf-8-sig", errors="replace")
     task = module_from_variables_file(path)
+    source = relative_path(path)
     variables: list[dict[str, Any]] = []
     for block_kind, lines in iter_var_blocks(text):
         is_constant = "CONSTANT" in block_kind
@@ -98,7 +99,7 @@ def parse_variables_file(path: Path) -> list[dict[str, Any]]:
                     "opcua": opcua,
                     "type": type_expr,
                     "constant": is_constant,
-                    "source": relative_path(path),
+                    "source": source,
                 }
             )
     return variables
@@ -130,6 +131,7 @@ def parse_generated_header(path: Path) -> list[dict[str, Any]]:
         return []
 
     source = source_match.group(1)
+    artifact_source = relative_path(path)
     generated_scope = scope_match.group(1).lower()
     scope = "task" if generated_scope == "local" else "global"
     task = Path(source).parent.name if scope == "task" else None
@@ -151,10 +153,10 @@ def parse_generated_header(path: Path) -> list[dict[str, Any]]:
                 "type": generated_iec_type(match.group("type"), match.group("array")),
                 "constant": match.group("storage") == "_GLOBAL_CONST",
                 "source": source,
-                "artifact_source": relative_path(path),
+                "artifact_source": artifact_source,
                 "catalog_source": "automation_studio_generated_header",
                 "confidence": "high",
-                "generated_from": [relative_path(path), source],
+                "generated_from": [artifact_source, source],
             }
         )
     return variables
@@ -242,7 +244,7 @@ def build_catalog(config: dict[str, Any], targets_file: str, project_root: Path 
             for item in parse_variables_file(path):
                 item["catalog_source"] = "source_scan"
                 item["confidence"] = "low"
-                item["generated_from"] = [relative_path(path)]
+                item["generated_from"] = [item["source"]]
                 source_items.append(item)
         provenance["generated_from"] = list(
             dict.fromkeys(
