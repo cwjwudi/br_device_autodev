@@ -152,15 +152,18 @@ MCP server version: `0.15.2a1`
 | `plc_download_ruc` | `target_change` | `Download` | `execute=true` | Download the RUC package to the target. Safety gate: requires execute=true, and plc_check_download must pass on the server side before actual transfer. |
 | `plc_read_logger` | `local_write` | `ReadLogger` | - | Read a whitelisted PLC/AR logger module through PVITransfer Logger. Returns report/log paths and a compact summary, never raw HTML/CSV content. |
 | `plc_list_targets` | `readonly` | `ListTargets` | - | List configured PLC/ARsim targets with IP, role, and automatic-download permission. |
+| `plc_list_variables` | `local_write` | `plc_symbol_index.py` | - | Build and page through the PLC variable catalog, preferring fresh Automation Studio build artifacts and falling back to source scanning. The complete catalog is saved locally; MCP responses are bounded. |
 | `plc_search_variables` | `local_write` | `plc_symbol_index.py` | - | Search PLC variables by text, module/task, and read/write access while preserving catalog source, confidence, provenance, and warnings. |
 | `plc_discover_runtime_target` | `local_write` | `persistent PVI runtime` | - | Connect through persistent PVI without source code or a policy file. Unknown physical targets are read-only; test roles must be explicitly declared. |
+| `plc_list_runtime_tasks` | `readonly` | `persistent PVI runtime` | - | List tasks from the running PLC image through PVI, independent of local source code. |
+| `plc_list_runtime_variables` | `readonly` | `persistent PVI runtime` | - | Scan online task or global variable names through PVI, then return a bounded page. Each page repeats the full scan; pattern is a case-sensitive glob, not a regex. Counts can change if the PLC image changes. |
 | `plc_read_runtime_variable` | `readonly` | `persistent PVI runtime` | - | Read an online PVI variable. Missing external policy defaults to safe read-only discovery. |
 | `plc_write_runtime_variable` | `target_change` | `persistent PVI runtime + policy` | `execute=true` | Write a discovered variable under the project PVI policy; requires execute=true. |
 
 
 ## Hidden Tools
 
-共有 25 个工具被 `config/mcp/tool_filter.json` 隐藏（实现仍注册，仅供内部编排调用，MCP 列表与直接调用不可用）；具体名单见该配置文件。
+共有 22 个工具被 `config/mcp/tool_filter.json` 隐藏（实现仍注册，仅供内部编排调用，MCP 列表与直接调用不可用）；具体名单见该配置文件。
 <!-- END GENERATED MCP TOOL CATALOG -->
 
 工具目录由 `python scripts/maintenance/generate_mcp_docs.py` 从 MCP schema 生成；用 `--check` 检查文档是否同步。
