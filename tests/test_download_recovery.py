@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
+import subprocess
 import sys
+import threading
 import time
 
 import pytest
@@ -10,6 +12,8 @@ import download
 import download_recovery as journal
 import server
 from toolchain import _CURRENT_OPERATION_ID
+from download_job import remaining_processes
+from locks import acquire_lock
 
 
 def scoped(target):
@@ -122,9 +126,7 @@ def test_restart_with_only_a_passed_safety_checkpoint_is_unknown(monkeypatch):
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows Job Object")
-def test_cancelled_download_does_not_launch(monkeypatch):
-    import threading
-
+def test_cancelled_download_does_not_launch():
     cancelled = threading.Event()
     cancelled.set()
     token = download.CANCELLED.set(cancelled)
@@ -134,3 +136,80 @@ def test_cancelled_download_does_not_launch(monkeypatch):
         download.CANCELLED.reset(token)
     assert data["error_code"] == "OPERATION_CANCELLED"
     assert data["download_state"] == "not_started" and data["process_id"] is None
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows Job Object")
+def test_cancel_during_transfer_reports_unconfirmed_outcome():
+    operation_id = "5" * 32
+    directory = download.DOWNLOAD_ROOT / operation_id
+    directory.mkdir(parents=True)
+    dispatched = directory / "transfer-started"
+    cancelled = threading.Event()
+
+    def cancel_after_dispatch():
+        deadline = time.monotonic() + 5
+        while not dispatched.exists() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        cancelled.set()
+
+    signal = threading.Thread(target=cancel_after_dispatch, daemon=True)
+    token = download.CANCELLED.set(cancelled)
+    signal.start()
+    try:
+        script = f"import pathlib,time; assert int(input()) > 0; pathlib.Path({str(dispatched)!r}).touch(); time.sleep(30)"
+        result = download.supervise([sys.executable, "-c", script], "arsim", operation_id, time.monotonic() + 7)
+    finally:
+        download.CANCELLED.reset(token)
+        signal.join(timeout=6)
+    assert dispatched.exists()
+    assert result["error_code"] == "OPERATION_CANCELLED"
+    assert result["download_state"] == "unknown" and not result["retryable"]
+    assert result["processes_ended"] and remaining_processes(operation_id) == 0
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows Job Object")
+def test_killing_server_releases_its_owned_tree_and_recovers_transfer_evidence():
+    operation_id = "6" * 32
+    request_id = "server-crash"
+    directory = download.DOWNLOAD_ROOT / operation_id
+    directory.mkdir(parents=True)
+    (directory / "transfer-started").touch()
+    log = directory / "pvi_download_sim.log"
+    child = f"import pathlib,time; assert int(input()) > 0; pathlib.Path({str(log)!r}).write_text('Transfer RUC SUCCESSFUL'); time.sleep(30)"
+    driver = """
+import sys, time
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import download, download_recovery as journal
+from locks import acquire_lock
+root, locks, operation_id, request_id, child = sys.argv[2:]
+download.DOWNLOAD_ROOT = Path(root)
+key = "target:127.0.0.2"
+acquire_lock(key, directory=Path(locks), metadata={"managed_download": True, "operation_id": operation_id})
+journal.claim(request_id, operation_id, {})
+journal.EXECUTION.set(({"target": "sim"}, [key], []))
+deadline = time.monotonic() + 20
+journal.bind(operation_id, 20, deadline)
+download.supervise([sys.executable, "-c", child], "sim", operation_id, deadline)
+"""
+    process = subprocess.Popen([
+        sys._base_executable, "-c", driver, str(Path(download.__file__).parent),
+        str(download.DOWNLOAD_ROOT), str(server.LOCK_DIR), operation_id, request_id, child,
+    ])
+    try:
+        deadline = time.monotonic() + 6
+        while not log.is_file() and time.monotonic() < deadline and process.poll() is None:
+            time.sleep(0.02)
+        assert log.is_file() and remaining_processes(operation_id) >= 1
+        assert call("plc_get_download_result", {"request_id": request_id})["target_protected"]
+    finally:
+        if process.poll() is None:
+            process.kill()
+        process.wait(timeout=5)
+    deadline = time.monotonic() + 5
+    while remaining_processes(operation_id) != 0 and time.monotonic() < deadline:
+        time.sleep(0.02)
+    result = call("plc_get_download_result", {"request_id": request_id})
+    assert result["download_state"] == "transfer_succeeded" and not result["target_protected"]
+    lock = acquire_lock("target:127.0.0.2", directory=server.LOCK_DIR)
+    lock.release()

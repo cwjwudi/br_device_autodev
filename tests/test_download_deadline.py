@@ -39,6 +39,52 @@ def test_sharing_conflict_and_conflicting_log(tmp_path, monkeypatch):
     assert download.read_transfer_log(log)[0] == "conflicting"
 
 
+def test_cleanup_failure_keeps_transfer_unknown_even_with_success_log(tmp_path, monkeypatch):
+    class UnresponsiveJob:
+        def __init__(self, operation_id):
+            pass
+
+        def attach(self, process):
+            pass
+
+        def active(self):
+            return 1
+
+        def terminate(self):
+            raise OSError("Termination could not be confirmed")
+
+        def close(self):
+            pass
+
+    class UnresponsiveProcess:
+        pid = 101
+
+        def __init__(self, *args, **kwargs):
+            import io
+            self.stdin = io.StringIO()
+
+        def communicate(self, timeout):
+            time.sleep(timeout)
+            raise subprocess.TimeoutExpired("fake", timeout)
+
+        def poll(self):
+            return None
+
+    monkeypatch.setattr(download, "DownloadJob", UnresponsiveJob)
+    monkeypatch.setattr(download, "deadline_ticks", lambda seconds: 1)
+    monkeypatch.setattr(download.subprocess, "Popen", UnresponsiveProcess)
+    monkeypatch.setattr(download.subprocess, "CREATE_NO_WINDOW", 0, raising=False)
+    monkeypatch.setattr(download, "DOWNLOAD_ROOT", tmp_path)
+    directory = tmp_path / "attempt"
+    directory.mkdir()
+    (directory / "transfer-started").touch()
+    (directory / "pvi_download_arsim.log").write_text("Transfer RUC SUCCESSFUL", encoding="utf-8")
+    result = download.supervise([], "arsim", "attempt", time.monotonic() + 0.7)
+    assert result["transfer_log_state"] == "success" and result["download_state"] == "unknown"
+    assert result["cleanup"]["attempted"] and not result["cleanup"]["succeeded"]
+    assert not result["processes_ended"] and not result["retryable"]
+
+
 @pytest.mark.skipif(os.name != "nt", reason="Windows Job Object")
 def test_success_evidence_does_not_interrupt_followup_and_timeout_reaps_descendants(tmp_path, monkeypatch):
     operation_id = uuid.uuid4().hex
