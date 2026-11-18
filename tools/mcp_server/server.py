@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import traceback
 import uuid
@@ -42,6 +43,7 @@ DISABLED_TOOLS = load_disabled_tools()
 AUDIT_DIR = DEFAULT_AUDIT_DIR
 LOCK_DIR = DEFAULT_LOCK_DIR
 ERROR_LOG = Path(__file__).resolve().parents[2] / "var" / "reports" / "mcp_server_errors.log"
+STDIO_LOG = ERROR_LOG.with_name("download_stdio.jsonl")
 RATE_LIMIT_WINDOW_SECONDS = 60.0
 MAX_TARGET_CHANGES_PER_WINDOW = 10
 _RATE_LIMIT_LOCK = threading.RLock()
@@ -385,24 +387,46 @@ def handle_request(message: dict[str, Any], operation_id: str | None = None) -> 
 
 
 def run() -> None:
+    sys.stdin.reconfigure(encoding="utf-8")
+    sys.stdout.reconfigure(encoding="utf-8", newline="\n")
     start_catalog_watcher()
     executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="mcp-tool")
     active: dict[Any, tuple[Future[dict[str, Any] | None], str]] = {}
     active_lock = threading.RLock()
     output_lock = threading.Lock()
 
-    def write_response(response: dict[str, Any] | None) -> None:
+    def trace(stage: str, request_id: Any, operation_id: str, **fields: Any) -> None:
+        try:
+            STDIO_LOG.parent.mkdir(parents=True, exist_ok=True)
+            with STDIO_LOG.open("a", encoding="utf-8") as stream:
+                stream.write(json.dumps({
+                    "stage": stage, "request_id": request_id, "operation_id": operation_id,
+                    "timestamp": datetime.now(UTC).isoformat(), "server_pid": os.getpid(), **fields,
+                }) + "\n")
+        except OSError:
+            pass
+
+    def write_response(response: dict[str, Any] | None, operation_id: str | None = None) -> None:
         if response is None:
             return
+        request_id = response.get("id")
+        line = json.dumps(response, ensure_ascii=False) + "\n"
+        if operation_id:
+            trace("response_serialized", request_id, operation_id, bytes=len(line.encode("utf-8")))
         with output_lock:
-            sys.stdout.write(json.dumps(response, ensure_ascii=False) + "\n")
+            sys.stdout.write(line)
             sys.stdout.flush()
+        if operation_id:
+            trace("stdout_flushed", request_id, operation_id)
 
-    def complete(request_id: Any, future: Future[dict[str, Any] | None]) -> None:
+    def complete(request_id: Any, future: Future[dict[str, Any] | None], operation_id: str | None) -> None:
         try:
-            write_response(future.result())
+            write_response(future.result(), operation_id)
+        except OSError as exc:
+            if operation_id:
+                trace("stdout_failed", request_id, operation_id, error=str(exc))
         except Exception as exc:
-            write_response(make_error(request_id, -32603, f"Internal MCP execution error: {exc}"))
+            write_response(make_error(request_id, -32603, f"Internal MCP execution error: {exc}"), operation_id)
         finally:
             with active_lock:
                 active.pop(request_id, None)
@@ -431,10 +455,14 @@ def run() -> None:
                     continue
                 if method == "tools/call" and request_id is not None:
                     operation_id = uuid.uuid4().hex
+                    tool_name = (message.get("params") or {}).get("name")
+                    traced = operation_id if tool_name in {"plc_download_ruc", "plc_get_download_result"} else None
+                    if traced:
+                        trace("request_received", request_id, traced)
                     future = executor.submit(handle_request, message, operation_id)
                     with active_lock:
                         active[request_id] = (future, operation_id)
-                    future.add_done_callback(lambda done, rid=request_id: complete(rid, done))
+                    future.add_done_callback(lambda done, rid=request_id, oid=traced: complete(rid, done, oid))
                     continue
                 response = handle_request(message)
 
