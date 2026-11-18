@@ -9,13 +9,17 @@ import arsim_provision
 
 
 @pytest.mark.parametrize("family,command", [("AS4", "CreateARsimStructure"), ("AS6", "OfflineCommissioning")])
-def test_creates_fresh_runtime_in_default_work_directory(tmp_path, monkeypatch, family, command):
+@pytest.mark.parametrize("custom", [False, True])
+def test_creates_fresh_runtime_in_work_directory(tmp_path, monkeypatch, family, command, custom):
     project = tmp_path / "project.apj"
     project.touch()
     package = tmp_path / "ruc.zip"
     package.touch()
     options = {"project_path": str(project), "project_config_path": str(tmp_path / "br-auto-dev.json"), "config": "Sim", "target": "arsim"}
     target = {"ip": "127.0.0.2"}
+    if custom:
+        target["arsim_work_dir"] = "custom-work"
+    work_root = tmp_path / "custom-work" if custom else tmp_path / "Temp" / "Simulation"
     chain = SimpleNamespace(family=family, pvi_transfer_exe=tmp_path / "transfer.exe")
     hardware = tmp_path / "Physical" / "Sim" / "Hardware.hw"
     hardware.parent.mkdir(parents=True)
@@ -38,13 +42,13 @@ def test_creates_fresh_runtime_in_default_work_directory(tmp_path, monkeypatch, 
         calls.append(args)
         conflicts = []
         if len(calls) > 2:
-            runtime = next((tmp_path / "Temp" / "Simulation" / "codex-arsim").iterdir()) / "runtime"
+            runtime = next((work_root / "codex-arsim").iterdir()) / "runtime"
             conflicts = [{"port": 11169, "path": str(runtime / "ar000.exe"), "pid": 100}]
         return {"ok": True, "slots": [{"state": "blocked" if conflicts else "free", "conflicts": conflicts}]}
 
     result = arsim_provision.provision(options, target, {"package_path": str(package)}, chain, occupancy, 10)
     assert result["ok"] and result["runtime_pid"] == 100
-    assert Path(result["runtime_directory"]).is_relative_to(tmp_path / "Temp" / "Simulation")
+    assert Path(result["runtime_directory"]).is_relative_to(work_root)
     assert (Path(result["run_directory"]) / "instance.json").exists()
 
 

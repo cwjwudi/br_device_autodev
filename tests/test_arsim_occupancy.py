@@ -2,6 +2,7 @@ import importlib
 import json
 import socket
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -23,3 +24,9 @@ def test_detects_listener_on_selected_address():
 def test_rejects_non_loopback():
     with pytest.raises(ValueError):
         toolchain.plc_check_arsim_occupancy({"addresses": ["192.168.0.1"]})
+
+
+def test_wildcard_and_ipv4_mapped_conflicts():
+    functions = Path(__file__).resolve().parents[1] / "tools" / "arsim_occupancy_functions.ps1"
+    script = f". '{functions}'; if (-not (Test-CoversSlot '::' '127.0.0.2')) {{ exit 1 }}; if (-not (Test-CoversSlot '::ffff:7f00:2' '127.0.0.2')) {{ exit 2 }}; if (Test-CoversSlot '::ffff:7f00:2' '127.0.0.1') {{ exit 3 }}"
+    subprocess.run(["powershell.exe", "-NoProfile", "-Command", script], check=True, timeout=15)

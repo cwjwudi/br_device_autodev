@@ -79,8 +79,7 @@ python tools\mcp_server\server.py
   "targets": {
     "arsim": {
       "ip": "127.0.0.1",
-      "role": "arsim",
-      "arsim_loader_exe": "Temp/Simulation/Sim/CPU/ar000loader.exe"
+      "role": "arsim"
     }
   },
   "pvi": {"enabled": true, "write_policy": "whitelist", "write_whitelist": [], "restore_writes": [], "validation_variables": []}
@@ -88,8 +87,8 @@ python tools\mcp_server\server.py
 ```
 
 - MCP 的 `project_path` 可指向含配置的目录或 `.apj`。传 `.apj` 时查找同目录及其上一级；配置里的 `.apj` 必须存在并与传入工程一致。项目配置格式错误时会报错。
-- `project_path`、`arsim_loader_exe` 的相对路径以配置文件所在目录为基准。旧的命名 environment 和默认目标文件已移除。构建和目标操作应传入项目路径。
-- ARsim 的 IP 必须是回环地址。检查 `Physical/<实际config>/Hardware.hw` 中 CPU 的 `Simulation` 为 `1`，重新构建后使用实际生成的 `Temp/Simulation/<实际config>/<CPU>/ar000loader.exe`；如果不配置 loader，程序会尝试在该 config 目录下寻找唯一 loader。
+- `project_path`、`arsim_work_dir`、`arsim_loader_exe` 的相对路径以配置文件所在目录为基准。`arsim_work_dir` 缺省为 `.apj` 所在目录的 `Temp/Simulation`；新建实例时工具在其中创建隔离子目录，不覆盖已有文件。
+- ARsim 的 IP 必须是回环地址；AS4 的 `SimulationIPAddress` 必须与目标 IP 一致并在构建前设置。首次安装使用 `plc_provision_arsim`；旧的 `arsim_loader_exe` 仍供 `plc_start_arsim` 启动既有实例。详见 [ARsim 工作流程](docs/arsim-workflow.md)。
 - 实时 PVI：调用 `plc_discover_runtime_target` 时传 `project_path` 与 `target`，服务会读取项目中的 IP、角色和 PVI 策略；随后按目标名读写。项目策略更改后重新发现目标。未传项目配置的物理目标可只读发现，但没有写入白名单。
 
 ### 可复制的配置示例
@@ -112,10 +111,8 @@ python tools\mcp_server\server.py
 
 1. 调用 `plc_doctor`、`plc_validate_environment`，传入项目路径，确认 AS major、工具路径、实际 config 和目标。
 2. 调用 `plc_build_project` 并设置 `build_ruc_package=true`。
-3. 调用 `plc_start_arsim`，显式传 `target="arsim"` 和 `execute=true`。
-4. 依次调用 `plc_probe_target`、`plc_describe_ruc_package`、`plc_check_download`，检查目标、包与所有告警。
-5. 确认目标及用户授权后调用 `plc_download_ruc`，显式传 `target="arsim"`、`execute=true`。
-6. 先调用 `plc_discover_runtime_target(project_path=..., target=...)`，再使用 `plc_read_runtime_variable` 读取实际变量。`Object not found` 时先确认运行映像中是否包含该任务和变量。
+3. 调用 `plc_check_arsim_occupancy`，首次部署用 `plc_provision_arsim(target="arsim", execute=true)` 离线安装并启动独立仿真；已有实例更新则检查归属后使用下载安全检查和 `plc_download_ruc`。
+4. 先调用 `plc_discover_runtime_target(project_path=..., target=...)`，再使用 `plc_read_runtime_variable` 读取实际变量。监听成功不等于 RUN 或功能验证通过。
 
 缺少 Library 时按 `plc_find_library_for_symbol` → `plc_plan_project_library` → `plc_add_project_library` 处理，只使用可信的本机 AS 安装库，不自动添加 Safety 库。
 
@@ -138,6 +135,8 @@ MCP server version: `0.15.2a1`
 
 | MCP Tool | Risk | Backend | Confirmation | Description |
 | --- | --- | --- | --- | --- |
+| `plc_check_arsim_occupancy` | `readonly` | `p802 occupancy sampler` | - | Sample local ARsim address conflicts using p802 TCP/UDP occupancy rules; free is not a reservation. |
+| `plc_provision_arsim` | `target_change` | `PVITransfer offline commissioning` | `execute=true` | Install the project's ARsim RUC into a new isolated working directory and start it on the configured free loopback IP. |
 | `plc_doctor` | `readonly` | `MCP native diagnostics` | - | Check local Python, PowerShell, Automation Studio, PVITransfer, PVI Python dependency, target config, project/config, ARsim loader, and generated-output write access. |
 | `plc_validate_environment` | `readonly` | `MCP native diagnostics` | - | Validate the project configuration, toolchain, and target without connecting to a PLC. |
 | `plc_list_reports` | `readonly` | `MCP native report index` | - | List compact metadata for historical JSON reports under var/reports without returning report bodies. |
