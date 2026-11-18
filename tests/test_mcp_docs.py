@@ -26,5 +26,4 @@ def test_readme_catalog_covers_tools_and_version() -> None:
     assert text.count("<!-- END GENERATED MCP TOOL CATALOG -->") == 1
     for definition in visible_definitions():
         assert text.count(f"| `{definition['name']}` |") == 1
-    for definition in disabled_definitions():
-        assert f"`{definition['name']}`" in text
+    assert f"共有 {len(disabled_definitions())} 个工具" in text

@@ -69,15 +69,12 @@ def hidden_note() -> str:
     hidden = [definition["name"] for definition in disabled_definitions()]
     if not hidden:
         return ""
-    names = ", ".join(f"`{markdown_escape(name)}`" for name in hidden)
     return "\n".join(
         [
             "",
             "## Hidden Tools",
             "",
-            f"以下 {len(hidden)} 个工具被 `config/mcp/tool_filter.json` 隐藏（实现仍注册，仅供内部编排调用，MCP 列表与直接调用不可用）：",
-            "",
-            names,
+            f"共有 {len(hidden)} 个工具被 `config/mcp/tool_filter.json` 隐藏（实现仍注册，仅供内部编排调用，MCP 列表与直接调用不可用）；具体名单见该配置文件。",
             "",
         ]
     )

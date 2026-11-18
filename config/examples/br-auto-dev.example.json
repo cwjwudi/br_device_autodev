@@ -13,10 +13,6 @@
   "access_policy": {
     "mode": "whitelist"
   },
-  "opcua": {
-    "endpoint_port": 4840,
-    "validation_node_ids": []
-  },
   "pvi": {
     "enabled": true,
     "write_policy": "whitelist",

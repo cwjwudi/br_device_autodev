@@ -324,6 +324,8 @@ def run_plc_toolchain(
         args.extend(["-StartWaitSeconds", str(start_wait_seconds)])
     if settle_ms is not None:
         args.extend(["-SettleMs", str(settle_ms)])
+    if command == "Probe":
+        args.extend(["-ProbeWaitSeconds", str(max(1, timeout_seconds // 2))])
 
     try:
         process = subprocess.Popen(
@@ -448,9 +450,16 @@ def run_plc_toolchain(
                 "cleanup": cleanup,
             }
         error_code = "TRANSFER_TIMEOUT" if command == "Download" else "TOOLCHAIN_TIMEOUT"
+        probe_log_path = REPO_ROOT / "var" / f"probe_{target}_{operation_id}.log"
+        probe_log = ""
+        if command == "Probe":
+            try:
+                probe_log = probe_log_path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                pass
         cleanup = {
             **cleanup,
-            "last_log_lines": ((stdout or "") + "\n" + (stderr or "")).splitlines()[-40:],
+            "last_log_lines": (probe_log or ((stdout or "") + "\n" + (stderr or ""))).splitlines()[-40:],
         }
         raise ToolchainError(
             f"PLC toolchain command '{command}' timed out after {timeout_seconds}s.",
@@ -464,6 +473,7 @@ def run_plc_toolchain(
             attempt_id=operation_id,
             process_id=process.pid,
             cleanup=cleanup,
+            details={"log_path": str(probe_log_path)} if probe_log else {},
             remediation=[
                 "Re-probe the target before attempting another state-changing operation.",
                 "Treat the deployment state as unknown if the target cannot be reached.",

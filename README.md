@@ -1,6 +1,6 @@
 # B&R PLC 自动开发工具链
 
-版本：**0.15.1a1（预发布基线）**。本项目通过 stdio MCP 提供 Automation Studio 构建、RUC 包检查和下载、ARsim 启动，以及 PVI / OPC UA 反馈验证。构建和下载分别调用 B&R 的 `BR.AS.Build.exe`、`PVITransfer.exe`。
+版本：**0.15.1a1（预发布基线）**。本项目通过 stdio MCP 提供 Automation Studio 构建、RUC 包检查和下载、ARsim 启动，以及 PVI 反馈验证。构建和下载分别调用 B&R 的 `BR.AS.Build.exe`、`PVITransfer.exe`。
 
 本版本仍是开发基线，尚未完成发布验收；使用前请阅读下方的实际安全限制。项目本身不是 Automation Studio 工程，需要另行准备 `.apj` 工程。
 
@@ -84,7 +84,6 @@ python tools\mcp_server\server.py
     }
   },
   "access_policy": {"mode": "whitelist"},
-  "opcua": {"endpoint_port": 4840, "validation_node_ids": []},
   "pvi": {"enabled": true, "write_policy": "whitelist", "write_whitelist": [], "restore_writes": [], "validation_variables": []}
 }
 ```
@@ -92,7 +91,6 @@ python tools\mcp_server\server.py
 - MCP 的 `project_path` 可指向含配置的目录或 `.apj`。传 `.apj` 时查找同目录及其上一级；配置里的 `.apj` 必须存在并与传入工程一致。项目配置格式错误时会报错。
 - `project_path`、`arsim_loader_exe` 和显式 `access_policy.catalog_path` 的相对路径以配置文件所在目录为基准。旧的命名 environment 和默认目标文件已移除。构建和目标操作应传入项目路径。
 - ARsim 的 IP 必须是回环地址。检查 `Physical/<实际config>/Hardware.hw` 中 CPU 的 `Simulation` 为 `1`，重新构建后使用实际生成的 `Temp/Simulation/<实际config>/<CPU>/ar000loader.exe`；如果不配置 loader，程序会尝试在该 config 目录下寻找唯一 loader。
-- OPC UA 只读取已配置节点；测试套件需根据实际工程配置输入、断言和恢复值。示例中的空列表不会自动暴露变量，也不能充当实际测试套件。
 - 实时 PVI：调用 `plc_discover_runtime_target` 时传 `project_path` 与 `target`，服务会读取项目中的 IP、角色和 PVI 策略；随后按目标名读写。项目策略更改后重新发现目标。未传项目配置的物理目标可只读发现，但没有写入白名单。
 
 ### 可复制的配置示例
@@ -118,9 +116,9 @@ python tools\mcp_server\server.py
 3. 调用 `plc_start_arsim`，显式传 `target="arsim"` 和 `execute=true`。
 4. 依次调用 `plc_probe_target`、`plc_describe_ruc_package`、`plc_check_download`，检查目标、包与所有告警。
 5. 确认目标及用户授权后调用 `plc_download_ruc`，显式传 `target="arsim"`、`execute=true`。
-6. 使用 `plc_verify_opcua` 或先 `plc_discover_runtime_target(project_path=..., target=...)` 再 `plc_read_runtime_variable` 读取实际变量。`Object not found` 时先确认运行映像中是否包含该任务和变量。
+6. 先调用 `plc_discover_runtime_target(project_path=..., target=...)`，再使用 `plc_read_runtime_variable` 读取实际变量。`Object not found` 时先确认运行映像中是否包含该任务和变量。
 
-缺少 Library 时按 `plc_find_library_for_symbol` → `plc_plan_project_library` → `plc_add_project_library` 处理，只使用可信的本机 AS 安装库，不自动添加 Safety 库。输入输出套件使用 `plc_reset_test_harness` 和 `plc_run_test_suite`；恢复失败必须按失败处理。
+缺少 Library 时按 `plc_find_library_for_symbol` → `plc_plan_project_library` → `plc_add_project_library` 处理，只使用可信的本机 AS 安装库，不自动添加 Safety 库。
 
 ## 安全边界与当前实现限制
 
@@ -153,11 +151,7 @@ MCP server version: `0.15.1a1`
 | `plc_describe_ruc_package` | `readonly` | `DescribePackage` | - | Read the metadata of a RUC package zip file: CPU type, AR version, config version, runtime type, etc. |
 | `plc_check_download` | `local_write` | `CheckDownload` | - | Run the download safety check without downloading. Compares the RUC package metadata with the target probe result. |
 | `plc_download_ruc` | `target_change` | `Download` | `execute=true` | Download the RUC package to the target. Safety gate: requires execute=true, and plc_check_download must pass on the server side before actual transfer. |
-| `plc_verify_opcua` | `local_write` | `VerifyOpcUa` | - | Read OPC UA validation nodes from the target. Returns values, types, and timestamps for each configured node. |
 | `plc_read_logger` | `local_write` | `ReadLogger` | - | Read a whitelisted PLC/AR logger module through PVITransfer Logger. Returns report/log paths and a compact summary, never raw HTML/CSV content. |
-| `plc_run_arsim_closed_loop` | `target_change` | `RunArsimClosedLoop` | `execute=true` | Run the standard ARsim closed loop: build RUC package, start ARsim, probe, describe package, safety check, optional explicit download, and verification report. |
-| `plc_run_test_suite` | `target_change` | `RunTestSuite` | `execute=true` | Run a full PLC IO test suite and write a report with per-case writes, readback, checks, and restore results. |
-| `plc_reset_test_harness` | `target_change` | `ResetTestHarness` | `execute=true` | Restore/reset the PLC test harness using pvi.restore_writes. Requires execute=true and refuses production targets. |
 | `plc_list_targets` | `readonly` | `ListTargets` | - | List configured PLC/ARsim targets with IP, role, and automatic-download permission. |
 | `plc_search_variables` | `local_write` | `plc_symbol_index.py` | - | Search PLC variables by text, module/task, and read/write access while preserving catalog source, confidence, provenance, and warnings. |
 | `plc_discover_runtime_target` | `local_write` | `persistent PVI runtime` | - | Connect through persistent PVI without source code or a policy file. Unknown physical targets are read-only; test roles must be explicitly declared. |
@@ -167,9 +161,7 @@ MCP server version: `0.15.1a1`
 
 ## Hidden Tools
 
-以下 21 个工具被 `config/mcp/tool_filter.json` 隐藏（实现仍注册，仅供内部编排调用，MCP 列表与直接调用不可用）：
-
-`plc_read_pvi`, `plc_read_pvi_batch`, `plc_write_pvi`, `plc_run_verification_suite`, `plc_run_io_test_case`, `plc_get_target_config`, `plc_list_environments`, `plc_list_variables`, `plc_list_toolchains`, `plc_get_toolchain`, `plc_runtime_health`, `plc_save_runtime_target`, `plc_list_runtime_tasks`, `plc_list_runtime_variables`, `plc_get_runtime_variable_info`, `plc_start_pvi_trace`, `plc_get_pvi_trace_status`, `plc_read_pvi_trace`, `plc_stop_pvi_trace`, `plc_open_test_session`, `plc_close_test_session`
+共有 25 个工具被 `config/mcp/tool_filter.json` 隐藏（实现仍注册，仅供内部编排调用，MCP 列表与直接调用不可用）；具体名单见该配置文件。
 <!-- END GENERATED MCP TOOL CATALOG -->
 
 工具目录由 `python scripts/maintenance/generate_mcp_docs.py` 从 MCP schema 生成；用 `--check` 检查文档是否同步。

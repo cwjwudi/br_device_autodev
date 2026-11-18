@@ -23,6 +23,7 @@ param(
     [int]$SettleMs = 100,
     [switch]$BuildRucPackage,
     [int]$StartWaitSeconds = 3,
+    [int]$ProbeWaitSeconds = 30,
     [switch]$ForceArsimDownload,
     [switch]$BypassDownloadSafety,
     [switch]$Execute
@@ -724,7 +725,7 @@ function New-ProbePil {
     param([Parameter(Mandatory = $true)][string]$Ip)
 
     New-Item -ItemType Directory -Path $GeneratedDir -Force | Out-Null
-    $pilPath = Join-Path $GeneratedDir "probe_$Target.pil"
+    $pilPath = Join-Path $GeneratedDir "probe_${Target}_${OperationId}.pil"
     $lines = @(
         "Connection `"/IF=tcpip`", `"/IP=$Ip /COMT=2500 /AM=* /PT=11169`", `"WT=10`"",
         "CurrentConnection",
@@ -741,7 +742,7 @@ function New-ProbePil {
 
 function Get-PviCommandValue {
     param(
-        [Parameter(Mandatory = $true)][string[]]$Lines,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][AllowEmptyString()][string[]]$Lines,
         [Parameter(Mandatory = $true)][string]$CommandName
     )
 
@@ -775,15 +776,19 @@ function Invoke-Probe {
     $wrapper = Resolve-RepoPath "scripts\windows\invoke-pvitransfer-silent.ps1"
     $pviTransfer = Resolve-RepoPath $toolchainConfig.pvi.transfer_exe
     $pil = New-ProbePil $targetConfig.ip
-    $log = Join-Path $GeneratedDir "probe_$Target.log"
+    $log = Join-Path $GeneratedDir "probe_${Target}_${OperationId}.log"
 
     $report = $null
+    $deadline = [DateTime]::UtcNow.AddSeconds($ProbeWaitSeconds)
     for ($attempt = 1; $attempt -le 3; $attempt++) {
+        $remaining = [Math]::Ceiling(($deadline - [DateTime]::UtcNow).TotalSeconds)
+        if ($remaining -lt 1) { break }
         $output = & powershell -NoProfile -ExecutionPolicy Bypass `
             -File $wrapper `
             -PilPath $pil `
             -LogPath $log `
-            -PviTransferPath $pviTransfer 2>&1
+            -PviTransferPath $pviTransfer `
+            -MaxWaitSeconds $remaining 2>&1
         $exitCode = $LASTEXITCODE
 
         $lines = @($output | ForEach-Object { $_.ToString() })
@@ -823,7 +828,7 @@ function Invoke-Probe {
         if ($report.ok -and $report.cpu_type) {
             break
         }
-        if ($attempt -lt 3) {
+        if ($attempt -lt 3 -and [DateTime]::UtcNow.AddSeconds(3) -lt $deadline) {
             Start-Sleep -Seconds 3
         }
     }
