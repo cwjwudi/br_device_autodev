@@ -50,6 +50,7 @@ ERROR_LOG = Path(__file__).resolve().parents[2] / "var" / "reports" / "mcp_serve
 STDIO_LOG = ERROR_LOG.with_name("download_stdio.jsonl")
 RATE_LIMIT_WINDOW_SECONDS = 60.0
 MAX_TARGET_CHANGES_PER_WINDOW = 10
+MAX_CONCURRENT_DOWNLOADS = 8
 _RATE_LIMIT_LOCK = threading.RLock()
 _TARGET_CHANGE_TIMES: dict[str, list[float]] = {}
 
@@ -150,7 +151,7 @@ def check_target_change_rate_limit(lock_keys: list[str], *, now: float | None = 
     return True, retry_after
 
 
-def handle_tools_call(params: dict[str, Any], operation_id: str | None = None) -> dict[str, Any]:
+def handle_tools_call(params: dict[str, Any], operation_id: str | None = None, *, download_busy: bool = False) -> dict[str, Any]:
     arguments = params.get("arguments")
     if params.get("name") != "plc_download_ruc" or not isinstance(arguments, dict):
         return _handle_tools_call(params, operation_id)
@@ -186,7 +187,13 @@ def handle_tools_call(params: dict[str, Any], operation_id: str | None = None) -
             "next_actions": [recovered["next_action"]],
         })
 
-    response = _handle_tools_call({**params, "arguments": {**arguments, "request_id": request_id}}, operation_id)
+    if download_busy:
+        response = text_result({
+            "ok": False, "tool": "plc_download_ruc", "stage": "admission", "retryable": True,
+            "error_code": "DOWNLOAD_SERVER_BUSY", "error": "All download workers are in use. No transfer was started.",
+        }, is_error=True)
+    else:
+        response = _handle_tools_call({**params, "arguments": {**arguments, "request_id": request_id}}, operation_id)
     payload = response["structuredContent"]
     payload.update({"request_id": request_id, "attempt_id": operation_id})
     data = payload.get("data") or {}
@@ -339,7 +346,10 @@ def _handle_tools_call(params: dict[str, Any], operation_id: str | None = None) 
         with acquire_locks(
             lock_keys,
             directory=LOCK_DIR,
-            metadata={"tool": tool_name, "operation_id": operation_id, "managed_download": tool_name == "plc_download_ruc"},
+            metadata={
+                "tool": tool_name, "operation_id": operation_id,
+                **({"managed_download": True, "request_id": arguments["request_id"]} if tool_name == "plc_download_ruc" else {}),
+            },
         ):
             holder = download_recovery.protected([key for key in lock_keys if key.startswith("target:")])
             if holder is not None:
@@ -440,7 +450,8 @@ def _handle_tools_call(params: dict[str, Any], operation_id: str | None = None) 
 
 
 def handle_request(message: dict[str, Any], operation_id: str | None = None,
-                   received_at: float | None = None, cancelled: threading.Event | None = None) -> dict[str, Any] | None:
+                   received_at: float | None = None, cancelled: threading.Event | None = None,
+                   download_busy: bool = False) -> dict[str, Any] | None:
     method = message.get("method")
     request_id = message.get("id")
     params = message.get("params") or {}
@@ -456,7 +467,7 @@ def handle_request(message: dict[str, Any], operation_id: str | None = None,
         time_token = download.RECEIVED_AT.set(received_at)
         cancel_token = download.CANCELLED.set(cancelled)
         try:
-            return make_response(request_id, handle_tools_call(params, operation_id=operation_id))
+            return make_response(request_id, handle_tools_call(params, operation_id=operation_id, download_busy=download_busy))
         finally:
             download.CANCELLED.reset(cancel_token)
             download.RECEIVED_AT.reset(time_token)
@@ -469,6 +480,8 @@ def run() -> None:
     sys.stdout.reconfigure(encoding="utf-8", newline="\n")
     start_catalog_watcher()
     executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="mcp-tool")
+    downloads = ThreadPoolExecutor(max_workers=MAX_CONCURRENT_DOWNLOADS, thread_name_prefix="mcp-download")
+    download_slots = threading.BoundedSemaphore(MAX_CONCURRENT_DOWNLOADS)
     active: dict[Any, tuple[Future[dict[str, Any] | None], str, threading.Event | None]] = {}
     active_lock = threading.RLock()
     output_lock = threading.Lock()
@@ -493,11 +506,14 @@ def run() -> None:
             trace("response_serialized", request_id, operation_id, bytes=len(line.encode("utf-8")))
         with output_lock:
             sys.stdout.write(line)
+            if operation_id:
+                trace("stdout_written", request_id, operation_id)
             sys.stdout.flush()
         if operation_id:
             trace("stdout_flushed", request_id, operation_id)
 
-    def complete(request_id: Any, future: Future[dict[str, Any] | None], operation_id: str | None) -> None:
+    def complete(request_id: Any, future: Future[dict[str, Any] | None],
+                 operation_id: str | None, download_slot: bool) -> None:
         try:
             write_response(future.result(), operation_id)
         except OSError as exc:
@@ -508,6 +524,8 @@ def run() -> None:
         finally:
             with active_lock:
                 active.pop(request_id, None)
+            if download_slot:
+                download_slots.release()
 
     try:
         for line in sys.stdin:
@@ -548,15 +566,21 @@ def run() -> None:
                     if tool_name == "plc_get_download_result":
                         write_response(handle_request(message, operation_id, received_at), operation_id)
                         continue
-                    future = executor.submit(handle_request, message, operation_id, received_at, cancelled)
+                    is_download = cancelled is not None
+                    if is_download and not download_slots.acquire(blocking=False):
+                        write_response(handle_request(message, operation_id, received_at, download_busy=True), operation_id)
+                        continue
+                    worker_pool = downloads if is_download else executor
+                    future = worker_pool.submit(handle_request, message, operation_id, received_at, cancelled)
                     with active_lock:
                         active[request_id] = (future, operation_id, cancelled)
-                    future.add_done_callback(lambda done, rid=request_id, oid=traced: complete(rid, done, oid))
+                    future.add_done_callback(lambda done, rid=request_id, oid=traced, slot=is_download: complete(rid, done, oid, slot))
                     continue
                 response = handle_request(message)
 
             write_response(response)
     finally:
+        downloads.shutdown(wait=True, cancel_futures=False)
         executor.shutdown(wait=True, cancel_futures=False)
         close_catalog_watcher()
         close_runtime_pvi_service()

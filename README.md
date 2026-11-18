@@ -149,7 +149,8 @@ MCP server version: `0.15.2a1`
 | `plc_probe_target` | `local_write` | `Probe` | - | Read-only probe of a configured B&R PLC/ARsim target via PVITransfer. Returns CPU type, AR version, PLC status, and log paths. |
 | `plc_describe_ruc_package` | `readonly` | `DescribePackage` | - | Read the metadata of a RUC package zip file: CPU type, AR version, config version, runtime type, etc. |
 | `plc_check_download` | `local_write` | `CheckDownload` | - | Run the download safety check without downloading. Compares the RUC package metadata with the target probe result. |
-| `plc_download_ruc` | `target_change` | `Download` | `execute=true` | Download the RUC package to the target. Safety gate: requires execute=true, and plc_check_download must pass on the server side before actual transfer. |
+| `plc_download_ruc` | `target_change` | `Download` | `execute=true` | Download the RUC package after the server-side safety check passes. Generate a stable request_id before sending and use plc_get_download_result with that ID if the response is lost. |
+| `plc_get_download_result` | `readonly` | `Download operation journal` | - | Look up one download by request_id. Read-only; reports process protection, transfer evidence, target probe and audit. Missing records are unknown. |
 | `plc_read_logger` | `local_write` | `ReadLogger` | - | Read a whitelisted PLC/AR logger module through PVITransfer Logger. Returns report/log paths and a compact summary, never raw HTML/CSV content. |
 | `plc_list_targets` | `readonly` | `ListTargets` | - | List configured PLC/ARsim targets with IP, role, and automatic-download permission. |
 | `plc_list_variables` | `local_write` | `plc_symbol_index.py` | - | Page through the complete project variable catalog cached in .br-auto-dev; changes refresh it while the server runs and are checked on each query. Fresh build artifacts are preferred; MCP responses are bounded. |

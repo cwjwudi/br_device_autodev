@@ -205,10 +205,14 @@ def status(request_id: str, row) -> dict[str, Any]:
     else:
         phase = "recovered"
         data = result["data"].copy() if result else {}
-        if facts and (facts["transfer_dispatched"] or facts["safety_check"] is not None):
+        safety = (facts or {}).get("safety_check") or {}
+        if facts and (facts["transfer_dispatched"] or facts["transfer_log_state"] != "missing" or safety.get("ok") is False):
             download.conclude(data, facts, processes_ended=True)
             data["safety_check"] = _safety(data.get("safety_check"))
         state = data.get("download_state", "unknown")
+        if state == "unknown":
+            data.setdefault("error_code", "TRANSFER_STATE_UNKNOWN")
+            data.setdefault("error", "Persisted evidence does not establish the transfer result.")
         action = data.get("next_action") or "Inspect the operation log and probe the target before any new download."
         result = {
             **(result or {}),

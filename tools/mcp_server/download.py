@@ -82,7 +82,7 @@ def evidence(operation_id: str, target: str) -> dict[str, Any]:
 
 def conclude(data: dict[str, Any], facts: dict[str, Any], *, processes_ended: bool) -> dict[str, Any]:
     for key, value in facts.items():
-        if data.get(key) is None and value is not None:
+        if data.get(key) in (None, {}) and value is not None:
             data[key] = value
     log_state = facts["transfer_log_state"]
     dispatched = facts["transfer_dispatched"]
@@ -119,9 +119,14 @@ def conclude(data: dict[str, Any], facts: dict[str, Any], *, processes_ended: bo
     elif state in {"not_started", "transfer_failed"}:
         if state == "not_started":
             data["executed"] = False
+        else:
+            data.update({"ok": False, "download_ok": False})
         if not data.get("ok"):
-            data["error_code"] = code or "DOWNLOAD_SAFETY_FAILED"
-            data["error"] = data.get("error") or "; ".join(safety.get("reasons") or []) or "PVITransfer reported failure. Inspect the transfer log."
+            data["error_code"] = code or ("TRANSFER_FAILED" if state == "transfer_failed" else "DOWNLOAD_SAFETY_FAILED")
+            data["error"] = data.get("error") or "; ".join(safety.get("reasons") or []) or (
+                "PVITransfer reported failure. Inspect the transfer log." if state == "transfer_failed" else
+                "The download ended before transfer was started."
+            )
         data["retryable"] = not data.get("ok")
         data["next_action"] = (
             "Safety check passed. Send an explicitly authorized download with a new request_id."
@@ -147,6 +152,7 @@ def supervise(args: list[str], target: str, operation_id: str, deadline: float) 
     stdout = stderr = ""
     data: dict[str, Any] = {}
     ended = True
+    attached = False
     cleanup_attempted = False
     cleanup_error = None
     cancelled = CANCELLED.get()
@@ -163,6 +169,7 @@ def supervise(args: list[str], target: str, operation_id: str, deadline: float) 
         )
         # The script cannot begin any target work before it has entered the job.
         job.attach(process)
+        attached = True
         remaining = stop_at - time.monotonic()
         if remaining <= 0:
             raise subprocess.TimeoutExpired(args, 0)
@@ -196,6 +203,9 @@ def supervise(args: list[str], target: str, operation_id: str, deadline: float) 
             try:
                 if process and process.stdin is not None:
                     process.stdin.close()  # An unassigned wrapper receives EOF and cannot start.
+                if process and not attached and process.poll() is None:
+                    cleanup_attempted = True
+                    process.kill()
                 if job.active():
                     cleanup_attempted = True
                     job.terminate()

@@ -91,7 +91,7 @@ def summarize_result(result: dict[str, Any] | None) -> dict[str, Any] | None:
             for item in writes
             if isinstance(item, dict)
         ]
-    for name in ("download_ok", "safety_bypassed", "deployment_state", "stage"):
+    for name in ("download_ok", "download_state", "effective_timeout_seconds", "safety_bypassed", "deployment_state", "stage", "error_code"):
         value = data.get(name, result.get(name))
         if value is not None:
             summary[name] = value

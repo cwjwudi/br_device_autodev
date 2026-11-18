@@ -49,6 +49,7 @@ if os.name == "nt":
     _frequency = _api("QueryPerformanceFrequency", wintypes.BOOL, ctypes.POINTER(ctypes.c_longlong))
     _open_process = _api("OpenProcess", wintypes.HANDLE, wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
     _wait = _api("WaitForSingleObject", wintypes.DWORD, wintypes.HANDLE, wintypes.DWORD)
+    _process_times = _api("GetProcessTimes", wintypes.BOOL, wintypes.HANDLE, *([ctypes.POINTER(wintypes.FILETIME)] * 4))
 
 
 def _checked(value):
@@ -88,15 +89,41 @@ def deadline_ticks(remaining_seconds: float) -> int:
     return counter.value + int(remaining_seconds * frequency.value)
 
 
-def owner_alive(pid: int) -> bool | None:
-    if pid == os.getpid():
+def _start_identity(handle) -> int | None:
+    times = [wintypes.FILETIME() for _ in range(4)]
+    if _process_times(handle, *(ctypes.byref(item) for item in times)):
+        return (times[0].dwHighDateTime << 32) | times[0].dwLowDateTime
+    return None
+
+
+def owner_identity() -> int | None:
+    if os.name != "nt":
+        return None
+    handle = _open_process(0x1000, False, os.getpid())  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        return None
+    try:
+        return _start_identity(handle)
+    finally:
+        _close(handle)
+
+
+def owner_alive(pid: int, expected_identity: int | None = None) -> bool | None:
+    if pid == os.getpid() and expected_identity is None:
         return True
     if os.name != "nt":
         return None
-    handle = _open_process(0x00100000, False, pid)  # SYNCHRONIZE
+    rights = 0x00100000 | (0x1000 if expected_identity is not None else 0)
+    handle = _open_process(rights, False, pid)
     if not handle:
         return False if ctypes.get_last_error() == 87 else None  # ERROR_INVALID_PARAMETER
     try:
+        if expected_identity is not None:
+            identity = _start_identity(handle)
+            if identity is None:
+                return None
+            if identity != expected_identity:
+                return False
         return {0: False, 258: True}.get(_wait(handle, 0))
     finally:
         _close(handle)

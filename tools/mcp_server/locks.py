@@ -146,6 +146,10 @@ def acquire_lock(
         "created_epoch": time.time(),
         "metadata": metadata or {},
     }
+    if (metadata or {}).get("managed_download"):
+        from download_job import owner_identity
+
+        payload["owner_identity"] = owner_identity()
 
     for attempt in range(2):
         try:
@@ -164,7 +168,7 @@ def acquire_lock(
             if metadata.get("managed_download") is True and metadata.get("operation_id") and isinstance(holder.get("pid"), int):
                 from download_job import owner_alive, remaining_processes
 
-                stale = owner_alive(holder["pid"]) is False and remaining_processes(metadata["operation_id"]) == 0
+                stale = owner_alive(holder["pid"], holder.get("owner_identity")) is False and remaining_processes(metadata["operation_id"]) == 0
             else:
                 stale = age > stale_after_seconds
             if attempt == 0 and stale:

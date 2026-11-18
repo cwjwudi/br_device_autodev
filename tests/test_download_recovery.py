@@ -72,6 +72,10 @@ def test_restart_retains_target_until_owned_processes_are_confirmed_ended(monkey
     assert journal.protected(["target:127.0.0.2"])["request_id"] == "interrupted"
     monkeypatch.setattr(journal, "remaining_processes", lambda _operation: 0)
     assert call("plc_get_download_result", {"request_id": "interrupted"})["download_state"] == "unknown"
+    log.write_text("Transfer RUC FAILED\n", encoding="utf-8")
+    failed = call("plc_get_download_result", {"request_id": "interrupted"})
+    assert failed["download_state"] == "transfer_failed"
+    assert failed["result"]["data"]["error_code"] == "TRANSFER_FAILED"
     log.write_text("Transfer RUC SUCCESSFUL\n", encoding="utf-8")
     ended = call("plc_get_download_result", {"request_id": "interrupted"})
     assert ended["download_state"] == "transfer_succeeded"
@@ -86,6 +90,35 @@ def test_duplicate_in_progress_never_calls_handler(monkeypatch):
     monkeypatch.setitem(server.TOOLS, "plc_download_ruc", lambda _args: pytest.fail("duplicate started"))
     replay = call("plc_download_ruc", args)
     assert replay["replayed"] and replay["recovery"]["download_state"] == "in_progress"
+
+
+def test_admission_rejection_is_queryable_and_never_calls_handler(monkeypatch):
+    monkeypatch.setitem(server.TOOLS, "plc_download_ruc", lambda _args: pytest.fail("overload started a transfer"))
+    response = server.handle_tools_call({
+        "name": "plc_download_ruc", "arguments": {"request_id": "at-capacity", "target": "arsim", "execute": True}
+    }, download_busy=True)["structuredContent"]
+    assert response["error_code"] == "DOWNLOAD_SERVER_BUSY"
+    recovered = call("plc_get_download_result", {"request_id": "at-capacity"})
+    assert recovered["download_state"] == "not_started"
+    assert recovered["operation_id"] == response["attempt_id"]
+
+
+def test_restart_with_only_a_passed_safety_checkpoint_is_unknown(monkeypatch):
+    operation_id = "4" * 32
+    journal.claim("safety-only", operation_id, {})
+    token = journal.EXECUTION.set(scoped("sim"))
+    try:
+        journal.bind(operation_id, 60, time.monotonic() + 60)
+    finally:
+        journal.EXECUTION.reset(token)
+    directory = download.DOWNLOAD_ROOT / operation_id
+    directory.mkdir()
+    (directory / "safety.json").write_text('{"ok": true}', encoding="utf-8")
+    monkeypatch.setattr(journal, "owner_alive", lambda _pid: False)
+    monkeypatch.setattr(journal, "remaining_processes", lambda _operation: 0)
+    recovered = call("plc_get_download_result", {"request_id": "safety-only"})
+    assert recovered["download_state"] == "unknown"
+    assert recovered["result"]["data"]["error_code"] == "TRANSFER_STATE_UNKNOWN"
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows Job Object")
