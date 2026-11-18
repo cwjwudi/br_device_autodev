@@ -1,5 +1,7 @@
 # ARsim validation — 2026-11-18
 
+问题修复状态及后续建议见 [AS4 / AS6 自动开发测试：问题与后续优化](arsim-issues-and-follow-up.md)。
+
 On this workstation, the AS4 project `p801_plc_debug_log/as-project/StdLibs.apj` and AS6 project `p102_test_report/test_report/test_report.apj` were built through the current MCP server, commissioned from their RUCs into separate default `Temp/Simulation/codex-arsim` directories, and then updated online through `plc_download_ruc` without a safety bypass. Both were observed RUN simultaneously and queried via separate PVI4/PVI6 MCP server processes.
 
 | Project | Build | IP / runtime | PVI result |
