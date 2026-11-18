@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import os
 import re
@@ -80,7 +81,11 @@ def resolve_scope_context(arguments: dict[str, Any]) -> dict[str, Any]:
     }
     try:
         targets = json.loads(_repo_path(context["targets_path"]).read_text(encoding="utf-8-sig"))
-        target_config = (targets.get("targets") or {}).get(context["target"])
+        definitions = targets.get("targets") or {}
+        target_config = definitions.get(context["target"])
+        if target_config is None:
+            target_config = next((value for name, value in definitions.items()
+                                  if name.casefold() == context["target"].casefold()), None)
         if isinstance(target_config, dict):
             context["target_role"] = target_config.get("role")
             context["target_ip"] = target_config.get("ip")
@@ -93,6 +98,12 @@ def resolve_scope_context(arguments: dict[str, Any]) -> dict[str, Any]:
             target, _ = toolchain._RUNTIME_SERVICE._resolve(context["target"])
             context["target_ip"], context["target_role"] = target.ip, target.role
         except (AttributeError, KeyError):
+            pass
+    if context["target_ip"]:
+        try:
+            address = ipaddress.ip_address(context["target_ip"])
+            context["target_ip"] = str(getattr(address, "ipv4_mapped", None) or address)
+        except ValueError:
             pass
     return context
 
@@ -144,8 +155,19 @@ def acquire_lock(
                 holder = json.loads(path.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError):
                 holder = {}
-            age = time.time() - float(holder.get("created_epoch") or 0)
-            if attempt == 0 and age > stale_after_seconds:
+            try:
+                file_time = path.stat().st_mtime
+            except FileNotFoundError:
+                continue
+            age = time.time() - float(holder.get("created_epoch") or file_time)
+            metadata = holder.get("metadata") or {}
+            if metadata.get("managed_download") is True and metadata.get("operation_id") and isinstance(holder.get("pid"), int):
+                from download_job import owner_alive, remaining_processes
+
+                stale = owner_alive(holder["pid"]) is False and remaining_processes(metadata["operation_id"]) == 0
+            else:
+                stale = age > stale_after_seconds
+            if attempt == 0 and stale:
                 path.unlink(missing_ok=True)
                 continue
             raise LockConflict(key, path, holder)

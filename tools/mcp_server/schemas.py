@@ -41,6 +41,10 @@ COMMON_PROPERTIES: dict[str, Any] = {
     },
 }
 
+DOWNLOAD_REQUEST_ID = {
+    "type": "string", "minLength": 1, "maxLength": 128,
+    "pattern": r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+}
 
 def object_schema(properties: dict[str, Any]) -> dict[str, Any]:
     merged = dict(COMMON_PROPERTIES)
@@ -357,9 +361,13 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "plc_download_ruc",
-        "description": "Download the RUC package to the target. Safety gate: requires execute=true, and plc_check_download must pass on the server side before actual transfer.",
+        "description": "Download the RUC package after the server-side safety check passes. Generate a stable request_id before sending and use plc_get_download_result with that ID if the response is lost.",
         "inputSchema": build_schema(
             {
+                "request_id": {
+                    **DOWNLOAD_REQUEST_ID,
+                    "description": "Caller-generated idempotency ID. Reuse only with identical arguments. Legacy calls may omit it and receive a server-generated ID.",
+                },
                 "timeout_seconds": {
                     "type": "integer",
                     "minimum": 1,
@@ -386,6 +394,15 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             },
             require_execute=True,
         ),
+    },
+    {
+        "name": "plc_get_download_result",
+        "description": "Look up one download by request_id. Read-only; reports process protection, transfer evidence, target probe and audit. Missing records are unknown.",
+        "inputSchema": {
+            "type": "object", "properties": {"request_id": DOWNLOAD_REQUEST_ID},
+            "required": ["request_id"], "additionalProperties": False,
+        },
+        "annotations": {"readOnlyHint": True},
     },
     {
         "name": "plc_verify_opcua",
@@ -796,6 +813,7 @@ TOOL_RISK_LEVELS: dict[str, str] = {
     "plc_check_download": "local_write",
     "plc_describe_ruc_package": "readonly",
     "plc_download_ruc": "target_change",
+    "plc_get_download_result": "readonly",
     "plc_find_library_for_symbol": "readonly",
     "plc_get_target_config": "readonly",
     "plc_list_environments": "readonly",
@@ -845,6 +863,7 @@ TOOL_BACKENDS: dict[str, str] = {
     "plc_check_download": "CheckDownload",
     "plc_describe_ruc_package": "DescribePackage",
     "plc_download_ruc": "Download",
+    "plc_get_download_result": "Download operation journal",
     "plc_find_library_for_symbol": "as_library_manager.py find",
     "plc_get_target_config": "GetTargetConfig",
     "plc_list_environments": "MCP native",

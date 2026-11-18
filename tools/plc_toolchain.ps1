@@ -1249,6 +1249,10 @@ function Invoke-Download {
     $downloadExitCode = $LASTEXITCODE
     $lines = Get-OutputLines $output
     $downloadOk = (($downloadExitCode -eq 0) -and (($lines -join "`n") -match "Transfer .* SUCCESSFUL"))
+    if ($ManagedDownload) {
+        @{ download_ok = $downloadOk; download_process_exit_code = $downloadExitCode } |
+            ConvertTo-Json | Set-Content -LiteralPath (Join-Path $downloadLogDir "transfer.json") -Encoding UTF8
+    }
     $verification = $null
     $probeAfter = $null
     $applicationReadiness = $null
@@ -1262,6 +1266,10 @@ function Invoke-Download {
             error = $_.Exception.Message
         }
     }
+    if ($ManagedDownload -and $probeAfter) {
+        $probeAfter | Select-Object ok, ip, cpu_type, ar_version, plc_status, log_path, error, error_code |
+            ConvertTo-Json | Set-Content -LiteralPath (Join-Path $downloadLogDir "probe.json") -Encoding UTF8
+    }
 
     if ($downloadOk -and $cfg.opcua.verify_after_download -eq $true) {
         $verification = Invoke-VerifyOpcUa -Quiet
@@ -1271,6 +1279,10 @@ function Invoke-Download {
     }
     if ($downloadOk -and $probeAfter -and $probeAfter.ok) {
         $applicationReadiness = Invoke-ApplicationReadiness -Quiet -Probe $probeAfter
+    }
+    if ($ManagedDownload -and $applicationReadiness) {
+        $applicationReadiness | Select-Object ok, error_code |
+            ConvertTo-Json | Set-Content -LiteralPath (Join-Path $downloadLogDir "application.json") -Encoding UTF8
     }
 
     $ok = $downloadOk
@@ -1311,7 +1323,7 @@ function Invoke-Download {
         generated_force_pil_path = $null
         probe_after = $probeAfter
         output_tail = Get-OutputTail $lines
-        log_tail = if (Test-Path -LiteralPath $log) { @(Get-Content -LiteralPath $log -Tail 40 -ErrorAction SilentlyContinue) } else { @() }
+        log_tail = if ($ManagedDownload) { Get-OutputTail $lines 40 } elseif (Test-Path -LiteralPath $log) { @(Get-Content -LiteralPath $log -Tail 40 -ErrorAction SilentlyContinue) } else { @() }
         warnings = @($lines | Where-Object { $_ -match '^WARNING:' })
         error_code = if ($deploymentState -eq "unknown") { "TRANSFER_STATE_UNKNOWN" } elseif (-not $downloadOk) { "TRANSFER_FAILED" } elseif ($applicationReadiness -and -not $applicationReadiness.ok) { $applicationReadiness.error_code } elseif ($verification -and -not $verification.ok) { "APPLICATION_NOT_READY" } else { $null }
         next_action = if ($deploymentState -eq "unknown") { "Re-probe the target and inspect the PVITransfer and Logger output before retrying." } elseif (-not $downloadOk) { "Inspect the transfer log; do not automatically retry with another installation mode." } elseif ($deploymentState -eq "runtime_reachable") { "Verify application readiness before running tests." } else { "Review the deployment report." }

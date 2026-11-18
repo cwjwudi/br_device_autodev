@@ -13,6 +13,7 @@ from typing import Any
 from project_config import load_project_config
 
 import download
+import download_recovery
 
 from diagnostics import (
     list_reports as diagnostic_list_reports,
@@ -562,12 +563,17 @@ def summarize(command: str, data: dict[str, Any]) -> str:
                 parts.append(str(v))
         return " / ".join(parts) if parts else "package described"
     if command == "Download":
-        if data.get("executed"):
-            return f"download {'OK' if data.get('download_ok') else 'FAILED'}"
-        reasons = data.get("safety_check", {}).get("reasons") or data.get("reasons") or []
+        state = data.get("download_state")
+        if state == "transfer_succeeded":
+            return "RUC transfer succeeded: " + (data.get("deployment_state") or "transfer_completed")
+        if state == "transfer_failed":
+            return "RUC transfer failed"
+        if state == "unknown":
+            return "RUC transfer result is unknown"
+        reasons = (data.get("safety_check") or {}).get("reasons") or data.get("reasons") or []
         if reasons:
             return f"blocked: {'; '.join(str(r) for r in reasons)}"
-        return "execute not set — dry run"
+        return "execute not set — dry run" if data.get("ok") else "RUC transfer did not start"
     if command == "VerifyOpcUa":
         results = data.get("results") or []
         ok_count = sum(1 for item in results if item.get("ok"))
@@ -1315,6 +1321,8 @@ def plc_download_ruc(arguments: dict[str, Any]) -> dict[str, Any]:
     target = validate_target_name(options["target"])
     project, _ = load_project_config(options["project_path"], REPO_ROOT)
     timeout = download.download_timeout(project, arguments.get("timeout_seconds"))
+    operation_id = _CURRENT_OPERATION_ID.get() or uuid.uuid4().hex
+    download_recovery.bind(operation_id, timeout, started + timeout)
     data = run_plc_toolchain(
         "Download",
         target=target,
@@ -1330,6 +1338,7 @@ def plc_download_ruc(arguments: dict[str, Any]) -> dict[str, Any]:
         bypass_download_safety=arguments.get("bypass_download_safety") is True,
         timeout_seconds=timeout,
         download_deadline=started + timeout,
+        operation_id=operation_id,
     )
     data["effective_timeout_seconds"] = timeout
     return wrap_result("plc_download_ruc", "Download", data, target)
@@ -1849,6 +1858,7 @@ TOOLS = {
     "plc_describe_ruc_package": plc_describe_ruc_package,
     "plc_check_download": plc_check_download,
     "plc_download_ruc": plc_download_ruc,
+    "plc_get_download_result": download_recovery.plc_get_download_result,
     "plc_verify_opcua": plc_verify_opcua,
     "plc_read_pvi": plc_read_pvi,
     "plc_read_pvi_batch": plc_read_pvi_batch,

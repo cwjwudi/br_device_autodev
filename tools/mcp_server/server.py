@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import sys
 import time
 import traceback
@@ -14,6 +15,7 @@ from typing import Any
 
 from audit import AUDIT_DIR as DEFAULT_AUDIT_DIR, write_audit_event
 import download
+import download_recovery
 from locks import (
     CRITICAL_TOOLS,
     LOCK_DIR as DEFAULT_LOCK_DIR,
@@ -149,6 +151,59 @@ def check_target_change_rate_limit(lock_keys: list[str], *, now: float | None = 
 
 
 def handle_tools_call(params: dict[str, Any], operation_id: str | None = None) -> dict[str, Any]:
+    arguments = params.get("arguments")
+    if params.get("name") != "plc_download_ruc" or not isinstance(arguments, dict):
+        return _handle_tools_call(params, operation_id)
+    operation_id = operation_id or uuid.uuid4().hex
+    request_id = arguments.get("request_id", operation_id)
+    if not download_recovery.valid_request_id(request_id):
+        return _handle_tools_call(params, operation_id)
+
+    def journal_error(code: str, message: str) -> dict[str, Any]:
+        return text_result({
+            "ok": False, "tool": "plc_download_ruc", "request_id": request_id,
+            "attempt_id": operation_id, "error_code": code, "error": message,
+            "stage": "recovery", "retryable": False,
+            "next_actions": ["Query plc_get_download_result with the same request_id before any new download."],
+        }, is_error=True)
+
+    try:
+        inserted, matches, row = download_recovery.claim(request_id, operation_id, arguments)
+    except (OSError, sqlite3.Error) as exc:
+        return journal_error("DOWNLOAD_RECORD_UNAVAILABLE", f"The download request could not be recorded: {exc}")
+    if not matches:
+        return journal_error("DOWNLOAD_REQUEST_ID_CONFLICT", "This request_id is already bound to different arguments.")
+    if not inserted:
+        try:
+            recovered = download_recovery.status(request_id, row)
+        except (OSError, sqlite3.Error) as exc:
+            return journal_error("DOWNLOAD_RECORD_UNAVAILABLE", str(exc))
+        result = recovered.get("result") or {}
+        return text_result({
+            **result, "ok": bool(result.get("ok")) and recovered["download_state"] in {"transfer_succeeded", "not_started"},
+            "request_id": request_id, "attempt_id": recovered["operation_id"],
+            "replayed": True, "recovery": recovered,
+            "next_actions": [recovered["next_action"]],
+        })
+
+    response = _handle_tools_call({**params, "arguments": {**arguments, "request_id": request_id}}, operation_id)
+    payload = response["structuredContent"]
+    payload.update({"request_id": request_id, "attempt_id": operation_id})
+    data = payload.get("data") or {}
+    try:
+        if not data.get("download_state"):
+            row = download_recovery.find(request_id)
+            bound = bool(row and row["scope"])
+            payload["download_state"] = "unknown" if bound else "not_started"
+            if not bound and payload.get("error_code") != "DOWNLOAD_TARGET_PROTECTED":
+                payload["next_actions"] = ["Resolve the reported cause and pass plc_check_download before a bounded retry with a new request_id."]
+        download_recovery.finish(operation_id, payload)
+    except (OSError, sqlite3.Error) as exc:
+        payload["recovery_error"] = str(exc)
+    return text_result(payload, is_error=response["isError"])
+
+
+def _handle_tools_call(params: dict[str, Any], operation_id: str | None = None) -> dict[str, Any]:
     name = params.get("name")
     if str(name) in DISABLED_TOOLS:
         return text_result(
@@ -277,12 +332,18 @@ def handle_tools_call(params: dict[str, Any], operation_id: str | None = None) -
     error_payload: dict[str, Any] | None = None
     final_status = "failed"
     operation_token = set_operation_id(operation_id)
+    execution_token = download_recovery.EXECUTION.set(
+        (context, lock_keys, audit_paths) if tool_name == "plc_download_ruc" else None
+    )
     try:
         with acquire_locks(
             lock_keys,
             directory=LOCK_DIR,
-            metadata={"tool": tool_name, "operation_id": operation_id},
+            metadata={"tool": tool_name, "operation_id": operation_id, "managed_download": tool_name == "plc_download_ruc"},
         ):
+            holder = download_recovery.protected([key for key in lock_keys if key.startswith("target:")])
+            if holder is not None:
+                raise download_recovery.DownloadProtected(holder["request_id"])
             result = tool(arguments)
         final_status = "succeeded" if result.get("ok") else "failed"
     except LockConflict as exc:
@@ -303,6 +364,13 @@ def handle_tools_call(params: dict[str, Any], operation_id: str | None = None) -
                 "path": str(exc.path),
                 "holder": exc.holder,
             },
+        }
+    except download_recovery.DownloadProtected as exc:
+        final_status = "blocked"
+        error_payload = {
+            "ok": False, "tool": name, "error": str(exc), "error_code": "DOWNLOAD_TARGET_PROTECTED",
+            "stage": "lock", "retryable": False, "blocking_request_id": exc.request_id,
+            "next_actions": ["Query plc_get_download_result with blocking_request_id and wait for process exit."],
         }
     except ToolchainError as exc:
         error_payload = {
@@ -345,6 +413,7 @@ def handle_tools_call(params: dict[str, Any], operation_id: str | None = None) -
         if traceback_path:
             error_payload["error_log"] = traceback_path
     finally:
+        download_recovery.EXECUTION.reset(execution_token)
         reset_operation_id(operation_token)
 
     payload = result if result is not None else error_payload
@@ -472,7 +541,13 @@ def run() -> None:
                     cancelled = threading.Event() if tool_name == "plc_download_ruc" else None
                     traced = operation_id if tool_name in {"plc_download_ruc", "plc_get_download_result"} else None
                     if traced:
-                        trace("request_received", request_id, traced)
+                        arguments = (message.get("params") or {}).get("arguments")
+                        client_request_id = arguments.get("request_id") if isinstance(arguments, dict) else None
+                        trace("request_received", request_id, traced,
+                              client_request_id=client_request_id if download_recovery.valid_request_id(client_request_id) else None)
+                    if tool_name == "plc_get_download_result":
+                        write_response(handle_request(message, operation_id, received_at), operation_id)
+                        continue
                     future = executor.submit(handle_request, message, operation_id, received_at, cancelled)
                     with active_lock:
                         active[request_id] = (future, operation_id, cancelled)

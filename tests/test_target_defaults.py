@@ -33,7 +33,7 @@ class TargetDefaultTests(unittest.TestCase):
     def test_schema_does_not_advertise_an_implicit_target(self) -> None:
         for definition in schemas.TOOL_DEFINITIONS:
             with self.subTest(tool=definition["name"]):
-                target_schema = definition["inputSchema"]["properties"]["target"]
+                target_schema = definition["inputSchema"]["properties"].get("target", {})
                 self.assertNotIn("default", target_schema)
 
     def test_server_rejects_target_change_without_explicit_selection(self) -> None:

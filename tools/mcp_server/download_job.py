@@ -47,6 +47,8 @@ if os.name == "nt":
     _close = _api("CloseHandle", wintypes.BOOL, wintypes.HANDLE)
     _counter = _api("QueryPerformanceCounter", wintypes.BOOL, ctypes.POINTER(ctypes.c_longlong))
     _frequency = _api("QueryPerformanceFrequency", wintypes.BOOL, ctypes.POINTER(ctypes.c_longlong))
+    _open_process = _api("OpenProcess", wintypes.HANDLE, wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    _wait = _api("WaitForSingleObject", wintypes.DWORD, wintypes.HANDLE, wintypes.DWORD)
 
 
 def _checked(value):
@@ -84,6 +86,20 @@ def deadline_ticks(remaining_seconds: float) -> int:
     _checked(_counter(ctypes.byref(counter)))
     _checked(_frequency(ctypes.byref(frequency)))
     return counter.value + int(remaining_seconds * frequency.value)
+
+
+def owner_alive(pid: int) -> bool | None:
+    if pid == os.getpid():
+        return True
+    if os.name != "nt":
+        return None
+    handle = _open_process(0x00100000, False, pid)  # SYNCHRONIZE
+    if not handle:
+        return False if ctypes.get_last_error() == 87 else None  # ERROR_INVALID_PARAMETER
+    try:
+        return {0: False, 258: True}.get(_wait(handle, 0))
+    finally:
+        _close(handle)
 
 
 class DownloadJob:

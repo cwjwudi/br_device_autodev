@@ -63,15 +63,19 @@ def evidence(operation_id: str, target: str) -> dict[str, Any]:
     directory = DOWNLOAD_ROOT / operation_id
     log_path = directory / f"pvi_download_{target}.log"
     log_state, log_error = read_transfer_log(log_path)
-    try:
-        safety = json.loads((directory / "safety.json").read_text(encoding="utf-8-sig"))
-    except (OSError, ValueError):
-        safety = None
+    def checkpoint(name: str):
+        try:
+            return json.loads((directory / name).read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError):
+            return None
     return {
         "log_path": str(log_path),
         "transfer_log_state": log_state,
         "transfer_log_error": log_error,
-        "safety_check": safety,
+        "safety_check": checkpoint("safety.json"),
+        "probe_after": checkpoint("probe.json"),
+        "application_readiness": checkpoint("application.json"),
+        "transfer_checkpoint": checkpoint("transfer.json"),
         "transfer_dispatched": (directory / "transfer-started").is_file(),
     }
 
@@ -83,9 +87,10 @@ def conclude(data: dict[str, Any], facts: dict[str, Any], *, processes_ended: bo
     log_state = facts["transfer_log_state"]
     dispatched = facts["transfer_dispatched"]
     code = data.get("error_code")
-    if not processes_ended or log_state == "conflicting" or (log_state == "failure" and data.get("download_ok") is True):
+    reported_success = data.get("download_ok") is True or (facts.get("transfer_checkpoint") or {}).get("download_ok") is True
+    if not processes_ended or log_state == "conflicting" or (log_state == "failure" and reported_success):
         state = "unknown"
-    elif log_state == "success" or data.get("download_ok") is True:
+    elif log_state == "success" or reported_success:
         state = "transfer_succeeded"
     elif log_state == "failure":
         state = "transfer_failed"
@@ -97,6 +102,8 @@ def conclude(data: dict[str, Any], facts: dict[str, Any], *, processes_ended: bo
     safety = data.get("safety_check") or {}
     if state == "transfer_succeeded":
         data["download_ok"] = True
+        if dispatched:
+            data["executed"] = True
         if not (data.get("probe_after") or {}).get("ok"):
             data["deployment_state"] = "transfer_completed"
             if data.get("ok"):
@@ -104,6 +111,9 @@ def conclude(data: dict[str, Any], facts: dict[str, Any], *, processes_ended: bo
             else:
                 data["error_code"] = code or "POST_DOWNLOAD_PROBE_UNCONFIRMED"
                 data.setdefault("error", "Transfer succeeded; the post-download probe did not confirm target reachability.")
+        elif data.get("deployment_state") in {None, "unknown"}:
+            data["deployment_state"] = "application_ready" if (data.get("application_readiness") or {}).get("ok") else "runtime_reachable"
+        data.setdefault("stage", "PostDownloadVerification")
         data["retryable"] = False
         data["next_action"] = "Confirm target reachability and application readiness; do not download again."
     elif state in {"not_started", "transfer_failed"}:
@@ -113,7 +123,11 @@ def conclude(data: dict[str, Any], facts: dict[str, Any], *, processes_ended: bo
             data["error_code"] = code or "DOWNLOAD_SAFETY_FAILED"
             data["error"] = data.get("error") or "; ".join(safety.get("reasons") or []) or "PVITransfer reported failure. Inspect the transfer log."
         data["retryable"] = not data.get("ok")
-        data["next_action"] = "Resolve the reported cause and pass plc_check_download before a bounded retry with a new request_id."
+        data["next_action"] = (
+            "Safety check passed. Send an explicitly authorized download with a new request_id."
+            if data.get("ok") else
+            "Resolve the reported cause and pass plc_check_download before a bounded retry with a new request_id."
+        )
     else:
         data["ok"] = False
         data["download_ok"] = None
