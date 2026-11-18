@@ -1878,7 +1878,19 @@ def plc_write_runtime_variable(arguments: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def plc_check_arsim_occupancy(arguments: dict[str, Any]) -> dict[str, Any]:
+    import ipaddress
+
+    addresses = arguments.get("addresses") or [f"127.0.0.{i}" for i in range(1, 6)]
+    if any(not ipaddress.ip_address(item).is_loopback or ipaddress.ip_address(item).version != 4 for item in addresses):
+        raise ValueError("ARsim addresses must be IPv4 loopback addresses")
+    command = ["powershell.exe", "-NoProfile", "-File", str(REPO_ROOT / "tools" / "arsim_occupancy.ps1"), "-Addresses", ",".join(addresses)]
+    result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=int(arguments.get("timeout_seconds") or 30), check=True)
+    return json.loads(result.stdout)
+
+
 TOOLS = {
+    "plc_check_arsim_occupancy": plc_check_arsim_occupancy,
     "plc_doctor": plc_doctor,
     "plc_validate_environment": plc_validate_environment,
     "plc_list_reports": plc_list_reports,

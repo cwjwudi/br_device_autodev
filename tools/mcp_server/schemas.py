@@ -151,6 +151,11 @@ def runtime_schema(
 
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
+        "name": "plc_check_arsim_occupancy",
+        "description": "Sample local ARsim address conflicts using p802 TCP/UDP occupancy rules; free is not a reservation.",
+        "inputSchema": object_schema({"addresses": {"type": "array", "items": {"type": "string"}, "minItems": 1}}),
+    },
+    {
         "name": "plc_doctor",
         "description": "Check local Python, PowerShell, Automation Studio, PVITransfer, PVI Python dependency, target config, project/config, ARsim loader, and generated-output write access.",
         "inputSchema": object_schema({}),
@@ -770,6 +775,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
 
 
 TOOL_RISK_LEVELS: dict[str, str] = {
+    "plc_check_arsim_occupancy": "readonly",
     "plc_doctor": "readonly",
     "plc_validate_environment": "readonly",
     "plc_list_reports": "readonly",
@@ -817,6 +823,7 @@ TOOL_RISK_LEVELS: dict[str, str] = {
 }
 
 TOOL_BACKENDS: dict[str, str] = {
+    "plc_check_arsim_occupancy": "p802 occupancy sampler",
     "plc_doctor": "MCP native diagnostics",
     "plc_validate_environment": "MCP native diagnostics",
     "plc_list_reports": "MCP native report index",
