@@ -350,6 +350,9 @@ def filter_catalog(
     result["query"] = query
     result["module"] = module
     result["access_filter"] = access
+    if access:
+        result["warnings"] = [*(catalog.get("warnings") or []),
+                              "Access filtering uses configured catalog entries, not live PVI permissions; results may omit accessible variables."]
     result["variables"] = page
     result["count"] = len(page)
     result["matched_count"] = matched_count

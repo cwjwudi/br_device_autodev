@@ -177,6 +177,7 @@ class PlcSymbolIndexTests(unittest.TestCase):
         self.assertEqual(catalog["catalog_source"], result["catalog_source"])
         self.assertEqual(catalog["confidence"], result["confidence"])
         self.assertEqual(1, result["count"])
+        self.assertTrue(any("not live PVI permissions" in warning for warning in result["warnings"]))
 
     def test_filter_paginates_without_losing_match_counts(self) -> None:
         catalog = self.build()

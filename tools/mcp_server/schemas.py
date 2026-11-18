@@ -610,7 +610,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 },
                 "access": {
                     "type": "string",
-                    "description": "Optional access filter.",
+                    "description": "Filter by configured catalog entries, not live PVI permissions; accessible variables may be omitted.",
                     "enum": ["read", "write"],
                 },
                 "offset": {"type": "integer", "minimum": 0, "default": 0},
