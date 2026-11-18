@@ -1,6 +1,7 @@
 import importlib
 import json
 import socket
+import os
 import sys
 from pathlib import Path
 
@@ -12,12 +13,11 @@ toolchain = importlib.import_module("toolchain")
 
 def test_detects_listener_on_selected_address():
     with socket.socket() as listener:
-        listener.bind(("127.0.0.2", 11169))
+        listener.bind(("127.0.0.5", 11169))
         listener.listen()
-        result = toolchain.plc_check_arsim_occupancy({"addresses": ["127.0.0.1", "127.0.0.2"], "timeout_seconds": 30})
-    assert result["slots"][0]["state"] == "free"
-    assert result["slots"][1]["state"] == "blocked"
-    assert result["slots"][1]["conflicts"][0]["port"] == 11169
+        result = toolchain.plc_check_arsim_occupancy({"addresses": ["127.0.0.5"], "timeout_seconds": 30})
+    assert result["slots"][0]["state"] == "blocked"
+    assert any(item["port"] == 11169 and item["pid"] == os.getpid() for item in result["slots"][0]["conflicts"])
 
 
 def test_rejects_non_loopback():

@@ -6,8 +6,7 @@
   "targets": {
     "arsim": {
       "ip": "127.0.0.1",
-      "role": "arsim",
-      "arsim_loader_exe": "Temp/Simulation/Sim/CPU/ar000loader.exe"
+      "role": "arsim"
     }
   },
   "pvi": {

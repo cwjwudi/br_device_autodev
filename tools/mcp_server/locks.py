@@ -100,6 +100,8 @@ def resolve_scope_context(arguments: dict[str, Any]) -> dict[str, Any]:
 def lock_keys_for_tool(tool: str, arguments: dict[str, Any]) -> list[str]:
     context = resolve_scope_context(arguments)
     keys: list[str] = []
+    if tool == "plc_provision_arsim":
+        keys.append("arsim:allocation")
     if tool in PROJECT_SCOPED_TOOLS:
         project = _repo_path(context["project_path"]).resolve()
         keys.append(f"project:{project}:{context['config']}")

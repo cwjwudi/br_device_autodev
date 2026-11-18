@@ -1889,8 +1889,26 @@ def plc_check_arsim_occupancy(arguments: dict[str, Any]) -> dict[str, Any]:
     return json.loads(result.stdout)
 
 
+def plc_provision_arsim(arguments: dict[str, Any]) -> dict[str, Any]:
+    from br_plc_toolchain.config import resolve_toolchain
+    from arsim_provision import provision
+
+    options = resolve_call_options(arguments, require_explicit_target=True)
+    if arguments.get("execute") is not True:
+        raise PermissionError("ARsim provisioning requires execute=true")
+    target_config = json.loads(Path(options["targets_path"]).read_text(encoding="utf-8-sig"))["targets"][options["target"]]
+    if target_config.get("role") != "arsim" or target_config.get("allow_auto_download", True) is not True:
+        raise PermissionError("ARsim provisioning requires an ARsim target with download enabled")
+    package = run_plc_toolchain("DescribePackage", target=options["target"], project_path=options["project_path"], config=options["config"], targets_path=options["targets_path"], toolchain=options["toolchain"], toolchains_path=options["toolchains_path"], timeout_seconds=30)
+    if not package.get("ok") or package.get("cpu_type") != "AR000" or package.get("runtime_type") != "AR Simulation":
+        raise ValueError("Project RUC is not a confirmed ARsim package")
+    chain = resolve_toolchain(options["toolchain"] or None, registry_path=options["toolchains_path"] or None)
+    return provision(options, target_config, package, chain, plc_check_arsim_occupancy, int(arguments.get("timeout_seconds") or 180))
+
+
 TOOLS = {
     "plc_check_arsim_occupancy": plc_check_arsim_occupancy,
+    "plc_provision_arsim": plc_provision_arsim,
     "plc_doctor": plc_doctor,
     "plc_validate_environment": plc_validate_environment,
     "plc_list_reports": plc_list_reports,
