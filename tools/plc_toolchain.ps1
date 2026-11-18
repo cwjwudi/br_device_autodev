@@ -694,8 +694,10 @@ function Invoke-Build {
         toolchain_version = $toolchainConfig.version
         build_ruc_package = $buildRuc
         log_path = $log
-        warning_lines = @($warningLines)
-        error_lines = @($errorLines)
+        warning_lines = @($warningLines | Select-Object -First 50)
+        error_lines = @($errorLines | Select-Object -First 50)
+        warning_lines_truncated = $warningLines.Count -gt 50
+        error_lines_truncated = $errorLines.Count -gt 50
         output_tail = Get-OutputTail $lines
     }
 
