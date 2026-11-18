@@ -567,10 +567,9 @@ def summarize(command: str, data: dict[str, Any]) -> str:
         return "; ".join(str(item) for item in (data.get("errors") or [])) or "library add was not executed"
     if command in ("ListVariables", "SearchVariables"):
         variables = data.get("variables") or []
-        mode = ((data.get("access_policy") or {}).get("mode") or "unknown")
         source = data.get("catalog_source") or "unknown"
         confidence = data.get("confidence") or "unknown"
-        return f"{len(variables)} variable(s), source={source}, confidence={confidence}, access_policy={mode}"
+        return f"{len(variables)} variable(s), source={source}, confidence={confidence}"
     if command == "Probe":
         return " / ".join(
             str(v)
@@ -754,7 +753,7 @@ def next_actions(tool: str, data: dict[str, Any]) -> list[str]:
     if tool == "plc_read_logger" and not data.get("ok"):
         return ["Check target reachability, logger.allowed_modules, and the PVITransfer log path."]
     if tool == "plc_write_pvi" and not data.get("ok"):
-        return ["Do not retry writes until execute=true, target role, access_policy, and variable names have been checked."]
+        return ["Do not retry writes until execute=true, target role, PVI write policy, and variable names have been checked."]
     if tool in ("plc_run_io_test_case", "plc_run_test_suite") and data.get("ok"):
         return ["Review the generated IO test report for writes, readback, checks, and restore results."]
     if tool in ("plc_run_io_test_case", "plc_run_test_suite") and not data.get("ok"):

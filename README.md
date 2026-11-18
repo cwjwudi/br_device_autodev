@@ -1,6 +1,6 @@
 # B&R PLC 自动开发工具链
 
-版本：**0.15.1a1（预发布基线）**。本项目通过 stdio MCP 提供 Automation Studio 构建、RUC 包检查和下载、ARsim 启动，以及 PVI 反馈验证。构建和下载分别调用 B&R 的 `BR.AS.Build.exe`、`PVITransfer.exe`。
+版本：**0.15.2a1（预发布基线）**。本项目通过 stdio MCP 提供 Automation Studio 构建、RUC 包检查和下载、ARsim 启动，以及 PVI 反馈验证。构建和下载分别调用 B&R 的 `BR.AS.Build.exe`、`PVITransfer.exe`。
 
 本版本仍是开发基线，尚未完成发布验收；使用前请阅读下方的实际安全限制。项目本身不是 Automation Studio 工程，需要另行准备 `.apj` 工程。
 
@@ -83,13 +83,12 @@ python tools\mcp_server\server.py
       "arsim_loader_exe": "Temp/Simulation/Sim/CPU/ar000loader.exe"
     }
   },
-  "access_policy": {"mode": "whitelist"},
   "pvi": {"enabled": true, "write_policy": "whitelist", "write_whitelist": [], "restore_writes": [], "validation_variables": []}
 }
 ```
 
 - MCP 的 `project_path` 可指向含配置的目录或 `.apj`。传 `.apj` 时查找同目录及其上一级；配置里的 `.apj` 必须存在并与传入工程一致。项目配置格式错误时会报错。
-- `project_path`、`arsim_loader_exe` 和显式 `access_policy.catalog_path` 的相对路径以配置文件所在目录为基准。旧的命名 environment 和默认目标文件已移除。构建和目标操作应传入项目路径。
+- `project_path`、`arsim_loader_exe` 的相对路径以配置文件所在目录为基准。旧的命名 environment 和默认目标文件已移除。构建和目标操作应传入项目路径。
 - ARsim 的 IP 必须是回环地址。检查 `Physical/<实际config>/Hardware.hw` 中 CPU 的 `Simulation` 为 `1`，重新构建后使用实际生成的 `Temp/Simulation/<实际config>/<CPU>/ar000loader.exe`；如果不配置 loader，程序会尝试在该 config 目录下寻找唯一 loader。
 - 实时 PVI：调用 `plc_discover_runtime_target` 时传 `project_path` 与 `target`，服务会读取项目中的 IP、角色和 PVI 策略；随后按目标名读写。项目策略更改后重新发现目标。未传项目配置的物理目标可只读发现，但没有写入白名单。
 
@@ -124,6 +123,7 @@ python tools\mcp_server\server.py
 
 - 生产角色的自动下载与 PVI 写入被拒绝。下载和写入必须显式传 `execute=true`；ARsim 包和物理 PLC 包不能跨目标类型下载。用户仍须确认目标、包和操作授权。
 - ARsim 默认 PVI 可读写、允许构建和下载；物理目标默认 PVI 可读、写入白名单为空、允许构建但禁止下载。`write_policy` 设为 `whitelist` 时只允许 `write_whitelist` 中的变量；设为 `blacklist` 时允许未命中 `write_blacklist` 的变量，支持 `*` 通配符。**黑名单为空会允许所有可写变量**；禁止自动修改 Safety 工程、任务和安全 I/O。
+- OPC UA 读取仅允许 ARsim 和专用测试 PLC，节点必须列在 `opcua.validation_node_ids` 中，且不能匹配 Safety、系统等受限名称。旧配置中的 `access_policy` 已移除：项目配置若保留该项会报错，直接 OPC UA 校验也会拒绝读取。删除前请检查原有自定义角色和名称限制；这些自定义限制和旧的动态读取模式不再支持，节点列表不能替代所有角色限制。变量目录的访问标记仅表示配置中列出的变量，实际 PVI 写入仍由 `write_policy` 和目标角色决定。
 - 物理测试 PLC 如需下载，用户必须手动在目标中设置 `allow_auto_download: true` 并授权本次操作。生产目标仍禁止下载和写入。所有 PVI 写入仍要求 `execute=true` 与 PVI 可写性。
 - **当前下载检查对可信开发目标会把部分 CPU、版本、配置、分区和安装模式不匹配降为告警**；允许下载、有效探针及包与目标类型仍是硬条件。人工必须审查所有告警，不应把 `ok=true` 当作完整兼容性证明。
 - `bypass_download_safety` 和旧参数 `force_arsim_download` 仅限 ARsim；操作规范只允许在用户明确授权后对本机 `role=arsim` 使用强制 ARsim 下载。
@@ -134,7 +134,7 @@ python tools\mcp_server\server.py
 <!-- BEGIN GENERATED MCP TOOL CATALOG -->
 当前 MCP 工具清单：
 
-MCP server version: `0.15.1a1`
+MCP server version: `0.15.2a1`
 
 | MCP Tool | Risk | Backend | Confirmation | Description |
 | --- | --- | --- | --- | --- |

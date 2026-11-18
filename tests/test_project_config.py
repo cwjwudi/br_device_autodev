@@ -20,8 +20,7 @@ def project(tmp_path):
     apj = directory / "demo.apj"
     apj.write_text("<Project/>", encoding="utf-8")
     config = {"project_path": "project/demo.apj", "config": "Sim", "toolchain": "as6_default",
-              "target": "arsim", "targets": {"arsim": {"ip": "127.0.0.1", "role": "arsim"}},
-              "access_policy": {"mode": "whitelist"}}
+              "target": "arsim", "targets": {"arsim": {"ip": "127.0.0.1", "role": "arsim"}}}
     path = tmp_path / "br-auto-dev.json"
     path.write_text(json.dumps(config), encoding="utf-8")
     return apj, path, config
@@ -58,6 +57,14 @@ def test_bad_and_mismatched_configs_fail_closed(project):
         load_project_config(str(apj), ROOT)
     path.write_text("{", encoding="utf-8")
     with pytest.raises(ValueError, match="Invalid project configuration"):
+        load_project_config(str(apj), ROOT)
+
+
+def test_legacy_access_policy_requires_explicit_migration(project):
+    apj, path, config = project
+    config["access_policy"] = {"mode": "whitelist", "blocked_name_patterns": ["*custom*"]}
+    path.write_text(json.dumps(config), encoding="utf-8")
+    with pytest.raises(ValueError, match="removed access_policy"):
         load_project_config(str(apj), ROOT)
 
 

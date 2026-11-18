@@ -58,9 +58,8 @@ def load_project_config(project: str, repo_root: Path) -> tuple[dict[str, Any], 
             raise ValueError(f"Invalid IP for target {name!r} in {path}") from exc
         if target["role"] == "arsim" and not ip.is_loopback:
             raise ValueError(f"ARsim target {name!r} must use a loopback IP")
-    policy = data.get("access_policy")
-    if not isinstance(policy, dict) or policy.get("mode") not in {"whitelist", "catalog_policy", "agent_directed"}:
-        raise ValueError(f"Project configuration {path} requires a valid access_policy.mode")
+    if "access_policy" in data:
+        raise ValueError(f"Project configuration {path} contains removed access_policy; review and remove it")
     pvi = data.get("pvi", {})
     if not isinstance(pvi, dict) or pvi.get("write_policy", "whitelist") not in ("whitelist", "blacklist"):
         raise ValueError(f"Project configuration {path} requires a valid pvi.write_policy")

@@ -222,7 +222,7 @@ def test_project_policy_is_applied_to_runtime_writes(tmp_path, monkeypatch) -> N
     (tmp_path / "Demo.apj").write_text("<Project/>", encoding="utf-8")
     project = {"project_path": "Demo.apj", "config": "PhysicalConfig", "toolchain": "as6_default",
                "target": "plc", "targets": {"plc": {"ip": "192.0.2.1", "role": "dedicated_test_plc"}},
-               "access_policy": {"mode": "whitelist"}, "pvi": {"write_whitelist": ["Main:bEnable"]}}
+               "pvi": {"write_whitelist": ["Main:bEnable"]}}
     (tmp_path / "br-auto-dev.json").write_text(json.dumps(project), encoding="utf-8")
     service = build_service(tmp_path / "discovery")
     monkeypatch.setattr(toolchain, "_RUNTIME_SERVICE", service)

@@ -54,7 +54,6 @@ class PlcIoTestRunnerTests(unittest.TestCase):
                     {"variable": "Harness:Input", "value": 0}
                 ],
             },
-            "access_policy": {"mode": "whitelist"},
         }
         self.target_config = {"ip": "127.0.0.1", "role": "arsim"}
         self.case = {

@@ -12,7 +12,7 @@ from typing import Any
 from plc_access_policy import evaluate_access_request
 
 
-OPERATIONS = ("describe", "pvi_read", "pvi_write", "opcua_read")
+OPERATIONS = ("pvi_read", "pvi_write", "opcua_read")
 
 
 def load_items(raw: str | None, items_file: str | None) -> list[Any]:
@@ -39,8 +39,6 @@ def error_payload(args: argparse.Namespace, message: str) -> dict[str, Any]:
         "operation": args.operation,
         "errors": [message],
         "blocked_reason": message,
-        "policy_mode": None,
-        "policy": None,
         "target": args.target,
         "target_role": None,
         "requested_items": [],

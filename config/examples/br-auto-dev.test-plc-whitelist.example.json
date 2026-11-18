@@ -9,7 +9,6 @@
       "role": "dedicated_test_plc"
     }
   },
-  "access_policy": {"mode": "whitelist"},
   "pvi": {
     "enabled": true,
     "write_policy": "whitelist",

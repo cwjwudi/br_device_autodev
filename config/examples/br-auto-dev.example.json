@@ -10,9 +10,6 @@
       "arsim_loader_exe": "Temp/Simulation/Sim/CPU/ar000loader.exe"
     }
   },
-  "access_policy": {
-    "mode": "whitelist"
-  },
   "pvi": {
     "enabled": true,
     "write_policy": "whitelist",

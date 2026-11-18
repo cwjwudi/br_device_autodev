@@ -11,9 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from plc_access_policy import (
-    access_policy,
     canonical_variable,
-    matches_blocked_name,
     opcua_read_set,
     pvi_read_map,
     pvi_write_map,
@@ -231,7 +229,6 @@ def build_artifact_variables(project_root: Path) -> tuple[list[dict[str, Any]], 
 
 
 def build_catalog(config: dict[str, Any], targets_file: str, project_root: Path = DEFAULT_PROJECT_ROOT) -> dict[str, Any]:
-    policy = access_policy(config)
     pvi_reads = pvi_read_map(config)
     pvi_writes = pvi_write_map(config)
     opcua_reads = opcua_read_set(config)
@@ -260,13 +257,10 @@ def build_catalog(config: dict[str, Any], targets_file: str, project_root: Path 
     for item in source_items:
         key = item["pvi"]
         access = set()
-        if item["pvi"] in pvi_reads or item["opcua"] in opcua_reads or policy["mode"] == "agent_directed":
+        if item["pvi"] in pvi_reads or item["opcua"] in opcua_reads:
             access.add("read")
-        if item["pvi"] in pvi_writes or (policy["mode"] == "agent_directed" and not item["constant"]):
+        if item["pvi"] in pvi_writes:
             access.add("write")
-        if matches_blocked_name(item["pvi"], policy) or matches_blocked_name(item["opcua"], policy):
-            access.discard("write")
-            item["blocked_by_policy"] = True
         item["access"] = sorted(access)
         item["in_pvi_read_whitelist"] = item["pvi"] in pvi_reads
         item["in_pvi_write_whitelist"] = item["pvi"] in pvi_writes
@@ -318,7 +312,6 @@ def build_catalog(config: dict[str, Any], targets_file: str, project_root: Path 
         "ok": True,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "targets_file": str(Path(targets_file).resolve()),
-        "access_policy": policy,
         "catalog_source": provenance["catalog_source"],
         "confidence": provenance["confidence"],
         "generated_from": provenance["generated_from"],

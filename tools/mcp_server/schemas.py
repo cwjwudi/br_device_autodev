@@ -452,7 +452,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 {
                     "writes": {
                         "type": "array",
-                        "description": "Write objects such as {\"variable\":\"LQR:bLqrEnable\",\"value\":true}. Every variable must pass the current access_policy.",
+                        "description": "Write objects such as {\"variable\":\"LQR:bLqrEnable\",\"value\":true}. Every variable must pass the PVI write policy.",
                         "items": {
                             "type": "object",
                             "properties": {

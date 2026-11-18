@@ -315,7 +315,7 @@ function Get-TargetConfig {
 
 function Invoke-AuthoritativeAccessPolicy {
     param(
-        [Parameter(Mandatory = $true)][ValidateSet("describe", "pvi_read", "pvi_write", "opcua_read")][string]$Operation,
+        [Parameter(Mandatory = $true)][ValidateSet("pvi_read", "pvi_write", "opcua_read")][string]$Operation,
         [Parameter(Mandatory = $true)]$Items,
         [bool]$Explicit = $false,
         [bool]$ExecuteRequest = $false
@@ -360,18 +360,6 @@ function Invoke-AuthoritativeAccessPolicy {
     catch {
         throw "PLC access policy CLI returned invalid JSON: $text"
     }
-}
-
-function Get-AuthoritativeAccessPolicy {
-    $result = Invoke-AuthoritativeAccessPolicy -Operation "describe" -Items @()
-    if (-not $result.policy) {
-        $message = [string]$result.blocked_reason
-        if (-not $message) {
-            $message = "PLC access policy could not be loaded."
-        }
-        throw $message
-    }
-    return $result.policy
 }
 
 function Test-AuthoritativePviReadAccess {
@@ -1504,7 +1492,6 @@ function Invoke-VerifyOpcUa {
             ok = $false
             target = $Target
             executed = $false
-            access_policy = (Get-AuthoritativeAccessPolicy)
             errors = @($accessErrors)
             requested_nodes = @($nodes)
         }
@@ -1535,7 +1522,6 @@ function Invoke-VerifyOpcUa {
     $report | Add-Member -NotePropertyName target -NotePropertyValue $Target -Force
     $report | Add-Member -NotePropertyName nodes_file -NotePropertyValue $nodesFile -Force
     $report | Add-Member -NotePropertyName warnings -NotePropertyValue @($warnings) -Force
-    $report | Add-Member -NotePropertyName access_policy -NotePropertyValue (Get-AuthoritativeAccessPolicy) -Force
     $report | Add-Member -NotePropertyName dynamic_request -NotePropertyValue $explicitNodes -Force
 
     if ($Quiet) {

@@ -22,15 +22,6 @@ class AccessPolicyTests(unittest.TestCase):
         self.addCleanup(self.temp_dir.cleanup)
         self.targets_path = Path(self.temp_dir.name) / "targets.json"
         self.config = {
-            "access_policy": {
-                "mode": "whitelist",
-                "allow_dynamic_pvi_read": False,
-                "allow_dynamic_pvi_write": False,
-                "allow_dynamic_opcua_read": False,
-                "allow_dynamic_opcua_write": False,
-                "allowed_target_roles": ["arsim", "dedicated_test_plc"],
-                "blocked_name_patterns": ["*safety*", "*system*"],
-            },
             "pvi": {
                 "enabled": True,
                 "read_whitelist": [
@@ -102,7 +93,6 @@ class AccessPolicyTests(unittest.TestCase):
             "ok",
             "errors",
             "blocked_reason",
-            "policy_mode",
             "target_role",
             "requested_items",
         }
@@ -155,7 +145,6 @@ class AccessPolicyTests(unittest.TestCase):
         for key in (
             "ok",
             "errors",
-            "policy_mode",
             "target_role",
             "requested_items",
             "blocked_reason",
@@ -199,6 +188,37 @@ class AccessPolicyTests(unittest.TestCase):
         self.assertNotIn("function Get-AccessPolicy", script)
         self.assertNotIn("function Test-PviReadAccess", script)
         self.assertNotIn("function Test-OpcUaReadAccess", script)
+
+    @unittest.skipUnless(shutil.which("powershell"), "Windows PowerShell is unavailable")
+    def test_powershell_reports_rejected_opcua_node(self) -> None:
+        completed = subprocess.run(
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+             str(TOOLS_DIR / "plc_toolchain.ps1"), "-Command", "VerifyOpcUa",
+             "-Target", "arsim", "-TargetsPath", str(self.targets_path),
+             "-OpcUaNodeId", "ns=2;s=Other"],
+            cwd=REPO_ROOT, text=True, encoding="utf-8", capture_output=True, timeout=30,
+            check=False,
+        )
+        report = json.loads(completed.stdout)
+        self.assertFalse(report["ok"])
+        self.assertFalse(report["executed"])
+        self.assertIn("validation_node_ids", " ".join(report["errors"]))
+        self.assertNotIn("access_policy", report)
+
+    def test_opcua_requires_safe_configured_node_and_allowed_role(self) -> None:
+        self.assertTrue(self.evaluate("opcua_read", ["ns=2;s=Harness.Output"], explicit=True)["ok"])
+        self.assertFalse(self.evaluate("opcua_read", ["ns=2;s=Other"], explicit=True)["ok"])
+        self.config["opcua"]["validation_node_ids"].append("ns=2;s=Safety.Enable")
+        self.assertFalse(self.evaluate("opcua_read", ["ns=2;s=Safety.Enable"], explicit=True)["ok"])
+        self.assertFalse(self.evaluate("opcua_read", ["ns=2;s=Harness.Output"], target="production")["ok"])
+
+    def test_legacy_policy_requires_explicit_opcua_migration(self) -> None:
+        self.config["access_policy"] = {"mode": "whitelist", "blocked_name_patterns": ["*custom*"]}
+        result = self.evaluate("opcua_read", ["ns=2;s=Harness.Output"], explicit=True)
+        self.assertFalse(result["ok"])
+        self.assertIn("reviewed and removed", result["blocked_reason"])
+        self.assertNotIn("policy", result)
+        self.assertNotIn("policy_mode", result)
 
 
 if __name__ == "__main__":

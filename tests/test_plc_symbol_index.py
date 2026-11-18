@@ -27,14 +27,7 @@ class PlcSymbolIndexTests(unittest.TestCase):
         )
         self.targets_file = Path(self.temp_dir.name) / "targets.json"
         self.config = {
-            "access_policy": {
-                "mode": "agent_directed",
-                "allow_dynamic_pvi_read": True,
-                "allow_dynamic_pvi_write": True,
-                "allow_dynamic_opcua_read": True,
-                "allowed_target_roles": ["arsim"],
-            },
-            "pvi": {"enabled": True, "read_whitelist": [], "write_whitelist": []},
+            "pvi": {"enabled": True, "read_whitelist": ["Harness:Input"], "write_whitelist": []},
             "opcua": {"validation_node_ids": []},
         }
 
@@ -83,6 +76,7 @@ class PlcSymbolIndexTests(unittest.TestCase):
         catalog = self.build()
 
         self.assertEqual("source_scan", catalog["catalog_source"])
+        self.assertNotIn("access_policy", catalog)
         self.assertEqual("low", catalog["confidence"])
         self.assertTrue(catalog["warnings"])
         variable = next(item for item in catalog["variables"] if item["name"] == "Input")
