@@ -24,6 +24,7 @@ param(
     [switch]$BuildRucPackage,
     [int]$StartWaitSeconds = 3,
     [int]$ProbeWaitSeconds = 30,
+    [switch]$ManagedDownload,
     [switch]$ForceArsimDownload,
     [switch]$BypassDownloadSafety,
     [switch]$Execute
@@ -32,6 +33,12 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = (Resolve-Path -LiteralPath ".").Path
 $GeneratedDir = Join-Path $RepoRoot "var"
+if ($ManagedDownload) {
+    $script:DownloadDeadline = 0L
+    if ($Command -ne "Download" -or -not [long]::TryParse([Console]::ReadLine(), [ref]$script:DownloadDeadline) -or
+        $script:DownloadDeadline -le [System.Diagnostics.Stopwatch]::GetTimestamp()) { exit 2 }
+    [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+}
 if (-not $OperationId) {
     $OperationId = [guid]::NewGuid().ToString("N")
 }
@@ -712,12 +719,12 @@ function Invoke-Build {
 }
 
 function New-ProbePil {
-    param([Parameter(Mandatory = $true)][string]$Ip)
+    param([Parameter(Mandatory = $true)][string]$Ip, [string]$LogStage = "", [int]$ConnectionWait = 10)
 
     New-Item -ItemType Directory -Path $GeneratedDir -Force | Out-Null
-    $pilPath = Join-Path $GeneratedDir "probe_${Target}_${OperationId}.pil"
+    $pilPath = Join-Path $GeneratedDir "probe_${Target}_${OperationId}$LogStage.pil"
     $lines = @(
-        "Connection `"/IF=tcpip`", `"/IP=$Ip /COMT=2500 /AM=* /PT=11169`", `"WT=10`"",
+        "Connection `"/IF=tcpip`", `"/IP=$Ip /COMT=2500 /AM=* /PT=11169`", `"WT=$ConnectionWait`"",
         "CurrentConnection",
         "CPUType",
         "SSWVersion",
@@ -755,7 +762,7 @@ function Get-PviCommandValue {
 }
 
 function Invoke-Probe {
-    param([switch]$Quiet)
+    param([switch]$Quiet, [string]$LogStage = "")
 
     $cfg = Read-ToolchainConfig
     $toolchainConfig = Get-SelectedToolchain
@@ -765,20 +772,27 @@ function Invoke-Probe {
     $arsimMediaMetadata = Get-BoundArsimMediaMetadata -TargetConfig $targetConfig -ProjectMetadata $projectMetadata
     $wrapper = Resolve-RepoPath "scripts\windows\invoke-pvitransfer-silent.ps1"
     $pviTransfer = Resolve-RepoPath $toolchainConfig.pvi.transfer_exe
-    $pil = New-ProbePil $targetConfig.ip
-    $log = Join-Path $GeneratedDir "probe_${Target}_${OperationId}.log"
+    if (-not $ManagedDownload) { $LogStage = "" }
+    $log = Join-Path $GeneratedDir "probe_${Target}_${OperationId}$LogStage.log"
 
     $report = $null
-    $deadline = [DateTime]::UtcNow.AddSeconds($ProbeWaitSeconds)
+    $frequency = [System.Diagnostics.Stopwatch]::Frequency
+    $deadline = [System.Diagnostics.Stopwatch]::GetTimestamp() + $ProbeWaitSeconds * $frequency
+    if ($ManagedDownload) { $deadline = [Math]::Min($deadline, $script:DownloadDeadline) }
     for ($attempt = 1; $attempt -le 3; $attempt++) {
-        $remaining = [Math]::Ceiling(($deadline - [DateTime]::UtcNow).TotalSeconds)
-        if ($remaining -lt 1) { break }
+        $remaining = ($deadline - [System.Diagnostics.Stopwatch]::GetTimestamp()) / $frequency
+        if ($remaining -le 0 -or ($ManagedDownload -and $remaining -lt 1)) { break }
+        $deadlineArgs = @()
+        $connectionWait = 10
+        if ($ManagedDownload) { $deadlineArgs = @("-DeadlineTicks", $deadline) }
+        if ($ManagedDownload) { $connectionWait = [Math]::Min(10, [Math]::Floor($remaining)) }
+        $pil = New-ProbePil $targetConfig.ip -LogStage $LogStage -ConnectionWait $connectionWait
         $output = & powershell -NoProfile -ExecutionPolicy Bypass `
             -File $wrapper `
             -PilPath $pil `
             -LogPath $log `
             -PviTransferPath $pviTransfer `
-            -MaxWaitSeconds $remaining 2>&1
+            -MaxWaitSeconds ([Math]::Ceiling($remaining)) @deadlineArgs 2>&1
         $exitCode = $LASTEXITCODE
 
         $lines = @($output | ForEach-Object { $_.ToString() })
@@ -818,7 +832,7 @@ function Invoke-Probe {
         if ($report.ok -and $report.cpu_type) {
             break
         }
-        if ($attempt -lt 3 -and [DateTime]::UtcNow.AddSeconds(3) -lt $deadline) {
+        if ($attempt -lt 3 -and [System.Diagnostics.Stopwatch]::GetTimestamp() + 3 * $frequency -lt $deadline) {
             Start-Sleep -Seconds 3
         }
     }
@@ -925,7 +939,7 @@ function Test-DownloadSafety {
     $cfg = Read-ToolchainConfig
     $targetConfig = Get-TargetConfig $cfg
     $packageInfo = Get-PackageInfo
-    $probe = Invoke-Probe -Quiet
+    $probe = Invoke-Probe -Quiet -LogStage "_safety"
 
     $reasons = New-Object System.Collections.Generic.List[string]
     $warnings = New-Object System.Collections.Generic.List[string]
@@ -1163,6 +1177,11 @@ function Invoke-Download {
     )
 
     $check = Test-DownloadSafety -Quiet -ForceArsimMismatch:$ForceArsimDownload
+    $downloadLogDir = Join-Path $GeneratedDir (Join-Path "downloads" $OperationId)
+    if ($ManagedDownload) {
+        New-Item -ItemType Directory -Path $downloadLogDir -Force | Out-Null
+        $check | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $downloadLogDir "safety.json") -Encoding UTF8
+    }
     if (-not $check.ok) {
         $report = [ordered]@{
             command = "Download"
@@ -1204,10 +1223,18 @@ function Invoke-Download {
     $wrapper = Resolve-RepoPath "scripts\windows\invoke-pvitransfer-silent.ps1"
     $pviTransfer = Resolve-RepoPath $toolchainConfig.pvi.transfer_exe
     $pil = Resolve-TransferPilPath
-    $downloadLogDir = Join-Path $GeneratedDir (Join-Path "downloads" $OperationId)
     New-Item -ItemType Directory -Path $downloadLogDir -Force | Out-Null
     $log = Join-Path $downloadLogDir "pvi_download_$Target.log"
-    $conn = "'/IF=tcpip', '/IP=$($targetConfig.ip) /COMT=2500 /AM=* /PT=11169', 'WT=60', 'IGNORE'"
+    $connectionWait = 60
+    $deadlineArgs = @()
+    if ($ManagedDownload) {
+        $remaining = ($script:DownloadDeadline - [System.Diagnostics.Stopwatch]::GetTimestamp()) / [System.Diagnostics.Stopwatch]::Frequency
+        if ($remaining -lt 1) { throw "The shared deadline expired before transfer." }
+        $connectionWait = [Math]::Floor($remaining)
+        $deadlineArgs = @("-DeadlineTicks", $script:DownloadDeadline)
+        New-Item -ItemType File -Path (Join-Path $downloadLogDir "transfer-started") | Out-Null
+    }
+    $conn = "'/IF=tcpip', '/IP=$($targetConfig.ip) /COMT=2500 /AM=* /PT=11169', 'WT=$connectionWait', 'IGNORE'"
 
     $output = $null
     $downloadExitCode = 1
@@ -1218,7 +1245,7 @@ function Invoke-Download {
         -PilPath $pil `
         -LogPath $log `
         -PviTransferPath $pviTransfer `
-        -Conn $conn 2>&1
+        -Conn $conn @deadlineArgs 2>&1
     $downloadExitCode = $LASTEXITCODE
     $lines = Get-OutputLines $output
     $downloadOk = (($downloadExitCode -eq 0) -and (($lines -join "`n") -match "Transfer .* SUCCESSFUL"))
@@ -1226,7 +1253,7 @@ function Invoke-Download {
     $probeAfter = $null
     $applicationReadiness = $null
     try {
-        $probeAfter = Invoke-Probe -Quiet
+        $probeAfter = Invoke-Probe -Quiet -LogStage "_after"
     }
     catch {
         $probeAfter = [ordered]@{

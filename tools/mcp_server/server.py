@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 import traceback
 import uuid
 import threading
@@ -12,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from audit import AUDIT_DIR as DEFAULT_AUDIT_DIR, write_audit_event
+import download
 from locks import (
     CRITICAL_TOOLS,
     LOCK_DIR as DEFAULT_LOCK_DIR,
@@ -368,7 +370,8 @@ def handle_tools_call(params: dict[str, Any], operation_id: str | None = None) -
     return text_result(payload, is_error=error_payload is not None)
 
 
-def handle_request(message: dict[str, Any], operation_id: str | None = None) -> dict[str, Any] | None:
+def handle_request(message: dict[str, Any], operation_id: str | None = None,
+                   received_at: float | None = None, cancelled: threading.Event | None = None) -> dict[str, Any] | None:
     method = message.get("method")
     request_id = message.get("id")
     params = message.get("params") or {}
@@ -381,7 +384,13 @@ def handle_request(message: dict[str, Any], operation_id: str | None = None) -> 
     if method == "tools/list":
         return make_response(request_id, {"tools": visible_definitions(DISABLED_TOOLS)})
     if method == "tools/call":
-        return make_response(request_id, handle_tools_call(params, operation_id=operation_id))
+        time_token = download.RECEIVED_AT.set(received_at)
+        cancel_token = download.CANCELLED.set(cancelled)
+        try:
+            return make_response(request_id, handle_tools_call(params, operation_id=operation_id))
+        finally:
+            download.CANCELLED.reset(cancel_token)
+            download.RECEIVED_AT.reset(time_token)
 
     return make_error(request_id, -32601, f"Method not found: {method}")
 
@@ -391,7 +400,7 @@ def run() -> None:
     sys.stdout.reconfigure(encoding="utf-8", newline="\n")
     start_catalog_watcher()
     executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="mcp-tool")
-    active: dict[Any, tuple[Future[dict[str, Any] | None], str]] = {}
+    active: dict[Any, tuple[Future[dict[str, Any] | None], str, threading.Event | None]] = {}
     active_lock = threading.RLock()
     output_lock = threading.Lock()
 
@@ -433,6 +442,7 @@ def run() -> None:
 
     try:
         for line in sys.stdin:
+            received_at = time.monotonic()
             line = line.strip()
             if not line:
                 continue
@@ -444,24 +454,28 @@ def run() -> None:
             else:
                 method = message.get("method")
                 request_id = message.get("id")
-                if method == "$/cancelRequest":
+                if method in {"$/cancelRequest", "notifications/cancelled"}:
                     cancelled_id = (message.get("params") or {}).get("requestId")
                     with active_lock:
                         active_item = active.get(cancelled_id)
                     if active_item:
-                        future, operation_id = active_item
-                        cancel_operation(operation_id)
-                        future.cancel()
+                        future, operation_id, cancelled = active_item
+                        if cancelled is not None:
+                            cancelled.set()
+                        else:
+                            cancel_operation(operation_id)
+                            future.cancel()
                     continue
                 if method == "tools/call" and request_id is not None:
                     operation_id = uuid.uuid4().hex
                     tool_name = (message.get("params") or {}).get("name")
+                    cancelled = threading.Event() if tool_name == "plc_download_ruc" else None
                     traced = operation_id if tool_name in {"plc_download_ruc", "plc_get_download_result"} else None
                     if traced:
                         trace("request_received", request_id, traced)
-                    future = executor.submit(handle_request, message, operation_id)
+                    future = executor.submit(handle_request, message, operation_id, received_at, cancelled)
                     with active_lock:
-                        active[request_id] = (future, operation_id)
+                        active[request_id] = (future, operation_id, cancelled)
                     future.add_done_callback(lambda done, rid=request_id, oid=traced: complete(rid, done, oid))
                     continue
                 response = handle_request(message)

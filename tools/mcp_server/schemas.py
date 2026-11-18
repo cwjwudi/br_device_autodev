@@ -360,6 +360,11 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "description": "Download the RUC package to the target. Safety gate: requires execute=true, and plc_check_download must pass on the server side before actual transfer.",
         "inputSchema": build_schema(
             {
+                "timeout_seconds": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Optional shared download budget, including safety, transfer, verification and cleanup. Capped by config/defaults/base.json (60s by default) and any lower project download.timeout_seconds. Returns the effective value.",
+                },
                 "package_path": {
                     "type": "string",
                     "description": "Optional RUC package zip path.",
@@ -380,7 +385,6 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 },
             },
             require_execute=True,
-            require_timeout=True,
         ),
     },
     {

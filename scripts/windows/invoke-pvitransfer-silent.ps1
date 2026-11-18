@@ -10,10 +10,15 @@ param(
 
     [int]$MaxWaitSeconds = 150,
 
-    [int]$SuccessExitGraceSeconds = 3
+    [int]$SuccessExitGraceSeconds = 3,
+
+    [long]$DeadlineTicks = 0
 )
 
 $ErrorActionPreference = "Stop"
+$frequency = [System.Diagnostics.Stopwatch]::Frequency
+$deadline = [System.Diagnostics.Stopwatch]::GetTimestamp() + $MaxWaitSeconds * $frequency
+if ($DeadlineTicks) { $deadline = [Math]::Min($deadline, $DeadlineTicks) }
 
 $resolvedPvi = (Resolve-Path -LiteralPath $PviTransferPath).Path
 $resolvedPil = (Resolve-Path -LiteralPath $PilPath).Path
@@ -30,12 +35,13 @@ Remove-Item -LiteralPath $resolvedLog -ErrorAction SilentlyContinue
 function Read-LogLines {
     param([Parameter(Mandatory = $true)][string]$Path)
 
-    for ($attempt = 0; $attempt -lt 10; $attempt++) {
+    for ($attempt = 0; $attempt -lt 10 -and [System.Diagnostics.Stopwatch]::GetTimestamp() -lt $deadline; $attempt++) {
         try {
             return @(Get-Content -LiteralPath $Path -Encoding Default -ErrorAction Stop)
         }
-        catch [System.IO.IOException] {
-            Start-Sleep -Milliseconds 100
+        catch [System.IO.IOException], [System.UnauthorizedAccessException] {
+            $remaining = [int][Math]::Floor(($deadline - [System.Diagnostics.Stopwatch]::GetTimestamp()) * 1000 / $frequency)
+            if ($remaining -gt 0) { Start-Sleep -Milliseconds ([Math]::Min(100, $remaining)) }
         }
         catch {
             throw
@@ -55,6 +61,7 @@ if ($Conn) {
     $args += "-Conn:`"$Conn`""
 }
 
+if ([System.Diagnostics.Stopwatch]::GetTimestamp() -ge $deadline) { exit 2 }
 $process = Start-Process `
     -FilePath $resolvedPvi `
     -ArgumentList $args `
@@ -63,7 +70,6 @@ $process = Start-Process `
     -PassThru
 
 $printedLines = 0
-$startedAt = [DateTime]::UtcNow
 $successSeenAt = $null
 $completion = $null
 while (-not $process.HasExited) {
@@ -75,7 +81,7 @@ while (-not $process.HasExited) {
         }
         $logText = $lines -join "`n"
         if ($logText -match 'PROCESS FINISHED \(SUCCESS\)' -or $logText -match 'Transfer .* SUCCESSFUL') {
-            if (-not $successSeenAt) { $successSeenAt = [DateTime]::UtcNow }
+            if (-not $successSeenAt) { $successSeenAt = [System.Diagnostics.Stopwatch]::GetTimestamp() }
             $completion = "success"
         }
         elseif ($logText -match 'PROCESS FINISHED \((FAILURE|ERROR)\)' -or $logText -match 'Transfer .* (FAILED|ERROR)') {
@@ -83,14 +89,22 @@ while (-not $process.HasExited) {
         }
     }
     if ($completion -eq "failure") { break }
-    if ($completion -eq "success" -and ([DateTime]::UtcNow - $successSeenAt).TotalSeconds -ge $SuccessExitGraceSeconds) { break }
-    if (([DateTime]::UtcNow - $startedAt).TotalSeconds -ge $MaxWaitSeconds) { break }
-    Start-Sleep -Milliseconds 250
+    $now = [System.Diagnostics.Stopwatch]::GetTimestamp()
+    if ($completion -eq "success" -and $now - $successSeenAt -ge $SuccessExitGraceSeconds * $frequency) { break }
+    $remaining = [int][Math]::Floor(($deadline - $now) * 1000 / $frequency)
+    if ($remaining -le 0) { break }
+    Start-Sleep -Milliseconds ([Math]::Min(250, $remaining))
     $process.Refresh()
 }
 
 if (-not $process.HasExited) {
-    & taskkill /PID $process.Id /T /F 2>&1 | Out-Null
+    if ($DeadlineTicks) {
+        try { $process.Kill() }
+        catch [System.InvalidOperationException] { if (-not $process.HasExited) { throw } }
+    }
+    else {
+        & taskkill /PID $process.Id /T /F 2>&1 | Out-Null
+    }
     if ($completion -eq "success") {
         Write-Output "WARNING: PVITransfer logged success but did not exit; its process tree was cleaned up."
     }
@@ -98,7 +112,7 @@ if (-not $process.HasExited) {
         Write-Output "WARNING: PVITransfer logged failure but did not exit; its process tree was cleaned up."
     }
     else {
-        Write-Output "WARNING: PVITransfer did not complete within $MaxWaitSeconds seconds; its process tree was cleaned up."
+        Write-Output "WARNING: PVITransfer did not complete within its time budget; termination was requested."
     }
 }
 
