@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import json
+import concurrent.futures
 import queue
 import subprocess
 import sys
@@ -35,6 +36,7 @@ class PlcSymbolIndexTests(unittest.TestCase):
             "pvi": {"enabled": True, "read_whitelist": ["Harness:Input"], "write_whitelist": []},
             "opcua": {"validation_node_ids": []},
         }
+        self.targets_file.write_text(json.dumps(self.config), encoding="utf-8")
 
     def create_build_artifacts(self, *, newer_than_source: bool = True) -> Path:
         header = (
@@ -44,7 +46,7 @@ class PlcSymbolIndexTests(unittest.TestCase):
             / "Harness"
             / "Variablesvar.h"
         )
-        header.parent.mkdir(parents=True)
+        header.parent.mkdir(parents=True, exist_ok=True)
         header.write_text(
             "\n".join(
                 [
@@ -57,7 +59,7 @@ class PlcSymbolIndexTests(unittest.TestCase):
             encoding="utf-8",
         )
         symbol_map = self.project_root / "Temp" / "Objects" / "Symbols.map"
-        symbol_map.parent.mkdir(parents=True)
+        symbol_map.parent.mkdir(parents=True, exist_ok=True)
         symbol_map.write_bytes(b"build-symbol-evidence")
         now = time.time()
         if newer_than_source:
@@ -98,6 +100,118 @@ class PlcSymbolIndexTests(unittest.TestCase):
         self.assertEqual(11001, len(catalog["variables"]))  # includes configured Harness:Input
         self.assertLess(resolve.call_count, 10)
 
+    def test_cache_reuses_and_refreshes_source_config_and_file_set(self) -> None:
+        cache = self.project_root / ".br-auto-dev" / "plc_symbol_catalog.json"
+        first, status = symbol_index.cached_catalog(self.targets_file, self.project_root, cache)
+        self.assertEqual("rebuilt", status)
+        saved = cache.read_bytes()
+        with patch.object(symbol_index, "build_catalog", wraps=symbol_index.build_catalog) as build:
+            second, status = symbol_index.cached_catalog(self.targets_file, self.project_root, cache)
+        self.assertEqual("hit", status)
+        build.assert_not_called()
+        self.assertEqual(saved, cache.read_bytes())
+        self.assertEqual(first["generated_at"], second["generated_at"])
+
+        original_stat = self.source.stat()
+        self.source.write_text("VAR\n    Other : REAL;\n    Output : ARRAY[0..1] OF REAL;\nEND_VAR\n", encoding="utf-8")
+        os.utime(self.source, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
+        refreshed, status = symbol_index.cached_catalog(self.targets_file, self.project_root, cache)
+        self.assertEqual("rebuilt", status)
+        self.assertIn("Harness:Other", [item["pvi"] for item in refreshed["variables"]])
+
+        added = self.project_root / "Logical" / "Global.var"
+        added.write_text("VAR\n    GlobalPoint : DINT;\nEND_VAR\n", encoding="utf-8")
+        refreshed, status = symbol_index.cached_catalog(self.targets_file, self.project_root, cache)
+        self.assertEqual("rebuilt", status)
+        self.assertIn("GlobalPoint", [item["pvi"] for item in refreshed["variables"]])
+        added.unlink()
+        refreshed, status = symbol_index.cached_catalog(self.targets_file, self.project_root, cache)
+        self.assertEqual("rebuilt", status)
+        self.assertNotIn("GlobalPoint", [item["pvi"] for item in refreshed["variables"]])
+
+        self.config["pvi"]["write_whitelist"] = ["Harness:Other"]
+        self.targets_file.write_text(json.dumps(self.config), encoding="utf-8")
+        refreshed, status = symbol_index.cached_catalog(self.targets_file, self.project_root, cache)
+        self.assertEqual("rebuilt", status)
+        self.assertIn("write", next(item for item in refreshed["variables"] if item["pvi"] == "Harness:Other")["access"])
+        cache.write_text("{broken", encoding="utf-8")
+        self.assertEqual("rebuilt", symbol_index.cached_catalog(self.targets_file, self.project_root, cache)[1])
+
+    def test_cache_does_not_reuse_unchanged_generated_headers_after_source_change(self) -> None:
+        self.create_build_artifacts()
+        cache = self.project_root / ".br-auto-dev" / "plc_symbol_catalog.json"
+        first, _ = symbol_index.cached_catalog(self.targets_file, self.project_root, cache)
+        self.assertEqual("automation_studio_build_artifacts", first["catalog_source"])
+        old = self.source.stat()
+        self.source.write_text("VAR\n    Other : REAL;\nEND_VAR\n", encoding="utf-8")
+        os.utime(self.source, ns=(old.st_atime_ns, old.st_mtime_ns))
+        updated, status = symbol_index.cached_catalog(self.targets_file, self.project_root, cache)
+        self.assertEqual("rebuilt", status)
+        self.assertEqual("source_scan", updated["catalog_source"])
+        self.assertIn("Harness:Other", [item["pvi"] for item in updated["variables"]])
+        self.assertEqual("hit", symbol_index.cached_catalog(self.targets_file, self.project_root, cache)[1])
+        self.targets_file.write_text(json.dumps({"pvi": {}}), encoding="utf-8")
+        updated, _ = symbol_index.cached_catalog(self.targets_file, self.project_root, cache)
+        self.assertEqual("source_scan", updated["catalog_source"])
+        self.create_build_artifacts()
+        updated, status = symbol_index.cached_catalog(self.targets_file, self.project_root, cache)
+        self.assertEqual("rebuilt", status)
+        self.assertEqual("automation_studio_build_artifacts", updated["catalog_source"])
+
+    def test_cache_retries_when_source_changes_during_build(self) -> None:
+        cache = self.project_root / ".br-auto-dev" / "plc_symbol_catalog.json"
+        original_build = symbol_index.build_catalog
+        builds = 0
+
+        def change_during_build(*args, **kwargs):
+            nonlocal builds
+            result = original_build(*args, **kwargs)
+            builds += 1
+            if builds == 1:
+                self.source.write_text("VAR\n    ChangedDuringBuild : REAL;\nEND_VAR\n", encoding="utf-8")
+            return result
+
+        with patch.object(symbol_index, "build_catalog", side_effect=change_during_build):
+            catalog, status = symbol_index.cached_catalog(self.targets_file, self.project_root, cache)
+        self.assertEqual("rebuilt", status)
+        self.assertEqual(2, builds)
+        self.assertIn("Harness:ChangedDuringBuild", [item["pvi"] for item in catalog["variables"]])
+        self.assertIn("Harness:ChangedDuringBuild", [item["pvi"] for item in json.loads(cache.read_text(encoding="utf-8"))["variables"]])
+
+    def test_separate_projects_keep_separate_catalogs(self) -> None:
+        other = Path(self.temp_dir.name) / "Other"
+        (other / "Logical").mkdir(parents=True)
+        (other / "Logical" / "Global.var").write_text("VAR\n    OtherProject : DINT;\nEND_VAR\n", encoding="utf-8")
+        first = self.project_root / ".br-auto-dev" / "plc_symbol_catalog.json"
+        second = other / ".br-auto-dev" / "plc_symbol_catalog.json"
+        a, _ = symbol_index.cached_catalog(self.targets_file, self.project_root, first)
+        b, _ = symbol_index.cached_catalog(self.targets_file, other, second)
+        self.assertNotIn("OtherProject", [item["pvi"] for item in a["variables"]])
+        self.assertIn("OtherProject", [item["pvi"] for item in b["variables"]])
+        self.assertEqual("hit", symbol_index.cached_catalog(self.targets_file, self.project_root, first)[1])
+
+    def test_cache_retries_replacement_and_handles_concurrent_writers(self) -> None:
+        cache = self.project_root / ".br-auto-dev" / "plc_symbol_catalog.json"
+        replace = os.replace
+        attempts = 0
+
+        def temporarily_locked(source, target):
+            nonlocal attempts
+            attempts += 1
+            if attempts < 3:
+                raise PermissionError("cache is temporarily in use")
+            return replace(source, target)
+
+        with patch.object(symbol_index.os, "replace", side_effect=temporarily_locked):
+            catalog, status = symbol_index.cached_catalog(self.targets_file, self.project_root, cache)
+        self.assertEqual("rebuilt", status)
+        self.assertEqual(3, attempts)
+        cache.unlink()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            results = list(executor.map(lambda _: symbol_index.cached_catalog(self.targets_file, self.project_root, cache), range(5)))
+        self.assertTrue(all(result[0]["variables"] == catalog["variables"] for result in results))
+        self.assertEqual(catalog["variables"], json.loads(cache.read_text(encoding="utf-8"))["variables"])
+
     def test_stdio_list_works_while_client_input_remains_open(self) -> None:
         project = self.project_root / "Demo.apj"
         project.write_text('<Project xmlns="http://br-automation.co.at/AS/Project"/>', encoding="utf-8")
@@ -118,7 +232,33 @@ class PlcSymbolIndexTests(unittest.TestCase):
             lines = queue.Queue()
             threading.Thread(target=lambda: lines.put(process.stdout.readline()), daemon=True).start()
             response = json.loads(lines.get(timeout=10))
-            self.assertTrue(response["result"]["structuredContent"]["ok"])
+            first = response["result"]["structuredContent"]
+            self.assertTrue(first["ok"])
+            self.assertEqual("rebuilt", first["data"]["cache_status"])
+            self.assertEqual(self.project_root / ".br-auto-dev" / "plc_symbol_catalog.json",
+                             Path(first["data"]["catalog_path"]))
+            process.stdin.write(json.dumps(request) + "\n")
+            process.stdin.flush()
+            threading.Thread(target=lambda: lines.put(process.stdout.readline()), daemon=True).start()
+            second = json.loads(lines.get(timeout=10))["result"]["structuredContent"]
+            self.assertEqual("hit", second["data"]["cache_status"])
+            self.source.write_text("VAR\n    Changed : REAL;\nEND_VAR\n", encoding="utf-8")
+            cache = Path(first["data"]["catalog_path"])
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                if any(item["pvi"] == "Harness:Changed" for item in json.loads(cache.read_text(encoding="utf-8"))["variables"]):
+                    break
+                time.sleep(0.1)
+            else:
+                self.fail("cache did not refresh after the source changed")
+            request["params"]["name"] = "plc_search_variables"
+            request["params"]["arguments"]["query"] = "Changed"
+            process.stdin.write(json.dumps(request) + "\n")
+            process.stdin.flush()
+            threading.Thread(target=lambda: lines.put(process.stdout.readline()), daemon=True).start()
+            changed = json.loads(lines.get(timeout=10))["result"]["structuredContent"]["data"]
+            self.assertEqual("hit", changed["cache_status"])
+            self.assertEqual("Harness:Changed", changed["variables"][0]["pvi"])
         finally:
             process.terminate()
             process.wait(timeout=5)

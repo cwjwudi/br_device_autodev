@@ -587,7 +587,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "plc_list_variables",
-        "description": "Build and page through the PLC variable catalog, preferring fresh Automation Studio build artifacts and falling back to source scanning. The complete catalog is saved locally; MCP responses are bounded.",
+        "description": "Page through the complete project variable catalog cached in .br-auto-dev; changes refresh it while the server runs and are checked on each query. Fresh build artifacts are preferred; MCP responses are bounded.",
         "inputSchema": object_schema(
             {
                 "offset": {"type": "integer", "minimum": 0, "default": 0},
@@ -597,7 +597,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "plc_search_variables",
-        "description": "Search PLC variables by text, module/task, and read/write access while preserving catalog source, confidence, provenance, and warnings.",
+        "description": "Search the full project variable catalog cached in .br-auto-dev. Changes refresh it while the server runs and are checked on each query. Results retain source, confidence, provenance, and warnings.",
         "inputSchema": object_schema(
             {
                 "query": {

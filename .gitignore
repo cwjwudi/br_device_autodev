@@ -5,6 +5,7 @@ config/local/*
 !config/local/.gitkeep
 var/
 Temp/
+.br-auto-dev/
 
 # Python
 __pycache__/

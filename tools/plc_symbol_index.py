@@ -4,8 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 import re
+import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -38,6 +42,9 @@ C_TO_IEC_TYPES = {
     "float": "REAL",
     "double": "LREAL",
 }
+SOURCE_EXTENSIONS = {".apj", ".c", ".cpp", ".h", ".hpp", ".hw", ".iec", ".il", ".iom",
+                     ".json", ".lby", ".ld", ".per", ".pkg", ".prg", ".sfc", ".st", ".sw",
+                     ".typ", ".var", ".xml", ".fun"}
 
 
 def is_task_variables_file(path: Path) -> bool:
@@ -179,8 +186,8 @@ def build_artifact_variables(project_root: Path) -> tuple[list[dict[str, Any]], 
             ],
         }
 
-    newest_header = max(path.stat().st_mtime for path in headers)
-    newer_sources = [path for path in source_files if path.stat().st_mtime > newest_header + 1.0]
+    oldest_header = min(path.stat().st_mtime_ns for path in headers)
+    newer_sources = [path for path in source_files if path.stat().st_mtime_ns > oldest_header]
     if newer_sources:
         return [], {
             "catalog_source": "source_scan",
@@ -230,13 +237,20 @@ def build_artifact_variables(project_root: Path) -> tuple[list[dict[str, Any]], 
     }
 
 
-def build_catalog(config: dict[str, Any], targets_file: str, project_root: Path = DEFAULT_PROJECT_ROOT) -> dict[str, Any]:
+def build_catalog(config: dict[str, Any], targets_file: str, project_root: Path = DEFAULT_PROJECT_ROOT,
+                  *, use_build_artifacts: bool = True) -> dict[str, Any]:
     pvi_reads = pvi_read_map(config)
     pvi_writes = pvi_write_map(config)
     opcua_reads = opcua_read_set(config)
     variables: dict[str, dict[str, Any]] = {}
 
-    source_items, provenance = build_artifact_variables(project_root)
+    if use_build_artifacts:
+        source_items, provenance = build_artifact_variables(project_root)
+    else:
+        source_items, provenance = [], {
+            "catalog_source": "source_scan", "confidence": "low", "generated_from": [],
+            "warnings": ["Project files changed since the last build artifacts; catalog fell back to source scanning."],
+        }
     if not source_items:
         logical_root = project_root / "Logical"
         source_paths = sorted(logical_root.rglob("*.var")) if logical_root.exists() else []
@@ -322,6 +336,85 @@ def build_catalog(config: dict[str, Any], targets_file: str, project_root: Path 
     }
 
 
+def fingerprint_files(paths: list[Path], root: Path, *, hash_contents: bool = False) -> str:
+    digest = hashlib.sha256()
+    for path in sorted(paths):
+        stat = path.stat()
+        digest.update(json.dumps([str(path.relative_to(root)), stat.st_size, stat.st_mtime_ns]).encode("utf-8"))
+        if hash_contents or path.suffix.lower() in SOURCE_EXTENSIONS:
+            with path.open("rb") as stream:
+                digest.update(hashlib.file_digest(stream, "sha256").digest())
+    return digest.hexdigest()
+
+
+def catalog_fingerprints(project_root: Path, targets_file: Path) -> dict[str, str]:
+    source_files = list(project_root.glob("*.apj"))
+    for directory in (project_root / "Logical", project_root / "Physical"):
+        if directory.exists():
+            source_files.extend(path for path in directory.rglob("*") if path.is_file())
+    includes = project_root / "Temp" / "Includes"
+    artifacts = list(includes.rglob("*var.h")) if includes.exists() else []
+    symbols = project_root / "Temp" / "Objects" / "Symbols.map"
+    if symbols.is_file():
+        artifacts.append(symbols)
+    code_files = [Path(__file__), Path(__file__).with_name("plc_access_policy.py"), Path(__file__).with_name("pvi_read.py")]
+    return {
+        "project": str(project_root.resolve()),
+        "targets_file": str(targets_file.resolve()),
+        "source": fingerprint_files(source_files, project_root),
+        "artifacts": fingerprint_files(artifacts, project_root, hash_contents=True),
+        "config": hashlib.sha256(targets_file.read_bytes()).hexdigest(),
+        "implementation": fingerprint_files(code_files, Path(__file__).parent, hash_contents=True),
+    }
+
+
+def cached_catalog(targets_file: Path, project_root: Path, output: Path) -> tuple[dict[str, Any], str]:
+    try:
+        previous = json.loads(output.read_text(encoding="utf-8"))
+        if (not isinstance(previous, dict) or previous.get("ok") is not True
+                or not isinstance(previous.get("variables"), list)
+                or not isinstance(previous.get("catalog_source"), str)):
+            previous = {}
+    except (OSError, ValueError):
+        previous = {}
+    old_cache = previous.get("_cache") if isinstance(previous.get("_cache"), dict) else {}
+    if not isinstance(old_cache.get("fingerprints"), dict):
+        old_cache = {}
+    for _ in range(2):
+        current = catalog_fingerprints(project_root, targets_file)
+        if old_cache.get("version") == 1 and old_cache.get("fingerprints") == current:
+            return previous, "hit"
+        old = old_cache.get("fingerprints") or {}
+        stale_artifacts = bool(old_cache.get("version") == 1 and old.get("artifacts") == current["artifacts"] and (
+            old_cache.get("stale_artifacts") or old.get("source") != current["source"]
+        ))
+        config = load_json_file(str(targets_file))
+        catalog = build_catalog(config, str(targets_file), project_root, use_build_artifacts=not stale_artifacts)
+        if catalog_fingerprints(project_root, targets_file) != current:
+            continue
+        catalog["_cache"] = {"version": 1, "fingerprints": current, "stale_artifacts": stale_artifacts}
+        output.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=output.parent,
+                                             prefix=".catalog-", suffix=".tmp", delete=False) as stream:
+                temp_path = Path(stream.name)
+                json.dump(catalog, stream, ensure_ascii=False, indent=2)
+            for attempt in range(40):
+                try:
+                    os.replace(temp_path, output)
+                    break
+                except PermissionError:
+                    if attempt == 39:
+                        raise
+                    time.sleep(0.05)
+        finally:
+            if temp_path is not None:
+                temp_path.unlink(missing_ok=True)
+        return catalog, "rebuilt"
+    raise RuntimeError("Project files changed while building the variable catalog; retry the search")
+
+
 def filter_catalog(
     catalog: dict[str, Any],
     *,
@@ -382,8 +475,15 @@ def main() -> int:
     project_root = Path(args.project_root)
     if not project_root.is_absolute():
         project_root = REPO_ROOT / project_root
-    config = load_json_file(str(targets_path))
-    catalog = build_catalog(config, str(targets_path), project_root=project_root)
+    output = None
+    if args.output_file:
+        output = Path(args.output_file)
+        if not output.is_absolute():
+            output = REPO_ROOT / output
+        catalog, cache_status = cached_catalog(targets_path, project_root, output)
+    else:
+        config = load_json_file(str(targets_path))
+        catalog = build_catalog(config, str(targets_path), project_root=project_root)
     result = filter_catalog(
         catalog,
         query=args.query,
@@ -393,13 +493,10 @@ def main() -> int:
         limit=args.limit,
     )
 
-    if args.output_file:
-        output = Path(args.output_file)
-        if not output.is_absolute():
-            output = REPO_ROOT / output
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(json.dumps(catalog, ensure_ascii=False, indent=2), encoding="utf-8")
+    result.pop("_cache", None)
+    if output is not None:
         result["catalog_path"] = str(output)
+        result["cache_status"] = cache_status
 
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0

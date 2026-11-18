@@ -34,11 +34,25 @@ DEFAULT_TOOLCHAINS_PATH = "config\\toolchains\\toolchains.json"
 _RUNTIME_SERVICE = None
 _RUNTIME_SERVICE_LOCK = threading.Lock()
 _TRACE_MANAGER = None
+_CATALOG_WATCHER = None
 _ACTIVE_PROCESSES: dict[str, int] = {}
 _CANCELLED_OPERATIONS: set[str] = set()
 _PROCESS_LOCK = threading.RLock()
 _CURRENT_OPERATION_ID: ContextVar[str | None] = ContextVar("br_plc_operation_id", default=None)
 DOWNLOAD_LOG_SUCCESS_GRACE_SECONDS = 3.0
+
+
+def start_catalog_watcher() -> None:
+    global _CATALOG_WATCHER
+    from catalog_watch import CatalogWatcher
+    _CATALOG_WATCHER = CatalogWatcher()
+
+
+def close_catalog_watcher() -> None:
+    global _CATALOG_WATCHER
+    watcher, _CATALOG_WATCHER = _CATALOG_WATCHER, None
+    if watcher is not None:
+        watcher.close()
 
 
 def runtime_pvi_service():
@@ -1647,10 +1661,10 @@ def plc_read_report_summary(arguments: dict[str, Any]) -> dict[str, Any]:
 def run_symbol_index(arguments: dict[str, Any], *, search: bool) -> dict[str, Any]:
     options = resolve_call_options(arguments, default_target="arsim")
     script = REPO_ROOT / "tools" / "plc_symbol_index.py"
-    catalog_path = REPO_ROOT / "var" / "catalogs" / "plc_symbol_catalog.json"
     project_file = Path(options["project_path"])
     if not project_file.is_absolute():
         project_file = REPO_ROOT / project_file
+    catalog_path = project_file.parent / ".br-auto-dev" / "plc_symbol_catalog.json"
     args = [
         "python",
         str(script),
@@ -1707,6 +1721,14 @@ def run_symbol_index(arguments: dict[str, Any], *, search: bool) -> dict[str, An
     if stderr:
         data.setdefault("stderr", stderr)
     data.setdefault("process_exit_code", completed.returncode)
+    if data.get("ok") and _CATALOG_WATCHER is not None:
+        targets_file = Path(options["targets_path"])
+        if not targets_file.is_absolute():
+            targets_file = REPO_ROOT / targets_file
+        try:
+            _CATALOG_WATCHER.register(targets_file.resolve(), project_file.parent.resolve(), catalog_path.resolve())
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            data.setdefault("warnings", []).append(f"Automatic catalog refresh could not start: {exc}")
     return data
 
 

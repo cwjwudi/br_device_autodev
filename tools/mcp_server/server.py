@@ -24,9 +24,11 @@ from toolchain import (
     TOOLS,
     ToolchainError,
     cancel_operation,
+    close_catalog_watcher,
     close_runtime_pvi_service,
     reset_operation_id,
     set_operation_id,
+    start_catalog_watcher,
 )
 from validation import validate_json_schema
 from version import SERVER_RUNTIME, __version__
@@ -383,6 +385,7 @@ def handle_request(message: dict[str, Any], operation_id: str | None = None) -> 
 
 
 def run() -> None:
+    start_catalog_watcher()
     executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="mcp-tool")
     active: dict[Any, tuple[Future[dict[str, Any] | None], str]] = {}
     active_lock = threading.RLock()
@@ -438,6 +441,7 @@ def run() -> None:
             write_response(response)
     finally:
         executor.shutdown(wait=True, cancel_futures=False)
+        close_catalog_watcher()
         close_runtime_pvi_service()
 
 
