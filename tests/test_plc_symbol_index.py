@@ -215,12 +215,17 @@ class PlcSymbolIndexTests(unittest.TestCase):
     def test_stdio_list_works_while_client_input_remains_open(self) -> None:
         project = self.project_root / "Demo.apj"
         project.write_text('<Project xmlns="http://br-automation.co.at/AS/Project"/>', encoding="utf-8")
-        (self.project_root / "br-auto-dev.json").write_text(json.dumps({
-            "project_path": "Demo.apj", "config": "Sim", "toolchain": "as6_default",
+        (self.project_root.parent / "br-auto-dev.json").write_text(json.dumps({
+            "project_path": "Project/Demo.apj", "config": "Sim", "toolchain": "as6_default",
             "target": "arsim", "targets": {"arsim": {"ip": "127.0.0.1", "role": "arsim"}},
         }), encoding="utf-8")
+        override_dir = self.project_root.parent / "override"
+        override_dir.mkdir()
+        override_targets = override_dir / "targets.json"
+        override_targets.write_text(json.dumps(self.config), encoding="utf-8")
         request = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {
-            "name": "plc_list_variables", "arguments": {"project_path": str(project), "limit": 1},
+            "name": "plc_list_variables", "arguments": {"project_path": str(project), "limit": 1,
+                                                          "targets_path": str(override_targets)},
         }}
         process = subprocess.Popen([sys.executable, str(REPO_ROOT / "tools/mcp_server/server.py")],
                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
@@ -235,7 +240,7 @@ class PlcSymbolIndexTests(unittest.TestCase):
             first = response["result"]["structuredContent"]
             self.assertTrue(first["ok"])
             self.assertEqual("rebuilt", first["data"]["cache_status"])
-            self.assertEqual(self.project_root / ".br-auto-dev" / "plc_symbol_catalog.json",
+            self.assertEqual(self.project_root.parent / ".br-auto-dev" / "plc_symbol_catalog.json",
                              Path(first["data"]["catalog_path"]))
             process.stdin.write(json.dumps(request) + "\n")
             process.stdin.flush()

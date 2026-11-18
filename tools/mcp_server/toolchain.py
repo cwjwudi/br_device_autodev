@@ -1664,7 +1664,9 @@ def run_symbol_index(arguments: dict[str, Any], *, search: bool) -> dict[str, An
     project_file = Path(options["project_path"])
     if not project_file.is_absolute():
         project_file = REPO_ROOT / project_file
-    catalog_path = project_file.parent / ".br-auto-dev" / "plc_symbol_catalog.json"
+    config_file = options["project_config_path"]
+    catalog_dir = Path(config_file).parent if config_file else project_file.parent
+    catalog_path = catalog_dir / ".br-auto-dev" / "plc_symbol_catalog.json"
     args = [
         "python",
         str(script),

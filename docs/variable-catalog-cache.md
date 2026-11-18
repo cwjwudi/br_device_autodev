@@ -1,7 +1,8 @@
 # Project variable catalog cache
 
 `plc_search_variables` and `plc_list_variables` save the complete unfiltered catalog to
-`<directory containing the .apj>/.br-auto-dev/plc_symbol_catalog.json`. Each entry includes
+`<directory containing br-auto-dev.json>/.br-auto-dev/plc_symbol_catalog.json` (or beside the
+`.apj` when no project configuration is present). Each entry includes
 its PVI name and existing source, type, access-configuration and confidence fields. A query
 returns only the requested page, plus `catalog_path` and `cache_status` (`rebuilt` or `hit`).
 The cache is generated data and can be excluded from version control with `.br-auto-dev/`.
