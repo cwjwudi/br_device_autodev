@@ -160,10 +160,11 @@ class RuntimePviService:
         task: str | None = None,
         pattern: str = "*",
         limit: int = 200,
+        offset: int = 0,
     ) -> dict[str, Any]:
         target, _ = self._resolve(target_name)
         result = self.manager.call(
-            target, "list_variables", scope=scope, task=task, pattern=pattern, limit=limit
+            target, "list_variables", scope=scope, task=task, pattern=pattern, limit=limit, offset=offset
         )
         with self._lock:
             target_catalog = self._discovered.setdefault(target_name, {})

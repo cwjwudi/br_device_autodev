@@ -10,6 +10,7 @@ import queue
 import threading
 import time
 from concurrent.futures import Future, TimeoutError as FutureTimeoutError
+from ctypes import byref, create_string_buffer, sizeof
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -19,6 +20,23 @@ from .values import coerce_write_value, json_safe, values_equal
 LOG = logging.getLogger(__name__)
 _GENERATION_LOCK = threading.Lock()
 _GENERATION_COUNTER = 0
+
+
+def _read_variable_names(parent: Any) -> list[str]:
+    from pvi.pvi_objects.Error import PviError
+    from pvi.pvi_objects.include import POBJ_ACC_LIST_PVAR, PviXRead
+
+    # pvipy's fixed 64 KiB buffer silently truncates large PVI lists.
+    size = 65536
+    while size <= 16 * 1024 * 1024:
+        buffer = create_string_buffer(size)
+        result = PviXRead(parent._hPvi, parent._linkID, POBJ_ACC_LIST_PVAR, None, 0, byref(buffer), sizeof(buffer))
+        if result:
+            raise PviError(result, parent)
+        if b"\0" in buffer.raw:
+            return [item.split(" ")[0] for item in buffer.value.decode("ascii").split("\t") if item]
+        size *= 2
+    raise RuntimeError("PVI variable list exceeds the 16 MiB scan limit; use project symbols or narrower tasks")
 _PVI_TRANSPORT_MARKERS = (
     "Pvi-Error 12004",
     "Pvi-Error 12059",
@@ -322,11 +340,16 @@ class PviWorker:
         task: str | None = None,
         pattern: str = "*",
         limit: int = 200,
+        offset: int = 0,
     ) -> dict[str, Any]:
         VariableRef(name="_list", scope=scope, task=task).validate()
-        source = self._get_task(str(task)).variables if scope == "task" else self._cpu.variables
+        parent = self._get_task(str(task)) if scope == "task" else self._cpu
+        source = _read_variable_names(parent)
         matched = [name for name in source if fnmatch.fnmatchcase(name, pattern)]
         effective_limit = max(1, min(limit, 5000))
+        offset = max(0, offset)
+        page = matched[offset:offset + effective_limit]
+        next_offset = offset + len(page)
         return {
             "ok": True,
             "target": self.target.name,
@@ -334,8 +357,11 @@ class PviWorker:
             "task": task,
             "pattern": pattern,
             "total_matches": len(matched),
-            "truncated": len(matched) > effective_limit,
-            "variables": matched[:effective_limit],
+            "offset": offset,
+            "limit": effective_limit,
+            "truncated": next_offset < len(matched),
+            "next_offset": next_offset if next_offset < len(matched) else None,
+            "variables": page,
         }
 
     def _get_variable(self, ref: VariableRef) -> Any:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import ctypes
 
 import pytest
 
@@ -8,6 +9,7 @@ from br_plc_toolchain.backends.pvi.manager import PviSessionManager
 from br_plc_toolchain.backends.pvi.models import PviTarget, VariableRef
 from br_plc_toolchain.backends.pvi.values import coerce_write_value, json_safe, values_equal
 from br_plc_toolchain.backends.pvi.worker import PviWorker, is_pvi_transport_error
+from br_plc_toolchain.backends.pvi import worker as pvi_worker
 
 
 class FakeWorker:
@@ -52,6 +54,31 @@ def test_variable_ref_validation_and_canonical_name() -> None:
     assert ref.canonical == "Main:bEnable"
     with pytest.raises(ValueError, match="task is required"):
         VariableRef(name="bEnable").validate()
+
+
+def test_large_pvi_list_grows_buffer_and_pages(monkeypatch) -> None:
+    from pvi.pvi_objects import include
+
+    names = [f"Point{i:05d}" for i in range(11000)]
+    payload = "\t".join(f"{name} SC=g VT=i32" for name in names).encode("ascii")
+    sizes = []
+
+    def read(_handle, _link, _access, _arg, _arg_size, buffer, size):
+        sizes.append(size)
+        ctypes.memmove(buffer, payload, min(len(payload), size))
+        return 0
+
+    monkeypatch.setattr(include, "PviXRead", read)
+    parent = type("Parent", (), {"_hPvi": 1, "_linkID": 2})()
+    assert pvi_worker._read_variable_names(parent) == names
+    assert sizes[0] == 65536 and sizes[-1] > len(payload)
+    worker = PviWorker(PviTarget(name="plc", ip="127.0.0.1"))
+    worker._cpu = parent
+    first = worker._list_variables(scope="global", limit=5000)
+    second = worker._list_variables(scope="global", limit=5000, offset=first["next_offset"])
+    third = worker._list_variables(scope="global", limit=5000, offset=second["next_offset"])
+    assert first["variables"] + second["variables"] + third["variables"] == names
+    assert third["total_matches"] == 11000 and third["next_offset"] is None
 
 
 def test_json_and_write_value_conversion() -> None:

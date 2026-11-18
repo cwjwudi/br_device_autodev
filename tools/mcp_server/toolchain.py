@@ -1811,6 +1811,7 @@ def plc_list_runtime_variables(arguments: dict[str, Any]) -> dict[str, Any]:
         task=arguments.get("task"),
         pattern=str(arguments.get("pattern") or "*"),
         limit=int(arguments.get("limit") or 200),
+        offset=int(arguments.get("offset") or 0),
     )
 
 

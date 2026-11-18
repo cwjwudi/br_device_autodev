@@ -660,13 +660,14 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "plc_list_runtime_variables",
-        "description": "List online task or global variables from the running PLC image through PVI.",
+        "description": "Scan online task or global variable names through PVI, then return a bounded page. Each page repeats the full scan; pattern is a case-sensitive glob, not a regex. Counts can change if the PLC image changes.",
         "inputSchema": runtime_schema(
             {
                 "scope": {"type": "string", "enum": ["task", "global"], "default": "task"},
                 "task": {"type": "string"},
                 "pattern": {"type": "string", "default": "*"},
                 "limit": {"type": "integer", "minimum": 1, "maximum": 5000, "default": 200},
+                "offset": {"type": "integer", "minimum": 0, "default": 0},
             },
             "target",
         ),
