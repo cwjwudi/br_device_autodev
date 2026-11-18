@@ -1678,6 +1678,7 @@ def run_symbol_index(arguments: dict[str, Any], *, search: bool) -> dict[str, An
     completed = subprocess.run(
         args,
         cwd=REPO_ROOT,
+        stdin=subprocess.DEVNULL,
         text=True,
         encoding="utf-8",
         errors="replace",

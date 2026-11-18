@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import os
+import json
+import queue
+import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -93,6 +97,35 @@ class PlcSymbolIndexTests(unittest.TestCase):
             catalog = self.build()
         self.assertEqual(11001, len(catalog["variables"]))  # includes configured Harness:Input
         self.assertLess(resolve.call_count, 10)
+
+    def test_stdio_list_works_while_client_input_remains_open(self) -> None:
+        project = self.project_root / "Demo.apj"
+        project.write_text('<Project xmlns="http://br-automation.co.at/AS/Project"/>', encoding="utf-8")
+        (self.project_root / "br-auto-dev.json").write_text(json.dumps({
+            "project_path": "Demo.apj", "config": "Sim", "toolchain": "as6_default",
+            "target": "arsim", "targets": {"arsim": {"ip": "127.0.0.1", "role": "arsim"}},
+        }), encoding="utf-8")
+        request = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {
+            "name": "plc_list_variables", "arguments": {"project_path": str(project), "limit": 1},
+        }}
+        process = subprocess.Popen([sys.executable, str(REPO_ROOT / "tools/mcp_server/server.py")],
+                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                   text=True, encoding="utf-8", cwd=REPO_ROOT)
+        try:
+            assert process.stdin and process.stdout
+            process.stdin.write(json.dumps(request) + "\n")
+            process.stdin.flush()
+            lines = queue.Queue()
+            threading.Thread(target=lambda: lines.put(process.stdout.readline()), daemon=True).start()
+            response = json.loads(lines.get(timeout=10))
+            self.assertTrue(response["result"]["structuredContent"]["ok"])
+        finally:
+            process.terminate()
+            process.wait(timeout=5)
+            if process.stdin:
+                process.stdin.close()
+            if process.stdout:
+                process.stdout.close()
 
     def test_fresh_build_headers_are_preferred_with_high_confidence(self) -> None:
         header = self.create_build_artifacts(newer_than_source=True)
