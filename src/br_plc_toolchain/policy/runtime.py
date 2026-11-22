@@ -18,10 +18,10 @@ def pvi_write_error(config: dict[str, Any], role: str, variable: str, *, execute
         return "Variable writes require execute=true"
     if not writable:
         return "PVI reports the variable is not writable"
-    if role == "arsim":
-        return None
     pvi = config.get("pvi") or {}
     mode = pvi.get("write_policy", "whitelist")
+    if role == "arsim" and mode != "blacklist":
+        return None
     if mode not in ("whitelist", "blacklist"):
         return "Invalid PVI write policy"
     entries = pvi.get("write_whitelist" if mode == "whitelist" else "write_blacklist", [])
@@ -102,4 +102,3 @@ class RuntimePolicy:
     def require(decision: AccessDecision) -> None:
         if not decision.allowed:
             raise AccessDenied("; ".join(decision.reasons))
-

@@ -19,6 +19,7 @@ from br_plc_toolchain.policy import RuntimePolicy, TestSessionManager
 
 
 TARGET_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+MAX_READ_BATCH = 128
 
 
 def validate_target_name(name: str) -> str:
@@ -201,8 +202,8 @@ class RuntimePviService:
         """
         if not refs:
             raise ValueError("variables must be a non-empty array")
-        if len(refs) > 64:
-            raise ValueError("variables may contain at most 64 items")
+        if len(refs) > MAX_READ_BATCH:
+            raise ValueError(f"variables may contain at most {MAX_READ_BATCH} items")
         target, config = self._resolve(target_name)
         unique: list[VariableRef] = []
         seen: set[str] = set()

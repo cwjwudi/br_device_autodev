@@ -231,3 +231,39 @@ def test_project_policy_is_applied_to_runtime_writes(tmp_path, monkeypatch) -> N
     assert runtime.write(target, VariableRef(name="bEnable", task="Main"), True, execute=True)["ok"]
     with pytest.raises(PermissionError, match="whitelist"):
         runtime.write(target, VariableRef(name="Other", task="Main"), True, execute=True)
+
+
+def test_read_many_supports_128_and_rejects_129(tmp_path) -> None:
+    service = build_service(tmp_path)
+    service.register_ephemeral_target(ip="127.0.0.1", name="arsim", declared_role="arsim")
+    refs_128 = [VariableRef(name=f"v{i}", task="Main") for i in range(128)]
+    result = service.read_many("arsim", refs_128)
+    assert result["ok"] is True
+    assert result["count"] == 128
+
+    refs_129 = [VariableRef(name=f"v{i}", task="Main") for i in range(129)]
+    with pytest.raises(ValueError, match="at most 128"):
+        service.read_many("arsim", refs_129)
+
+
+def test_arsim_enforces_explicit_project_write_blacklist(tmp_path) -> None:
+    service = build_service(tmp_path)
+    service.register_ephemeral_target(
+        ip="127.0.0.4",
+        name="arsim",
+        declared_role="arsim",
+        project_config={
+            "pvi": {
+                "write_policy": "blacklist",
+                "write_blacklist": ["*Safety*", "gIOCtrl*", "IOModule:*"],
+            }
+        },
+    )
+    assert service.write("arsim", VariableRef(name="bEnable", task="Main"), True, execute=True)["ok"]
+    for blocked in (
+        VariableRef(name="bSafetyOk", task="Main"),
+        VariableRef(name="gIOCtrl.bOut", scope="global"),
+        VariableRef(name="bDo1", task="IOModule"),
+    ):
+        with pytest.raises(PermissionError, match="blacklist"):
+            service.write("arsim", blocked, True, execute=True)

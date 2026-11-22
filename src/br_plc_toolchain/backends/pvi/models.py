@@ -56,22 +56,58 @@ class VariableRef:
 
 
 def parse_variable_ref(spec: str) -> VariableRef:
-    """Parse the compact MCP variable spelling into a validated reference.
+    """Parse variable specs into a validated VariableRef.
 
-    A plain name is a global variable.  A single task separator denotes a
-    task variable (for example ``Main:bEnable``).  PVI paths containing
-    colons are intentionally left as global names; task variables should use
-    the explicit ``task:name`` form at the MCP boundary.
+    Supports plain globals (``gAlive``), OPC-UA / PVI globals (``::gAlive``,
+    ``global::gAlive``, ``::AsGlobalPV:gAlive``), and task variables
+    (``Main:bEnable``, ``Main::bEnable``, ``::Main:bEnable``).
     """
     if not isinstance(spec, str) or not spec.strip():
         raise ValueError("Variable name must be a non-empty string")
     text = spec.strip()
-    if ":" in text and not text.startswith("::"):
-        task, name = text.split(":", 1)
-        if task and name and ":" not in task:
-            ref = VariableRef(name=name, scope="task", task=task)
+    if text.startswith("::"):
+        rest = text[2:].strip()
+        if not rest or rest.startswith(":"):
+            raise ValueError(f"Invalid variable reference: {spec!r}")
+        if "::" in rest:
+            task, name = rest.split("::", 1)
+        elif ":" in rest:
+            task, name = rest.split(":", 1)
+        else:
+            ref = VariableRef(name=rest, scope="global")
             ref.validate()
             return ref
+        task, name = task.strip(), name.strip()
+        if not task or not name or ":" in task or name.startswith(":"):
+            raise ValueError(f"Invalid variable reference: {spec!r}")
+        if task == "AsGlobalPV" or task.lower() == "global":
+            ref = VariableRef(name=name, scope="global")
+        else:
+            ref = VariableRef(name=name, scope="task", task=task)
+        ref.validate()
+        return ref
+    if "::" in text:
+        task, name = text.split("::", 1)
+        task, name = task.strip(), name.strip()
+        if not task or not name or ":" in task or name.startswith(":"):
+            raise ValueError(f"Invalid variable reference: {spec!r}")
+        if task == "AsGlobalPV" or task.lower() == "global":
+            ref = VariableRef(name=name, scope="global")
+        else:
+            ref = VariableRef(name=name, scope="task", task=task)
+        ref.validate()
+        return ref
+    if ":" in text:
+        task, name = text.split(":", 1)
+        task, name = task.strip(), name.strip()
+        if not task or not name or ":" in task or name.startswith(":"):
+            raise ValueError(f"Invalid variable reference: {spec!r}")
+        if task == "AsGlobalPV":
+            ref = VariableRef(name=name, scope="global")
+        else:
+            ref = VariableRef(name=name, scope="task", task=task)
+        ref.validate()
+        return ref
     ref = VariableRef(name=text, scope="global")
     ref.validate()
     return ref

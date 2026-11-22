@@ -1,7 +1,6 @@
 """High-level PLC toolchain services."""
 
-from .runtime_pvi import RuntimePviService
 from .pvi_trace import PviTraceError, TraceManager
+from .runtime_pvi import MAX_READ_BATCH, RuntimePviService
 
-__all__ = ["RuntimePviService", "TraceManager", "PviTraceError"]
-
+__all__ = ["MAX_READ_BATCH", "RuntimePviService", "TraceManager", "PviTraceError"]

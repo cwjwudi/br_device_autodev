@@ -19,9 +19,9 @@ TRACE_STATES = {"running", "completed", "stopped", "failed", "expired"}
 DEFAULT_DURATION_SECONDS = 30
 MAX_DURATION_SECONDS = 600
 DEFAULT_INTERVAL_MS = 500
-MIN_INTERVAL_MS = 100
-MAX_VARIABLES = 32
-MAX_SAMPLES = 10_000
+MIN_INTERVAL_MS = 20
+MAX_VARIABLES = 128
+MAX_SAMPLES = 30_000
 MAX_FILE_BYTES = 50 * 1024 * 1024
 RETENTION_DAYS = 7
 
@@ -304,6 +304,7 @@ class TraceManager:
                 "last_sample": trace.last_sample,
                 "error_count": trace.error_count,
                 "error_code": trace.error_code,
+                "trace_file": str(trace.path.resolve()),
             }
 
     def _get(self, trace_id: str) -> _Trace:
@@ -329,6 +330,39 @@ class TraceManager:
         if thread is not None and thread is not threading.current_thread():
             thread.join(timeout=5)
         return self._summary(trace)
+
+    def wait(
+        self,
+        trace_id: str,
+        *,
+        poll_interval_s: float = 0.1,
+        timeout_s: float | None = None,
+    ) -> dict[str, Any]:
+        if poll_interval_s <= 0:
+            raise PviTraceError("poll_interval_s must be positive", error_code="TRACE_INTERVAL_INVALID")
+        trace = self._get(trace_id)
+        deadline = (time.monotonic() + timeout_s) if timeout_s is not None else None
+        while True:
+            with trace.lock:
+                state = trace.state
+                thread = trace.thread
+            if state != "running":
+                if thread is not None and thread is not threading.current_thread():
+                    thread.join(timeout=5)
+                return self._summary(trace)
+            if deadline is not None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError(
+                        f"PVI_TRACE_WAIT_TIMEOUT: trace {trace_id!r} did not finish within {timeout_s}s"
+                    )
+                wait_s = min(poll_interval_s, remaining)
+            else:
+                wait_s = poll_interval_s
+            if thread is not None and thread is not threading.current_thread():
+                thread.join(timeout=wait_s)
+            else:
+                time.sleep(wait_s)
 
     def read(
         self,
@@ -385,6 +419,7 @@ class TraceManager:
             "sample_count": len(samples),
             "dropped_samples": dropped,
             "errors": errors,
+            "trace_file": str(trace.path.resolve()),
         }
 
     def close(self) -> None:

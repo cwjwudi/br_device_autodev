@@ -965,10 +965,10 @@ def plc_read_pvi_batch(arguments: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("backend must be 'runtime' or 'legacy'.")
     specs = arguments.get("variables")
     if backend == "runtime":
-        refs = _parse_variable_specs(specs, limit=64)
+        refs = _parse_variable_specs(specs, limit=128)
         service, target = _ensure_runtime_target(arguments)
         return service.read_many(target, refs)
-    variable_specs = _dedupe_variable_strings(specs, limit=64)
+    variable_specs = _dedupe_variable_strings(specs, limit=128)
     options = resolve_call_options(arguments, default_target="arsim")
     return _legacy_read_batch(
         {**arguments, "variables": variable_specs},
@@ -1761,7 +1761,7 @@ def plc_read_runtime_variable(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def plc_start_pvi_trace(arguments: dict[str, Any]) -> dict[str, Any]:
-    refs = _parse_variable_specs(arguments.get("variables"), limit=32)
+    refs = _parse_variable_specs(arguments.get("variables"), limit=128)
     service, target = _ensure_runtime_target(arguments)
     del service  # TraceManager owns the service reference and its worker lifecycle.
     return pvi_trace_manager().start(

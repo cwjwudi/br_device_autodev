@@ -432,7 +432,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "plc_read_pvi_batch",
-        "description": "Read up to 64 explicitly named PLC variables in one compact request. Runtime uses the persistent PVI worker; legacy is retained only for compatibility.",
+        "description": "Read up to 128 explicitly named PLC variables in one compact request. Runtime uses the persistent PVI worker; legacy is retained only for compatibility.",
         "inputSchema": object_schema(
             {
                 "backend": {"type": "string", "enum": ["runtime", "legacy"], "default": "runtime"},
@@ -441,7 +441,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "variables": {
                     "type": "array",
                     "minItems": 1,
-                    "maxItems": 64,
+                    "maxItems": 128,
                     "items": {"type": "string", "minLength": 1},
                 },
             }
@@ -719,17 +719,17 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "plc_start_pvi_trace",
-        "description": "Start a read-only asynchronous Runtime PVI trace for explicitly named variables. Data is retained locally and queried by trace id.",
+        "description": "Start a read-only asynchronous Runtime PVI trace for up to 128 explicitly named variables (minimum 20 ms interval). Data is retained locally and queried by trace id.",
         "inputSchema": runtime_schema(
             {
                 "variables": {
                     "type": "array",
                     "minItems": 1,
-                    "maxItems": 32,
+                    "maxItems": 128,
                     "items": {"type": "string", "minLength": 1},
                 },
                 "duration_seconds": {"type": "integer", "minimum": 1, "maximum": 600, "default": 30},
-                "interval_ms": {"type": "integer", "minimum": 100, "default": 500},
+                "interval_ms": {"type": "integer", "minimum": 20, "default": 500},
             },
             "variables",
         ),
@@ -750,7 +750,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "trace_id": {"type": "string", "pattern": "^trace-[A-Za-z0-9-]+$"},
                 "from_ms": {"type": "integer", "minimum": 0, "default": 0},
                 "to_ms": {"type": "integer", "minimum": 0},
-                "max_samples": {"type": "integer", "minimum": 1, "maximum": 10000, "default": 1000},
+                "max_samples": {"type": "integer", "minimum": 1, "maximum": 30000, "default": 1000},
                 "downsample": {"type": "integer", "minimum": 1, "default": 1},
             },
             "trace_id",

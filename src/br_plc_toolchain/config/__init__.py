@@ -1,9 +1,11 @@
 """Configuration loading and target bootstrap helpers."""
 
 from .loader import (
+    PROJECT_CONFIG_NAME,
     ConfigError,
     create_ephemeral_target_config,
     load_json_config,
+    load_project_config,
     save_local_target,
 )
 from .toolchains import (
@@ -16,9 +18,11 @@ from .toolchains import (
 )
 
 __all__ = [
+    "PROJECT_CONFIG_NAME",
     "ConfigError",
     "create_ephemeral_target_config",
     "load_json_config",
+    "load_project_config",
     "save_local_target",
     "DEFAULT_TOOLCHAINS_PATH",
     "LOCAL_TOOLCHAINS_PATH",

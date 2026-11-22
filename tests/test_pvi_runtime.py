@@ -6,7 +6,7 @@ import ctypes
 import pytest
 
 from br_plc_toolchain.backends.pvi.manager import PviSessionManager
-from br_plc_toolchain.backends.pvi.models import PviTarget, VariableRef
+from br_plc_toolchain.backends.pvi.models import PviTarget, VariableRef, parse_variable_ref
 from br_plc_toolchain.backends.pvi.values import coerce_write_value, json_safe, values_equal
 from br_plc_toolchain.backends.pvi.worker import PviWorker, is_pvi_transport_error
 from br_plc_toolchain.backends.pvi import worker as pvi_worker
@@ -192,3 +192,33 @@ def test_manager_disconnect_marks_link_hierarchy_dirty() -> None:
     worker._on_manager_connection(False)  # type: ignore[attr-defined]
 
     assert worker.dirty is True
+
+
+def test_batch_timeout_for_128_variables_stays_bounded() -> None:
+    worker = PviWorker(
+        PviTarget(
+            name="arsim",
+            ip="127.0.0.1",
+            request_timeout_s=15,
+            manager_timeout_s=5,
+            startup_wait_s=5,
+            variable_link_wait_s=0.25,
+        )
+    )
+    timeout = worker._operation_timeout(  # type: ignore[attr-defined]
+        "read_many", {"refs": [VariableRef(name=f"v{i}", task="Main") for i in range(128)]}
+    )
+    assert 50.0 <= timeout <= 60.0
+
+
+def test_parse_variable_ref_supports_global_and_task_aliases() -> None:
+    assert parse_variable_ref("gAlive") == VariableRef(name="gAlive", scope="global")
+    assert parse_variable_ref("::gAlive") == VariableRef(name="gAlive", scope="global")
+    assert parse_variable_ref("global::gAlive") == VariableRef(name="gAlive", scope="global")
+    assert parse_variable_ref("::AsGlobalPV:gAlive") == VariableRef(name="gAlive", scope="global")
+    assert parse_variable_ref("Main:bEnable") == VariableRef(name="bEnable", scope="task", task="Main")
+    assert parse_variable_ref("Main::bEnable") == VariableRef(name="bEnable", scope="task", task="Main")
+    assert parse_variable_ref("::Main:bEnable") == VariableRef(name="bEnable", scope="task", task="Main")
+    for invalid in ("", "   ", "::", "Main:", ":bEnable", "Main::", "Main:::bEnable"):
+        with pytest.raises(ValueError):
+            parse_variable_ref(invalid)

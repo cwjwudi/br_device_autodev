@@ -221,3 +221,79 @@ def test_runtime_write_and_test_session_are_audited_target_changes(tmp_path) -> 
         )
     assert opened["isError"] is False and opened["structuredContent"]["audit"]
     assert written["isError"] is False and written["structuredContent"]["audit"]
+
+
+def test_newly_enabled_runtime_tools_are_visible_and_enforce_128_20ms_contract(tmp_path) -> None:
+    visible_names = {item["name"] for item in server.visible_definitions(server.DISABLED_TOOLS)}
+    expected_enabled = {
+        "plc_read_pvi_batch",
+        "plc_start_pvi_trace",
+        "plc_get_pvi_trace_status",
+        "plc_read_pvi_trace",
+        "plc_stop_pvi_trace",
+        "plc_runtime_health",
+        "plc_get_runtime_variable_info",
+    }
+    assert expected_enabled.issubset(visible_names)
+
+    by_name = server.TOOL_DEFINITIONS_BY_NAME
+    assert by_name["plc_read_pvi_batch"]["inputSchema"]["properties"]["variables"]["maxItems"] == 128
+    trace_props = by_name["plc_start_pvi_trace"]["inputSchema"]["properties"]
+    assert trace_props["variables"]["maxItems"] == 128
+    assert trace_props["interval_ms"]["minimum"] == 20
+    assert by_name["plc_read_pvi_trace"]["inputSchema"]["properties"]["max_samples"]["maximum"] == 30000
+
+    fake = FakeRuntimeService()
+    with (
+        patch.object(toolchain, "_RUNTIME_SERVICE", fake),
+        patch.object(toolchain, "_TRACE_MANAGER", None),
+    ):
+        batch_ok = call(
+            "plc_read_pvi_batch",
+            {"target": "plc", "variables": [f"Main:v{i}" for i in range(128)]},
+        )
+        assert batch_ok["isError"] is False
+        assert batch_ok["structuredContent"]["count"] == 128
+
+        batch_too_many = call(
+            "plc_read_pvi_batch",
+            {"target": "plc", "variables": [f"Main:v{i}" for i in range(129)]},
+        )
+        assert batch_too_many["isError"] is True
+
+        trace_too_fast = call(
+            "plc_start_pvi_trace",
+            {"target": "plc", "variables": ["Main:v0"], "interval_ms": 19},
+        )
+        assert trace_too_fast["isError"] is True
+
+        trace_too_many = call(
+            "plc_start_pvi_trace",
+            {"target": "plc", "variables": [f"Main:v{i}" for i in range(129)], "interval_ms": 20},
+        )
+        assert trace_too_many["isError"] is True
+
+        from br_plc_toolchain.services.pvi_trace import TraceManager
+
+        trace_mgr = TraceManager(fake, root=tmp_path / "traces")
+        with patch.object(toolchain, "_TRACE_MANAGER", trace_mgr):
+            try:
+                started = call(
+                    "plc_start_pvi_trace",
+                    {
+                        "target": "plc",
+                        "variables": [f"Main:v{i}" for i in range(128)],
+                        "duration_seconds": 1,
+                        "interval_ms": 20,
+                    },
+                )
+                assert started["isError"] is False
+                trace_id = started["structuredContent"]["trace_id"]
+                stopped = call("plc_stop_pvi_trace", {"target": "plc", "trace_id": trace_id})
+                assert stopped["isError"] is False
+                assert stopped["structuredContent"]["trace_file"]
+                read = call("plc_read_pvi_trace", {"target": "plc", "trace_id": trace_id})
+                assert read["isError"] is False
+                assert len(read["structuredContent"]["variables"]) == 128
+            finally:
+                trace_mgr.close()

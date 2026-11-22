@@ -127,6 +127,25 @@ powershell -ExecutionPolicy Bypass -File scripts\setup_venv.ps1
 - `bypass_download_safety` 和旧参数 `force_arsim_download` 仅限 ARsim；操作规范只允许在用户明确授权后对本机 `role=arsim` 使用强制 ARsim 下载。
 - 构建、工程修改、下载、写入和测试应经 MCP 锁和审计执行。测试变量优先先读再写同值并独立读回；不要为了验证随意改变控制状态。
 
+## 公开 Python PVI SDK
+
+除 MCP 工具外，`br_plc_toolchain` 包还导出了受相同 `RuntimePolicy` 约束的高层客户端 `PviClient`（以及 `RuntimePviService`、`TraceManager`、`PviTraceError`、`PviSessionManager`、`PviTarget`、`VariableRef`、`parse_variable_ref`），供多步骤闭环控制、高频 20 ms / 128 变量采样及离线分析脚本直接编排，无需引用 `tools.mcp_server.toolchain` 私有对象：
+
+```python
+from br_plc_toolchain import PviClient
+
+with PviClient.from_project(r"C:\path\to\project", target="arsim") as plc:
+    plc.discover()
+    snapshot = plc.read_many(["Main:bEnable", "gAlive"])
+    trace = plc.start_trace(["Main:eState", "gAlive"], duration_seconds=10, interval_ms=20)
+    plc.write("Main:bEnable", True, execute=True)
+    plc.wait_until("Main:eState", lambda v: v == 3, timeout_s=5.0)
+    summary = plc.stop_trace(trace["trace_id"])
+    data = plc.read_trace(trace["trace_id"], max_samples=1000)
+```
+
+独立 Python 脚本在运行期间维持自己的持久 PVI 连接并在退出 `with` 上下文时自动关闭，不与 MCP Server 共享进程内句柄。
+
 ## MCP 工具
 
 <!-- BEGIN GENERATED MCP TOOL CATALOG -->
@@ -152,20 +171,27 @@ MCP server version: `0.15.2a1`
 | `plc_check_download` | `local_write` | `CheckDownload` | - | Run the download safety check without downloading. Compares the RUC package metadata with the target probe result. |
 | `plc_download_ruc` | `target_change` | `Download` | `execute=true` | Download the RUC package after the server-side safety check passes. Generate a stable request_id before sending and use plc_get_download_result with that ID if the response is lost. |
 | `plc_get_download_result` | `readonly` | `Download operation journal` | - | Look up one download by request_id. Read-only; reports process protection, transfer evidence, target probe and audit. Missing records are unknown. |
+| `plc_read_pvi_batch` | `readonly` | `persistent PVI runtime or legacy ReadPvi adapter` | - | Read up to 128 explicitly named PLC variables in one compact request. Runtime uses the persistent PVI worker; legacy is retained only for compatibility. |
 | `plc_read_logger` | `local_write` | `ReadLogger` | - | Read a whitelisted PLC/AR logger module through PVITransfer Logger. Returns report/log paths and a compact summary, never raw HTML/CSV content. |
 | `plc_list_targets` | `readonly` | `ListTargets` | - | List configured PLC/ARsim targets with IP, role, and automatic-download permission. |
 | `plc_list_variables` | `local_write` | `plc_symbol_index.py` | - | Page through the complete project variable catalog cached in .br-auto-dev; changes refresh it while the server runs and are checked on each query. Fresh build artifacts are preferred; MCP responses are bounded. |
 | `plc_search_variables` | `local_write` | `plc_symbol_index.py` | - | Search the full project variable catalog cached in .br-auto-dev. Changes refresh it while the server runs and are checked on each query. Results retain source, confidence, provenance, and warnings. |
 | `plc_discover_runtime_target` | `local_write` | `persistent PVI runtime` | - | Connect through persistent PVI without source code or a policy file. Unknown physical targets are read-only; test roles must be explicitly declared. |
+| `plc_runtime_health` | `readonly` | `persistent PVI runtime` | - | Return persistent PVI Manager, CPU, runtime, license and cache status. |
 | `plc_list_runtime_tasks` | `readonly` | `persistent PVI runtime` | - | List tasks from the running PLC image through PVI, independent of local source code. |
 | `plc_list_runtime_variables` | `readonly` | `persistent PVI runtime` | - | Scan online task or global variable names through PVI, then return a bounded page. Each page repeats the full scan; pattern is a case-sensitive glob, not a regex. Counts can change if the PLC image changes. |
+| `plc_get_runtime_variable_info` | `readonly` | `persistent PVI runtime` | - | Read online PVI type, access rights and metadata for a discovered variable. |
 | `plc_read_runtime_variable` | `readonly` | `persistent PVI runtime` | - | Read an online PVI variable. Missing external policy defaults to safe read-only discovery. |
+| `plc_start_pvi_trace` | `local_write` | `Runtime PVI TraceManager` | - | Start a read-only asynchronous Runtime PVI trace for up to 128 explicitly named variables (minimum 20 ms interval). Data is retained locally and queried by trace id. |
+| `plc_get_pvi_trace_status` | `readonly` | `Runtime PVI TraceManager` | - | Return a compact status summary for a Runtime PVI trace. |
+| `plc_read_pvi_trace` | `readonly` | `Runtime PVI TraceManager` | - | Read a bounded time range from a Runtime PVI trace as compact columnar rows. |
+| `plc_stop_pvi_trace` | `local_write` | `Runtime PVI TraceManager` | - | Stop a Runtime PVI trace and return its final compact summary. Idempotent for completed traces. |
 | `plc_write_runtime_variable` | `target_change` | `persistent PVI runtime + policy` | `execute=true` | Write a discovered variable under the project PVI policy; requires execute=true. |
 
 
 ## Hidden Tools
 
-共有 22 个工具被 `config/mcp/tool_filter.json` 隐藏（实现仍注册，仅供内部编排调用，MCP 列表与直接调用不可用）；具体名单见该配置文件。
+共有 15 个工具被 `config/mcp/tool_filter.json` 隐藏（实现仍注册，仅供内部编排调用，MCP 列表与直接调用不可用）；具体名单见该配置文件。
 <!-- END GENERATED MCP TOOL CATALOG -->
 
 工具目录由 `python scripts/maintenance/generate_mcp_docs.py` 从 MCP schema 生成；用 `--check` 检查文档是否同步。
