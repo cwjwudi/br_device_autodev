@@ -178,6 +178,16 @@ def load_project_config(
     for key in ("write_whitelist", "write_blacklist"):
         if key in pvi and not isinstance(pvi[key], list):
             raise ValueError(f"Project configuration {path} requires {key} to be an array")
+    if "allow_logger" in data and not isinstance(data["allow_logger"], bool):
+        raise ValueError(f"Project configuration {path} requires allow_logger to be a boolean")
+    if "logger" in data:
+        logger = data["logger"]
+        if not isinstance(logger, dict):
+            raise ValueError(f"Project configuration {path} requires logger to be an object")
+        if "enabled" in logger and not isinstance(logger["enabled"], bool):
+            raise ValueError(f"Project configuration {path} requires logger.enabled to be a boolean")
+        if "default_format" in logger and (not isinstance(logger["default_format"], str) or not logger["default_format"].strip()):
+            raise ValueError(f"Project configuration {path} requires logger.default_format to be a non-empty string")
     data["project_path"] = str(project_path)
     return data, path
 

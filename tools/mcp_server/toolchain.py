@@ -699,7 +699,7 @@ def next_actions(tool: str, data: dict[str, Any]) -> list[str]:
     if tool == "plc_read_logger" and data.get("ok"):
         return ["Open the generated logger report path for detailed diagnostics."]
     if tool == "plc_read_logger" and not data.get("ok"):
-        return ["Check target reachability, logger.allowed_modules, and the PVITransfer log path."]
+        return ["Check target reachability, project logger.enabled configuration, and the PVITransfer log path."]
     if tool == "plc_write_pvi" and not data.get("ok"):
         return ["Do not retry writes until execute=true, target role, PVI write policy, and variable names have been checked."]
     if tool in ("plc_run_io_test_case", "plc_run_test_suite") and data.get("ok"):
@@ -976,28 +976,87 @@ def plc_read_pvi_batch(arguments: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _load_plc_logger_module():
+    tools_root = str(REPO_ROOT / "tools")
+    if tools_root not in sys.path:
+        sys.path.insert(0, tools_root)
+    import plc_logger_read
+
+    return plc_logger_read
+
+
 def plc_read_logger(arguments: dict[str, Any]) -> dict[str, Any]:
+    from br_plc_toolchain.config import resolve_toolchain
+
     options = resolve_call_options(arguments, default_target="arsim")
     target = options["target"]
     logger_type = str(arguments.get("logger_type") or "System")
     logger_name = str(arguments.get("logger_name") or "$arlogsys")
-    logger_format = str(arguments.get("format") or ".html")
+    logger_format = arguments.get("format")
+    if logger_format is not None:
+        logger_format = str(logger_format)
     output_path = arguments.get("output_path")
     if output_path is not None and not isinstance(output_path, str):
         raise ValueError("output_path must be a string.")
-    data = run_plc_toolchain(
-        "ReadLogger",
+    severity = arguments.get("severity")
+    if severity is not None:
+        severity = str(severity)
+    order = str(arguments.get("order") or "newest")
+    summary_limit = int(arguments.get("limit") or 20)
+    keep_temp_files = arguments.get("keep_temp_files") is True
+
+    chain = resolve_toolchain(
+        options["toolchain"] or None,
+        registry_path=options["toolchains_path"] or None,
+    )
+
+    config: dict[str, Any] | None = None
+    targets_file: Path | None = None
+    target_ip = str(arguments.get("ip")).strip() if arguments.get("ip") else None
+    target_role: str | None = None
+    require_config_opt_in = True
+
+    if options["targets_path"]:
+        candidate = Path(options["targets_path"])
+        if not candidate.is_absolute():
+            candidate = REPO_ROOT / candidate
+        targets_file = candidate.resolve()
+        config = json.loads(targets_file.read_text(encoding="utf-8-sig"))
+    elif _RUNTIME_SERVICE is not None:
+        try:
+            runtime_target, runtime_config = _RUNTIME_SERVICE._resolve(target)
+            target_ip = target_ip or runtime_target.ip
+            target_role = runtime_target.role
+            if isinstance(runtime_config, dict) and (
+                "logger" in runtime_config or "allow_logger" in runtime_config
+            ):
+                config = runtime_config
+            else:
+                require_config_opt_in = False
+        except (AttributeError, KeyError):
+            require_config_opt_in = not bool(target_ip)
+    else:
+        require_config_opt_in = not bool(target_ip)
+
+    logger_mod = _load_plc_logger_module()
+    data = logger_mod.read_logger(
         target=target,
-        project_path=options["project_path"],
-        config=options["config"],
-        targets_path=options["targets_path"],
-        toolchain=options["toolchain"],
-        toolchains_path=options["toolchains_path"],
         logger_type=logger_type,
         logger_name=logger_name,
-        logger_format=logger_format,
+        fmt=logger_format,
         output_path=output_path,
-        timeout_seconds=int(arguments.get("timeout_seconds") or 150),
+        pvi_transfer_path=chain.pvi_transfer_exe,
+        config=config,
+        targets_file=targets_file,
+        target_ip=target_ip,
+        target_role=target_role,
+        require_config_opt_in=require_config_opt_in,
+        timeout_seconds=int(arguments.get("timeout_seconds") or 120),
+        summary_limit=summary_limit,
+        severity=severity,
+        order=order,
+        keep_temp_files=keep_temp_files,
+        repo_root=REPO_ROOT,
     )
     return wrap_result("plc_read_logger", "ReadLogger", data, target)
 

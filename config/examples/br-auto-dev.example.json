@@ -9,6 +9,9 @@
       "role": "arsim"
     }
   },
+  "logger": {
+    "enabled": true
+  },
   "pvi": {
     "enabled": true,
     "write_policy": "whitelist",

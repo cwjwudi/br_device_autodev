@@ -66,14 +66,14 @@ class TargetDefaultTests(unittest.TestCase):
         self.assertTrue(result["isError"])
         handler.assert_not_called()
 
-    @patch.object(toolchain, "run_plc_toolchain")
-    def test_readonly_logger_falls_back_to_arsim(self, run_toolchain) -> None:
-        run_toolchain.return_value = {"ok": True}
-
-        result = toolchain.plc_read_logger({})
+    def test_readonly_logger_falls_back_to_arsim(self) -> None:
+        mock_mod = Mock()
+        mock_mod.read_logger.return_value = {"ok": True}
+        with patch.object(toolchain, "_load_plc_logger_module", return_value=mock_mod):
+            result = toolchain.plc_read_logger({})
 
         self.assertEqual("arsim", result["target"])
-        self.assertEqual("arsim", run_toolchain.call_args.kwargs["target"])
+        self.assertEqual("arsim", mock_mod.read_logger.call_args.kwargs["target"])
 
     @patch.object(toolchain, "run_plc_toolchain")
     def test_direct_target_change_handler_also_requires_selection(self, run_toolchain) -> None:

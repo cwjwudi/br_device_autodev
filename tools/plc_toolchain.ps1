@@ -14,7 +14,7 @@ param(
     [string[]]$PviVariable,
     [string]$LoggerType = "System",
     [string]$LoggerName = '$arlogsys',
-    [string]$Format = ".html",
+    [string]$Format = ".csvx",
     [string]$OutputPath,
     [string]$WritesPath,
     [string]$SuitePath = "tests\plc\lqr_io_tests.json",

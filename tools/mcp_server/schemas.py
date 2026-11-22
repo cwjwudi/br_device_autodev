@@ -449,28 +449,54 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "plc_read_logger",
-        "description": "Read a whitelisted PLC/AR logger module through PVITransfer Logger. Returns report/log paths and a compact summary, never raw HTML/CSV content.",
+        "description": "Read a PLC/AR logger module directly through PVITransfer Logger (enabled at project level via logger.enabled=true; Safety modules blocked). Returns report/log paths and a compact summary, defaults to .csvx.",
         "inputSchema": object_schema(
             {
+                "ip": {
+                    "type": "string",
+                    "description": "Optional target IP address for runtime-discovered targets without a project configuration.",
+                },
                 "logger_type": {
                     "type": "string",
-                    "description": "Logger module type, for example System, User, or Connectivity.",
+                    "description": "Logger module type, for example System, User, Connectivity, or Named.",
                     "default": "System",
                 },
                 "logger_name": {
                     "type": "string",
-                    "description": "Logger module name, for example $arlogsys, $arlogusr, or $arlogconn.",
+                    "description": "Logger module name, for example $arlogsys, $arlogusr, $arlogconn, or $motion.",
                     "default": "$arlogsys",
                 },
                 "format": {
                     "type": "string",
-                    "description": "Output format. Supported values: .html, .csvx, .arl, .logpkg.",
-                    "default": ".html",
-                    "enum": [".html", ".csvx", ".arl", ".logpkg"],
+                    "description": "Output format. Supported values: .csvx (default), .html, .arl, .logpkg.",
+                    "default": ".csvx",
+                    "enum": [".csvx", ".html", ".arl", ".logpkg"],
                 },
                 "output_path": {
                     "type": "string",
                     "description": "Optional output file or directory. Must stay inside the repository. Defaults to var/logger/.",
+                },
+                "severity": {
+                    "type": "string",
+                    "description": "Optional comma-separated severity filter for .csvx summary (e.g. Error,Warning).",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum parsed .csvx summary entries to return.",
+                    "default": 20,
+                    "minimum": 1,
+                    "maximum": 200,
+                },
+                "order": {
+                    "type": "string",
+                    "description": "Order of .csvx summary entries.",
+                    "default": "newest",
+                    "enum": ["newest", "oldest"],
+                },
+                "keep_temp_files": {
+                    "type": "boolean",
+                    "description": "Keep intermediate .pil and .pvitransfer.log files after a successful read.",
+                    "default": False,
                 },
             }
         ),
