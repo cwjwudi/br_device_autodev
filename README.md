@@ -8,13 +8,14 @@
 
 - Windows、PowerShell、Python 3.11 或更新版本。
 - 与工程主版本匹配的 Automation Studio 4 或 6，以及对应版本的 PVI、PVITransfer 和 PVI DLL。切换 PVI4 / PVI6 时重启 MCP Server。
-- 从仓库根目录安装依赖；运行 MCP Server 需要保留完整仓库，当前 wheel 只包含 `src` 中的 Python 包。
+- 运行 MCP Server 需要保留完整仓库，当前 wheel 只包含 `src` 中的 Python 包。
 
 ```powershell
-python -m pip install -e .
-python -m pip install pytest  # 仅运行测试时需要
-python tools\mcp_server\server.py
+powershell -ExecutionPolicy Bypass -File scripts\setup_venv.ps1
+.\.venv\Scripts\python.exe tools\mcp_server\server.py
 ```
+
+安装脚本在仓库根目录创建或复用 `.venv`，通过阿里云 PyPI 镜像安装 `requirements.txt` 中的项目及其运行依赖。运行依赖以 `pyproject.toml` 为准；依赖声明变更后可重新运行脚本。
 
 在支持 stdio 的 MCP 客户端中配置，替换为本机绝对路径（JSON 中的 Windows 反斜杠应写成 `\\`，也可使用 `/`）：
 
@@ -23,7 +24,7 @@ python tools\mcp_server\server.py
   "mcpServers": {
     "br-plc-toolchain": {
       "type": "stdio",
-      "command": "python",
+      "command": "C:/path/to/br_device_autodev/.venv/Scripts/python.exe",
       "args": ["C:/path/to/br_device_autodev/tools/mcp_server/server.py"],
       "cwd": "C:/path/to/br_device_autodev"
     }
@@ -171,8 +172,11 @@ MCP server version: `0.15.2a1`
 
 ## 测试与输出
 
+需要运行测试时，先安装测试依赖：
+
 ```powershell
-python -m pytest -q
+.\.venv\Scripts\python.exe -m pip install pytest --index-url https://mirrors.aliyun.com/pypi/simple/
+.\.venv\Scripts\python.exe -m pytest -q
 ```
 
 测试以本地模拟为主，不代表本版本完成实机或 ARsim 验收。测试和调用可能生成 `var/`、`Temp/`、Python 缓存；`var/` 包含审计和历史报告，清理前应先确认保留需求。
