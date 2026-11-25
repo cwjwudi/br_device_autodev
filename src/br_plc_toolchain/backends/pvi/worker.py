@@ -147,6 +147,9 @@ class PviWorker:
                 timeout_s,
                 self.target.manager_timeout_s + self.target.startup_wait_s + link_budget + 2.0,
             )
+        elif operation == "restart":
+            wait_budget = float(arguments.get("wait_ready_timeout") or 30.0)
+            return min(max(timeout_s, wait_budget + 15.0), 180.0)
         return min(timeout_s, 60.0)
 
     def _run(self) -> None:
@@ -176,6 +179,7 @@ class PviWorker:
             "read_many": self._read_many,
             "write": self._write,
             "write_many": self._write_many,
+            "restart": self._restart,
         }
         try:
             while not self._stop.is_set():
@@ -472,6 +476,193 @@ class PviWorker:
             except Exception as exc:
                 results.append({"ok": False, **self._ref_dict(ref), "error": str(exc)})
         return {"ok": all(item["ok"] for item in results), "atomic": False, "results": results}
+
+    @staticmethod
+    def _extract_run_state(raw_status: Any) -> str | None:
+        if isinstance(raw_status, dict):
+            run_state = raw_status.get("RunState") or raw_status.get("run_state")
+            if isinstance(run_state, str) and run_state.strip():
+                value = run_state.strip().upper()
+                return "SERVICE" if value == "SERV" else value
+            st = raw_status.get("ST")
+            if isinstance(st, str) and st.strip():
+                st_up = st.strip().upper()
+                if st_up in {"BOOT", "BOOTING"}:
+                    return "BOOT"
+                if st_up in {"RESET", "ERROR", "SERV", "SERVICE"}:
+                    return "SERVICE"
+                if st_up in {"DIAG", "DIAGNOSE"}:
+                    return "DIAG"
+            return None
+        if isinstance(raw_status, str) and raw_status.strip():
+            value = raw_status.strip().upper()
+            return "SERVICE" if value == "SERV" else value
+        return None
+
+    def _restart_via_pvitransfer(self, mode: str, pvi_transfer_exe: str, timeout: float) -> None:
+        import subprocess
+        import tempfile
+        from pathlib import Path
+
+        transfer_exe = Path(pvi_transfer_exe)
+        if not transfer_exe.is_file():
+            raise FileNotFoundError(f"PVITransfer.exe not found: {transfer_exe}")
+        cmd_name = "WarmStart" if mode == "warm" else "ColdStart"
+        with tempfile.TemporaryDirectory(prefix="br_restart_") as tmp:
+            tmp_dir = Path(tmp)
+            pil_path = tmp_dir / "restart.pil"
+            log_path = tmp_dir / "restart.log"
+            lines = [
+                f'Connection "/IF=tcpip", "/IP={self.target.ip} /COMT={self.target.communication_timeout_ms} /AM=* /PT={self.target.port}", "WT=30"',
+                cmd_name,
+            ]
+            pil_path.write_text("\r\n".join(lines) + "\r\n", encoding="ascii")
+            proc = subprocess.Popen(
+                [str(transfer_exe), "-silent", f"-{pil_path}", f"-{log_path}"],
+                cwd=tmp_dir,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+            try:
+                exit_code = proc.wait(timeout=max(5.0, min(timeout, 30.0)))
+            except subprocess.TimeoutExpired as exc:
+                if os.name == "nt":
+                    subprocess.run(
+                        ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                        capture_output=True,
+                        check=False,
+                    )
+                raise TimeoutError(f"PVITransfer {cmd_name} timed out") from exc
+            log_text = log_path.read_text(encoding="utf-8", errors="replace") if log_path.exists() else ""
+            if exit_code != 0 and "PROCESS FINISHED (SUCCESS)" not in log_text:
+                raise RuntimeError(f"PVITransfer {cmd_name} failed (exit={exit_code}): {log_text[-500:]}")
+
+    def _restart(
+        self,
+        mode: str = "warm",
+        wait_ready_timeout: float = 30.0,
+        pvi_transfer_exe: str | None = None,
+    ) -> dict[str, Any]:
+        normalized_mode = mode.strip().lower()
+        if normalized_mode not in {"warm", "cold"}:
+            raise ValueError(f"Unsupported restart mode: {mode!r}. Expected 'warm' or 'cold'.")
+        started = time.monotonic()
+        wait_timeout = max(0.1, float(wait_ready_timeout))
+
+        before_raw: Any = None
+        before_status: str | None = None
+        if self._cpu is not None and self._cpu_connected:
+            try:
+                before_raw = json_safe(self._cpu.status)
+                before_status = self._extract_run_state(before_raw)
+            except Exception:
+                before_raw = None
+
+        method = "pvi"
+        pvi_error: Exception | None = None
+        try:
+            if self._cpu is None:
+                raise RuntimeError("PVI CPU object is not initialized")
+            if normalized_mode == "warm":
+                if hasattr(self._cpu, "warmStart"):
+                    self._cpu.warmStart()
+                else:
+                    self._cpu.status = "WarmStart"
+            else:
+                if hasattr(self._cpu, "coldStart"):
+                    self._cpu.coldStart()
+                else:
+                    self._cpu.status = "ColdStart"
+        except Exception as exc:
+            pvi_error = exc
+            if pvi_transfer_exe:
+                self._restart_via_pvitransfer(normalized_mode, pvi_transfer_exe, wait_timeout)
+                method = "pvitransfer"
+            else:
+                raise
+
+        # Unlink and invalidate cached variable and task objects before re-creating them after restart
+        for obj in list(self._variables.values()) + list(self._tasks.values()):
+            try:
+                if hasattr(obj, "kill"):
+                    obj.kill()
+            except Exception:
+                LOG.debug("Failed to unlink cached object %r during restart", obj, exc_info=True)
+        self._variables.clear()
+        self._tasks.clear()
+
+        # Wait briefly for the reboot transition to begin so we do not read stale pre-restart RUN state
+        deadline = started + wait_timeout
+        saw_transition = before_status not in {"RUN", "SERVICE", "DIAG"}
+        transition_wait_until = min(deadline, time.monotonic() + min(2.0, wait_timeout * 0.25))
+        while not saw_transition and time.monotonic() < transition_wait_until and not self._stop.is_set():
+            self._do_events()
+            if not self._cpu_connected:
+                saw_transition = True
+                break
+            try:
+                probe_state = self._extract_run_state(json_safe(self._cpu.status))
+                if probe_state not in {"RUN", "SERVICE", "DIAG"}:
+                    saw_transition = True
+                    break
+            except Exception:
+                saw_transition = True
+                break
+            time.sleep(min(0.1, max(0.02, transition_wait_until - time.monotonic())))
+
+        last_raw: Any = None
+        last_status: str | None = None
+        settled_states = {"RUN", "SERVICE", "DIAG"}
+
+        while time.monotonic() < deadline and not self._stop.is_set():
+            self._do_events()
+            if self._manager_connected and self._cpu_connected and self._cpu is not None:
+                try:
+                    last_raw = json_safe(self._cpu.status)
+                    last_status = self._extract_run_state(last_raw)
+                    if last_status in settled_states:
+                        # Confirm PVI object layer is responsive (e.g. tasks readable when available)
+                        if hasattr(self._cpu, "tasks"):
+                            _ = self._cpu.tasks
+                        elapsed = round(time.monotonic() - started, 3)
+                        return {
+                            "ok": True,
+                            "target": self.target.name,
+                            "mode": normalized_mode,
+                            "method": method,
+                            "before_status": before_status,
+                            "before_status_raw": before_raw,
+                            "after_status": last_status,
+                            "after_status_raw": last_raw,
+                            "elapsed_seconds": elapsed,
+                            "cache_cleared": True,
+                            **({"pvi_fallback_reason": str(pvi_error)} if pvi_error else {}),
+                        }
+                except Exception:
+                    pass
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            time.sleep(min(0.2, max(0.02, remaining)))
+
+        elapsed = round(time.monotonic() - started, 3)
+        return {
+            "ok": False,
+            "error_code": "RUNTIME_RESTART_TIMEOUT",
+            "error": (
+                f"Target {self.target.name!r} did not recover to a ready state within "
+                f"{wait_timeout:.1f}s after {normalized_mode}start."
+            ),
+            "target": self.target.name,
+            "mode": normalized_mode,
+            "method": method,
+            "before_status": before_status,
+            "after_status": last_status or "UNKNOWN",
+            "after_status_raw": last_raw,
+            "elapsed_seconds": elapsed,
+            "cache_cleared": True,
+        }
 
     def _cleanup(self) -> None:
         objects = list(self._variables.values()) + list(self._tasks.values())

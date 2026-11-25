@@ -161,8 +161,77 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "plc_provision_arsim",
-        "description": "Install the project's ARsim RUC into a new isolated working directory and start it on the configured free loopback IP.",
-        "inputSchema": build_schema({}, require_execute=True, require_timeout=True),
+        "description": "Install the project's ARsim RUC into a new isolated working directory and start it on the configured free loopback IP. Optionally replaces an owned instance of the same project target when replace_existing=true.",
+        "inputSchema": build_schema(
+            {
+                "replace_existing": {
+                    "type": "boolean",
+                    "description": "If true with execute=true, safely stop an existing registered ARsim instance owned by the same project and target on that IP before provisioning. Never stops external or other-project instances.",
+                    "default": False,
+                },
+            },
+            require_execute=True,
+            require_timeout=True,
+        ),
+    },
+    {
+        "name": "plc_manage_arsim",
+        "description": "Manage codex-arsim instances registered in var/arsim/instances.json: list live status (read-only with execute=false), safely stop or restart owned instances with executable-path verification, or clean stopped codex-arsim directories.",
+        "inputSchema": required_schema(
+            build_schema(
+                {
+                    "action": {
+                        "type": "string",
+                        "description": "Lifecycle action to perform.",
+                        "enum": ["list", "stop", "restart", "clean"],
+                    },
+                    "run_id": {
+                        "type": "string",
+                        "description": "Optional ARsim run_id to filter or target.",
+                        "minLength": 1,
+                    },
+                    "keep_latest": {
+                        "type": "integer",
+                        "description": "When action='clean', number of newest stopped codex-arsim directories to retain.",
+                        "minimum": 0,
+                        "default": 2,
+                    },
+                },
+                require_execute=True,
+                require_timeout=True,
+            ),
+            "action",
+            "execute",
+        ),
+    },
+    {
+        "name": "plc_init_project_config",
+        "description": "Auto-discover an Automation Studio .apj, Physical/Physical.pkg configurations, SimulationIPAddress, and matching toolchain to preview (execute=false) or write (execute=true) br-auto-dev.json.",
+        "inputSchema": required_schema(
+            build_schema(
+                {
+                    "template": {
+                        "type": "string",
+                        "description": "Target preset template for the generated br-auto-dev.json.",
+                        "enum": ["arsim", "test_plc_whitelist", "test_plc_blacklist"],
+                        "default": "arsim",
+                    },
+                    "ip": {
+                        "type": "string",
+                        "description": "Optional target IP override (defaults to discovered SimulationIPAddress or 127.0.0.1 for arsim).",
+                        "minLength": 1,
+                    },
+                    "overwrite": {
+                        "type": "boolean",
+                        "description": "Allow overwriting an existing br-auto-dev.json when execute=true.",
+                        "default": False,
+                    },
+                },
+                require_execute=True,
+            ),
+            "project_path",
+            "execute",
+        ),
     },
     {
         "name": "plc_doctor",
@@ -498,6 +567,35 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                     "description": "Keep intermediate .pil and .pvitransfer.log files after a successful read.",
                     "default": False,
                 },
+                "mode": {
+                    "type": "string",
+                    "description": "Read mode: 'single' for one module (default) or 'aggregate' to pull System/User/Motion/Fieldbus and merge filtered events.",
+                    "enum": ["single", "aggregate"],
+                    "default": "single",
+                },
+                "modules": {
+                    "type": "array",
+                    "description": "Optional logger module list for mode='aggregate' (e.g. ['System/$arlogsys', 'Motion/$motion']). Safety modules are always blocked.",
+                    "items": {"type": "string", "minLength": 1},
+                },
+                "min_severity": {
+                    "type": "string",
+                    "description": "Minimum severity threshold for mode='aggregate'.",
+                    "enum": ["info", "warning", "error"],
+                    "default": "warning",
+                },
+                "since_minutes": {
+                    "type": "number",
+                    "description": "Optional lookback window in minutes for mode='aggregate'.",
+                    "minimum": 0,
+                },
+                "max_entries": {
+                    "type": "integer",
+                    "description": "Maximum merged events to return in mode='aggregate' (default 50, max 200).",
+                    "minimum": 1,
+                    "maximum": 200,
+                    "default": 50,
+                },
             }
         ),
     },
@@ -824,12 +922,39 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "target", "name", "value", "execute",
         ),
     },
+    {
+        "name": "plc_control_runtime",
+        "description": "Trigger a policy-checked PLC/ARsim Warmstart or Coldstart via PVI (with controlled PVITransfer fallback), clear cached PVI objects, and wait for runtime recovery. Requires execute=true; production is permanently denied.",
+        "inputSchema": runtime_schema(
+            {
+                "action": {
+                    "type": "string",
+                    "description": "Runtime restart action.",
+                    "enum": ["warmstart", "coldstart"],
+                },
+                "execute": {
+                    "type": "boolean",
+                    "description": "Must be set to true to perform the restart.",
+                },
+                "timeout_seconds": {
+                    "type": "integer",
+                    "description": "Maximum seconds to wait for target recovery after restart.",
+                    "minimum": 1,
+                    "maximum": 180,
+                    "default": 30,
+                },
+            },
+            "target", "action", "execute",
+        ),
+    },
 ]
 
 
 TOOL_RISK_LEVELS: dict[str, str] = {
     "plc_check_arsim_occupancy": "readonly",
     "plc_provision_arsim": "target_change",
+    "plc_manage_arsim": "target_change",
+    "plc_init_project_config": "project_write",
     "plc_doctor": "readonly",
     "plc_validate_environment": "readonly",
     "plc_list_reports": "readonly",
@@ -875,11 +1000,14 @@ TOOL_RISK_LEVELS: dict[str, str] = {
     "plc_open_test_session": "target_change",
     "plc_close_test_session": "local_write",
     "plc_write_runtime_variable": "target_change",
+    "plc_control_runtime": "target_change",
 }
 
 TOOL_BACKENDS: dict[str, str] = {
     "plc_check_arsim_occupancy": "p802 occupancy sampler",
     "plc_provision_arsim": "PVITransfer offline commissioning",
+    "plc_manage_arsim": "ARsim registry & process manager",
+    "plc_init_project_config": "project_init.py",
     "plc_doctor": "MCP native diagnostics",
     "plc_validate_environment": "MCP native diagnostics",
     "plc_list_reports": "MCP native report index",
@@ -925,6 +1053,7 @@ TOOL_BACKENDS: dict[str, str] = {
     "plc_open_test_session": "runtime test-session policy",
     "plc_close_test_session": "runtime test-session policy",
     "plc_write_runtime_variable": "persistent PVI runtime + policy",
+    "plc_control_runtime": "persistent PVI runtime + policy",
 }
 
 CONFIRMATION_REQUIRED_RISK_LEVELS = {"project_write", "target_change"}

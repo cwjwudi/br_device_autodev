@@ -7,12 +7,13 @@ description: Use the B&R PLC MCP tools and public PviClient Python SDK to build,
 
 ## 1. Project & Deployment Baseline
 
-- Read the project `br-auto-dev.json`; do not guess the project, target, toolchain, IP, or test values.
+- Read the project `br-auto-dev.json`; do not guess the project, target, toolchain, IP, or test values. If a new project lacks `br-auto-dev.json`, run `plc_init_project_config(project_path=..., execute=false)` to preview discovered `.apj`/Config/toolchain settings and `execute=true` to write it.
 - Use `plc_validate_environment` and `plc_doctor`, then `plc_build_project` with `build_ruc_package=true`.
-- For a fresh ARsim, check `plc_check_arsim_occupancy`, then call `plc_provision_arsim` with the explicit target and `execute=true`. It installs the RUC to a new subdirectory of `arsim_work_dir` or `<project>/Temp/Simulation`.
+- For a fresh ARsim, check `plc_check_arsim_occupancy`, then call `plc_provision_arsim` with the explicit target and `execute=true` (pass `replace_existing=true` only to replace an owned instance of the same project target). Use `plc_manage_arsim` (`list` with `execute=false`; `stop`/`restart`/`clean` with `execute=true`) to inspect, safely stop/restart, and clean up `codex-arsim` instances.
 - AS4 uses the project's `SimulationIPAddress` (default `127.0.0.1`); if it differs from the target, fix the simulation configuration and rebuild before provisioning.
 - An occupied IP is not a reservation and must not be taken over. Inspect ownership; do not stop another project.
-- Provisioning confirms an owned listener, not RUN or application correctness. Use `plc_discover_runtime_target` and `plc_read_runtime_variable` / `plc_read_pvi_batch` or task-specific log checks to verify feedback.
+- Provisioning confirms an owned listener, not RUN or application correctness. Use `plc_discover_runtime_target` and `plc_read_runtime_variable` / `plc_read_pvi_batch` or `plc_read_logger(mode="aggregate", min_severity="warning")` to verify feedback and diagnose multi-module errors (Safety logger modules are always blocked).
+- To recover from `SERVICE` mode or reset runtime state on ARsim or an explicitly authorized test PLC, use `plc_control_runtime(target=..., action="warmstart"|"coldstart", execute=true)` (or `plc.restart(mode="warm", execute=True)` in `PviClient`). `production` targets permanently deny runtime control.
 - To update an existing target, use `plc_check_download` and review identity and warnings, then `plc_download_ruc` with explicit authorization and `execute=true`. Never bypass a failed safety check.
 - Bound waits and retries. After a timeout or unknown transfer result, inspect target state and logs before attempting another change.
 

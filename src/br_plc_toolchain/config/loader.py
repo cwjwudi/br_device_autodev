@@ -164,6 +164,8 @@ def load_project_config(
             raise ValueError(f"Invalid role for target {name!r} in {path}")
         if "allow_auto_download" in target and not isinstance(target["allow_auto_download"], bool):
             raise ValueError(f"allow_auto_download for target {name!r} must be a boolean")
+        if "allow_runtime_control" in target and not isinstance(target["allow_runtime_control"], bool):
+            raise ValueError(f"allow_runtime_control for target {name!r} must be a boolean")
         try:
             ip = ipaddress.ip_address(target.get("ip", ""))
         except (TypeError, ValueError) as exc:
@@ -171,7 +173,11 @@ def load_project_config(
         if target["role"] == "arsim" and not ip.is_loopback:
             raise ValueError(f"ARsim target {name!r} must use a loopback IP")
     if "access_policy" in data:
-        raise ValueError(f"Project configuration {path} contains removed access_policy; review and remove it")
+        raise ValueError(
+            f"Project configuration {path} contains removed access_policy; migrate to: "
+            "pvi.write_policy ('whitelist' or 'blacklist') + pvi.write_whitelist / pvi.write_blacklist, "
+            "and per-target targets.<name>.allow_auto_download (boolean), then remove access_policy."
+        )
     pvi = data.get("pvi", {})
     if not isinstance(pvi, dict) or pvi.get("write_policy", "whitelist") not in ("whitelist", "blacklist"):
         raise ValueError(f"Project configuration {path} requires a valid pvi.write_policy")

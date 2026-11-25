@@ -109,8 +109,25 @@ def resolve_scope_context(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def lock_keys_for_tool(tool: str, arguments: dict[str, Any]) -> list[str]:
+    if tool == "plc_init_project_config":
+        raw_proj = str(arguments.get("project_path") or "").strip()
+        if not raw_proj:
+            return []
+        return [f"project_init:{_repo_path(raw_proj).resolve()}"]
+    if tool == "plc_manage_arsim":
+        action = str(arguments.get("action") or "list").strip().lower()
+        if action == "list":
+            return []
+        keys = ["arsim:allocation"]
+        try:
+            context = resolve_scope_context(arguments)
+            if context.get("target_ip"):
+                keys.append(f"target:{context['target_ip']}")
+        except (ValueError, OSError):
+            pass
+        return sorted(set(keys))
     context = resolve_scope_context(arguments)
-    keys: list[str] = []
+    keys = []
     if tool == "plc_provision_arsim":
         keys.append("arsim:allocation")
     if tool in PROJECT_SCOPED_TOOLS:

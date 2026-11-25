@@ -1039,6 +1039,30 @@ def plc_read_logger(arguments: dict[str, Any]) -> dict[str, Any]:
         require_config_opt_in = not bool(target_ip)
 
     logger_mod = _load_plc_logger_module()
+    mode = str(arguments.get("mode") or "single").strip().lower()
+    if mode == "aggregate":
+        modules = arguments.get("modules")
+        min_severity = str(arguments.get("min_severity") or "warning")
+        since_minutes = arguments.get("since_minutes")
+        max_entries = int(arguments.get("max_entries") or 50)
+        data = logger_mod.diagnose_loggers(
+            target=target,
+            pvi_transfer_path=chain.pvi_transfer_exe,
+            modules=modules,
+            min_severity=min_severity,
+            since_minutes=float(since_minutes) if since_minutes is not None else None,
+            max_entries=max_entries,
+            output_path=output_path,
+            config=config,
+            targets_file=targets_file,
+            target_ip=target_ip,
+            target_role=target_role,
+            require_config_opt_in=require_config_opt_in,
+            timeout_seconds=int(arguments.get("timeout_seconds") or 120),
+            keep_temp_files=keep_temp_files,
+            repo_root=REPO_ROOT,
+        )
+        return wrap_result("plc_read_logger", "ReadLoggerAggregate", data, target)
     data = logger_mod.read_logger(
         target=target,
         logger_type=logger_type,
@@ -1873,6 +1897,32 @@ def plc_write_runtime_variable(arguments: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def plc_control_runtime(arguments: dict[str, Any]) -> dict[str, Any]:
+    from br_plc_toolchain.config import resolve_toolchain
+
+    service, target = _ensure_runtime_target(arguments)
+    action = str(arguments.get("action") or "").strip().lower()
+    if action not in {"warmstart", "coldstart"}:
+        raise ValueError("action must be 'warmstart' or 'coldstart'")
+    pvi_transfer_exe: str | None = None
+    try:
+        options = resolve_call_options(arguments)
+        chain = resolve_toolchain(
+            options["toolchain"] or None,
+            registry_path=options["toolchains_path"] or None,
+        )
+        pvi_transfer_exe = str(chain.pvi_transfer_exe)
+    except Exception:
+        pvi_transfer_exe = None
+    return service.restart_target(
+        target,
+        mode=action,
+        execute=arguments.get("execute") is True,
+        timeout_seconds=float(arguments.get("timeout_seconds") or 30),
+        pvi_transfer_exe=pvi_transfer_exe,
+    )
+
+
 def plc_check_arsim_occupancy(arguments: dict[str, Any]) -> dict[str, Any]:
     import ipaddress
 
@@ -1898,12 +1948,94 @@ def plc_provision_arsim(arguments: dict[str, Any]) -> dict[str, Any]:
     if not package.get("ok") or package.get("cpu_type") != "AR000" or package.get("runtime_type") != "AR Simulation":
         raise ValueError("Project RUC is not a confirmed ARsim package")
     chain = resolve_toolchain(options["toolchain"] or None, registry_path=options["toolchains_path"] or None)
-    return provision(options, target_config, package, chain, plc_check_arsim_occupancy, int(arguments.get("timeout_seconds") or 180))
+    return provision(
+        options,
+        target_config,
+        package,
+        chain,
+        plc_check_arsim_occupancy,
+        int(arguments.get("timeout_seconds") or 180),
+        replace_existing=arguments.get("replace_existing") is True,
+    )
+
+
+def plc_manage_arsim(arguments: dict[str, Any]) -> dict[str, Any]:
+    import arsim_registry
+
+    action = str(arguments.get("action") or "").strip().lower()
+    if action not in {"list", "stop", "restart", "clean"}:
+        raise ValueError("action must be one of: list, stop, restart, clean")
+
+    project_path = arguments.get("project_path")
+    if isinstance(project_path, str) and project_path.strip():
+        candidate = Path(project_path)
+        if not candidate.is_absolute():
+            candidate = REPO_ROOT / candidate
+        project_path = str(candidate.resolve())
+    else:
+        project_path = None
+
+    target = str(arguments["target"]).strip() if arguments.get("target") else None
+    run_id = str(arguments["run_id"]).strip() if arguments.get("run_id") else None
+    execute = arguments.get("execute") is True
+    timeout_seconds = int(arguments.get("timeout_seconds") or 30)
+
+    if action == "list":
+        return arsim_registry.list_arsim_instances(
+            project_path=project_path,
+            target=target,
+            run_id=run_id,
+        )
+    if action == "stop":
+        return arsim_registry.stop_arsim_instance(
+            project_path=project_path,
+            target=target,
+            run_id=run_id,
+            execute=execute,
+            occupancy=plc_check_arsim_occupancy,
+            timeout_seconds=timeout_seconds,
+        )
+    if action == "restart":
+        return arsim_registry.restart_arsim_instance(
+            project_path=project_path,
+            target=target,
+            run_id=run_id,
+            execute=execute,
+            occupancy=plc_check_arsim_occupancy,
+            timeout_seconds=timeout_seconds,
+        )
+    keep_latest = int(arguments.get("keep_latest") if arguments.get("keep_latest") is not None else 2)
+    return arsim_registry.clean_arsim_directories(
+        project_path=project_path,
+        target=target,
+        run_id=run_id,
+        keep_latest=keep_latest,
+        execute=execute,
+    )
+
+
+def plc_init_project_config(arguments: dict[str, Any]) -> dict[str, Any]:
+    import project_init
+
+    return project_init.init_project_config(
+        project_path=str(arguments.get("project_path") or ""),
+        template=str(arguments.get("template") or "arsim"),
+        config=str(arguments["config"]).strip() if arguments.get("config") else None,
+        ip=str(arguments["ip"]).strip() if arguments.get("ip") else None,
+        target=str(arguments["target"]).strip() if arguments.get("target") else None,
+        toolchain=str(arguments["toolchain"]).strip() if arguments.get("toolchain") else None,
+        toolchains_path=arguments.get("toolchains_path"),
+        overwrite=arguments.get("overwrite") is True,
+        execute=arguments.get("execute") is True,
+        repo_root=REPO_ROOT,
+    )
 
 
 TOOLS = {
     "plc_check_arsim_occupancy": plc_check_arsim_occupancy,
     "plc_provision_arsim": plc_provision_arsim,
+    "plc_manage_arsim": plc_manage_arsim,
+    "plc_init_project_config": plc_init_project_config,
     "plc_doctor": plc_doctor,
     "plc_validate_environment": plc_validate_environment,
     "plc_list_reports": plc_list_reports,
@@ -1949,4 +2081,5 @@ TOOLS = {
     "plc_open_test_session": plc_open_test_session,
     "plc_close_test_session": plc_close_test_session,
     "plc_write_runtime_variable": plc_write_runtime_variable,
+    "plc_control_runtime": plc_control_runtime,
 }

@@ -46,6 +46,7 @@ def test_creates_fresh_runtime_in_work_directory(tmp_path, monkeypatch, family, 
             conflicts = [{"port": 11169, "path": str(runtime / "ar000.exe"), "pid": 100}]
         return {"ok": True, "slots": [{"state": "blocked" if conflicts else "free", "conflicts": conflicts}]}
 
+    monkeypatch.setattr(arsim_provision.arsim_registry, "DEFAULT_REGISTRY_PATH", tmp_path / "instances.json")
     result = arsim_provision.provision(options, target, {"package_path": str(package)}, chain, occupancy, 10)
     assert result["ok"] and result["runtime_pid"] == 100
     assert Path(result["runtime_directory"]).is_relative_to(work_root)

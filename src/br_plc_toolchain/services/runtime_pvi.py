@@ -314,6 +314,62 @@ class RuntimePviService:
         result["session_id"] = session_id
         return result
 
+    def restart_target(
+        self,
+        target_name: str,
+        *,
+        mode: str = "warm",
+        execute: bool = False,
+        timeout_seconds: float = 30.0,
+        pvi_transfer_exe: str | None = None,
+    ) -> dict[str, Any]:
+        normalized = str(mode or "").strip().lower()
+        mode_map = {
+            "warm": "warm",
+            "warmstart": "warm",
+            "cold": "cold",
+            "coldstart": "cold",
+        }
+        if normalized not in mode_map:
+            raise ValueError(f"Unsupported restart mode {mode!r}; expected 'warmstart'/'warm' or 'coldstart'/'cold'.")
+        resolved_mode = mode_map[normalized]
+        target, config = self._resolve(target_name)
+
+        if target.role == "production":
+            raise PermissionError(
+                "POLICY_DENIED: Runtime control (warmstart/coldstart) is permanently denied for production targets."
+            )
+        if not execute:
+            raise PermissionError(
+                "CONFIRMATION_REQUIRED: Runtime control (warmstart/coldstart) requires execute=true."
+            )
+        if target.role == "arsim":
+            pass
+        elif target.role in {"dedicated_test_plc", "test_plc"}:
+            targets_map = config.get("targets") if isinstance(config.get("targets"), dict) else {}
+            target_cfg = targets_map.get(target_name) if isinstance(targets_map.get(target_name), dict) else {}
+            if not target_cfg and isinstance(config.get("target"), dict):
+                target_cfg = config["target"]
+            allow_ctrl = target_cfg.get("allow_runtime_control") is True
+            allow_dl = target_cfg.get("allow_auto_download") is True
+            if not (allow_ctrl or allow_dl):
+                raise PermissionError(
+                    "POLICY_DENIED: Runtime control on a physical test PLC requires "
+                    "allow_runtime_control=true (or allow_auto_download=true) in target configuration."
+                )
+        else:
+            raise PermissionError(
+                f"POLICY_DENIED: Runtime control is not permitted for target role {target.role!r}."
+            )
+
+        return self.manager.call(
+            target,
+            "restart",
+            mode=resolved_mode,
+            wait_ready_timeout=float(timeout_seconds),
+            pvi_transfer_exe=pvi_transfer_exe,
+        )
+
     def _write_manifest(self, target_name: str, manifest: dict[str, Any]) -> None:
         validate_target_name(target_name)
         self.discovery_root.mkdir(parents=True, exist_ok=True)

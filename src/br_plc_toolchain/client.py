@@ -424,6 +424,22 @@ class PviClient:
         self._ensure_open()
         return self.service.close_test_session(session_id)
 
+    def restart(
+        self,
+        mode: str = "warm",
+        *,
+        execute: bool = False,
+        timeout_seconds: float = 30.0,
+    ) -> dict[str, Any]:
+        """Perform a policy-checked Warmstart or Coldstart on the target PLC/ARsim."""
+        self._ensure_open()
+        return self.service.restart_target(
+            self.target_name,
+            mode=mode,
+            execute=execute,
+            timeout_seconds=timeout_seconds,
+        )
+
     def wait_until(
         self,
         variable: VariableRef | str | Sequence[VariableRef | str],

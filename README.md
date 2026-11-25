@@ -151,12 +151,14 @@ with PviClient.from_project(r"C:\path\to\project", target="arsim") as plc:
 <!-- BEGIN GENERATED MCP TOOL CATALOG -->
 当前 MCP 工具清单：
 
-MCP server version: `0.15.2a1`
+MCP server version: `0.16.0a1`
 
 | MCP Tool | Risk | Backend | Confirmation | Description |
 | --- | --- | --- | --- | --- |
 | `plc_check_arsim_occupancy` | `readonly` | `p802 occupancy sampler` | - | Sample local ARsim address conflicts using p802 TCP/UDP occupancy rules; free is not a reservation. |
-| `plc_provision_arsim` | `target_change` | `PVITransfer offline commissioning` | `execute=true` | Install the project's ARsim RUC into a new isolated working directory and start it on the configured free loopback IP. |
+| `plc_provision_arsim` | `target_change` | `PVITransfer offline commissioning` | `execute=true` | Install the project's ARsim RUC into a new isolated working directory and start it on the configured free loopback IP. Optionally replaces an owned instance of the same project target when replace_existing=true. |
+| `plc_manage_arsim` | `target_change` | `ARsim registry & process manager` | `execute=true` | Manage codex-arsim instances registered in var/arsim/instances.json: list live status (read-only with execute=false), safely stop or restart owned instances with executable-path verification, or clean stopped codex-arsim directories. |
+| `plc_init_project_config` | `project_write` | `project_init.py` | `execute=true` | Auto-discover an Automation Studio .apj, Physical/Physical.pkg configurations, SimulationIPAddress, and matching toolchain to preview (execute=false) or write (execute=true) br-auto-dev.json. |
 | `plc_doctor` | `readonly` | `MCP native diagnostics` | - | Check local Python, PowerShell, Automation Studio, PVITransfer, PVI Python dependency, target config, project/config, ARsim loader, and generated-output write access. |
 | `plc_validate_environment` | `readonly` | `MCP native diagnostics` | - | Validate the project configuration, toolchain, and target without connecting to a PLC. |
 | `plc_list_reports` | `readonly` | `MCP native report index` | - | List compact metadata for historical JSON reports under var/reports without returning report bodies. |
@@ -187,6 +189,7 @@ MCP server version: `0.15.2a1`
 | `plc_read_pvi_trace` | `readonly` | `Runtime PVI TraceManager` | - | Read a bounded time range from a Runtime PVI trace as compact columnar rows. |
 | `plc_stop_pvi_trace` | `local_write` | `Runtime PVI TraceManager` | - | Stop a Runtime PVI trace and return its final compact summary. Idempotent for completed traces. |
 | `plc_write_runtime_variable` | `target_change` | `persistent PVI runtime + policy` | `execute=true` | Write a discovered variable under the project PVI policy; requires execute=true. |
+| `plc_control_runtime` | `target_change` | `persistent PVI runtime + policy` | `execute=true` | Trigger a policy-checked PLC/ARsim Warmstart or Coldstart via PVI (with controlled PVITransfer fallback), clear cached PVI objects, and wait for runtime recovery. Requires execute=true; production is permanently denied. |
 
 
 ## Hidden Tools

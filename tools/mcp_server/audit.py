@@ -27,6 +27,7 @@ PVI_ACCESS_TOOLS = {
     "plc_get_runtime_variable_info",
     "plc_read_runtime_variable",
     "plc_write_runtime_variable",
+    "plc_control_runtime",
     "plc_start_pvi_trace",
     "plc_get_pvi_trace_status",
     "plc_read_pvi_trace",
@@ -141,7 +142,18 @@ def write_audit_event(
     directory: Path = AUDIT_DIR,
 ) -> str:
     now = datetime.now(timezone.utc)
-    context = resolve_scope_context(arguments)
+    try:
+        context = resolve_scope_context(arguments)
+    except (ValueError, OSError):
+        context = {
+            "environment": arguments.get("environment"),
+            "target": arguments.get("target"),
+            "project_path": arguments.get("project_path"),
+            "config": arguments.get("config"),
+            "targets_path": arguments.get("targets_path"),
+            "target_role": None,
+            "target_ip": arguments.get("ip"),
+        }
     payload = {
         "schema_version": 2,
         "event_id": uuid.uuid4().hex,

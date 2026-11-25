@@ -22,6 +22,27 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "var" / "logger"
 ALLOWED_FORMATS = {".html", ".csvx", ".arl", ".logpkg"}
 DEFAULT_FORMAT = ".csvx"
+DEFAULT_DIAGNOSTIC_MODULES: list[tuple[str, str]] = [
+    ("System", "$arlogsys"),
+    ("User", "$arlogusr"),
+    ("Motion", "$motion"),
+    ("Fieldbus", "$fieldbus"),
+]
+SEVERITY_RANKS: dict[str, int] = {
+    "info": 1,
+    "information": 1,
+    "success": 1,
+    "notice": 1,
+    "0": 1,
+    "1": 1,
+    "warning": 2,
+    "warn": 2,
+    "2": 2,
+    "error": 3,
+    "fatal": 3,
+    "critical": 3,
+    "3": 3,
+}
 SUCCESS_MARKER_RE = re.compile(r"PROCESS FINISHED \(SUCCESS\)|Transfer .* SUCCESSFUL", re.IGNORECASE)
 FAILURE_MARKER_RE = re.compile(r"PROCESS FINISHED \((?:FAILURE|ERROR)\)|Transfer .* (?:FAILED|ERROR)", re.IGNORECASE)
 
@@ -588,6 +609,314 @@ def read_logger(
         report["log_path"] = None
 
     return report
+
+
+def _normalize_severity_rank(value: str | None) -> int:
+    if not value:
+        return 1
+    return SEVERITY_RANKS.get(value.strip().lower(), 1)
+
+
+def _parse_logger_timestamp(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    # Try ISO-8601 first
+    iso_candidate = text[:-1] + "+00:00" if text.endswith("Z") else text
+    try:
+        dt = datetime.fromisoformat(iso_candidate)
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except ValueError:
+        pass
+    for fmt in (
+        "%Y-%m-%d %H:%M:%S.%f",
+        "%Y-%m-%d %H:%M:%S",
+        "%d.%m.%Y %H:%M:%S.%f",
+        "%d.%m.%Y %H:%M:%S",
+        "%Y/%m/%d %H:%M:%S.%f",
+        "%Y/%m/%d %H:%M:%S",
+    ):
+        try:
+            return datetime.strptime(text, fmt).replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+    return None
+
+
+def _normalize_module_specs(
+    modules: list[Any] | None,
+) -> list[tuple[str, str]]:
+    if not modules:
+        return list(DEFAULT_DIAGNOSTIC_MODULES)
+    result: list[tuple[str, str]] = []
+    for item in modules:
+        if isinstance(item, dict):
+            ltype = str(item.get("logger_type") or item.get("type") or "Named").strip()
+            lname = str(item.get("logger_name") or item.get("name") or "").strip()
+            if lname:
+                result.append((ltype, lname))
+        elif isinstance(item, (tuple, list)) and len(item) == 2:
+            result.append((str(item[0]).strip(), str(item[1]).strip()))
+        elif isinstance(item, str) and item.strip():
+            raw = item.strip()
+            if ":" in raw:
+                ltype, lname = raw.split(":", 1)
+                result.append((ltype.strip(), lname.strip()))
+            elif "/" in raw:
+                ltype, lname = raw.split("/", 1)
+                result.append((ltype.strip(), lname.strip()))
+            else:
+                default_type = next((t for t, n in DEFAULT_DIAGNOSTIC_MODULES if n.casefold() == raw.casefold()), "Named")
+                result.append((default_type, raw))
+    return result
+
+
+def _extract_compact_entries(path: Path, module_label: str) -> list[dict[str, Any]]:
+    text = path.read_text(encoding="utf-8-sig", errors="replace")
+    rows = _parse_csvx_rows(text)
+
+    time_keys = ("Time", "Timestamp", "DateTime", "Date/Time", "time", "timestamp")
+    severity_keys = ("Severity", "Level", "Type", "ErrorLevel", "severity", "level")
+    event_id_keys = ("Event ID", "EventId", "event_id", "ID", "Code", "ErrorCode", "code", "id")
+    object_id_keys = ("Object ID", "ObjectId", "object_id", "Entered by", "Origin", "TaskName", "entered_by", "origin")
+    desc_keys = ("Description", "ASCII Data", "Message", "Text", "Event", "description", "message", "text")
+
+    entries: list[dict[str, Any]] = []
+    for row in rows:
+        timestamp = next((str(row.get(k)) for k in time_keys if row.get(k)), None)
+        severity = next((str(row.get(k)) for k in severity_keys if row.get(k)), "unknown")
+        event_id = next((str(row.get(k)) for k in event_id_keys if row.get(k)), None)
+        object_id = next((str(row.get(k)) for k in object_id_keys if row.get(k)), None)
+        description = next((str(row.get(k)) for k in desc_keys if row.get(k)), None)
+        entries.append(
+            {
+                "timestamp": timestamp,
+                "module": module_label,
+                "severity": severity,
+                "event_id": event_id,
+                "object_id": object_id,
+                "description": description,
+            }
+        )
+    return entries
+
+
+def diagnose_loggers(
+    *,
+    target: str,
+    pvi_transfer_path: str | Path,
+    modules: list[Any] | None = None,
+    min_severity: str = "warning",
+    since_minutes: float | None = None,
+    max_entries: int = 50,
+    output_path: str | None = None,
+    config: dict[str, Any] | None = None,
+    targets_file: str | Path | None = None,
+    target_ip: str | None = None,
+    target_role: str | None = None,
+    require_config_opt_in: bool = True,
+    timeout_seconds: int = 120,
+    keep_temp_files: bool = False,
+    repo_root: Path = REPO_ROOT,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Pull multiple logger modules and merge compact filtered events in reverse chronological order."""
+    min_sev = str(min_severity or "warning").strip().lower()
+    if min_sev not in {"info", "warning", "error"}:
+        raise ValueError(f"Unsupported min_severity {min_severity!r}; expected 'info', 'warning', or 'error'.")
+    min_rank = _normalize_severity_rank(min_sev)
+    bounded_max = max(1, min(int(max_entries or 50), 200))
+
+    specs = _normalize_module_specs(modules)
+    if not specs:
+        raise ValueError("At least one logger module must be specified.")
+
+    loaded_config = config
+    if loaded_config is None and targets_file:
+        config_path = Path(targets_file)
+        if not config_path.is_absolute():
+            config_path = repo_root / config_path
+        loaded_config = load_json_file(config_path.resolve())
+
+    if loaded_config is not None and require_config_opt_in and not is_logger_enabled(loaded_config):
+        return {
+            "command": "ReadLoggerAggregate",
+            "mode": "aggregate",
+            "ok": False,
+            "target": target,
+            "error_code": "POLICY_DENIED",
+            "error_summary": (
+                "Logger download is not enabled in project configuration. "
+                "Set logger.enabled = true (or allow_logger = true) to allow downloading logger modules."
+            ),
+            "modules": [],
+            "blocked_modules": [],
+            "entries": [],
+        }
+
+    started = time.monotonic()
+    deadline = started + max(5, int(timeout_seconds))
+    reference_now = now or datetime.now(timezone.utc)
+    cutoff_dt = (
+        datetime.fromtimestamp(reference_now.timestamp() - float(since_minutes) * 60.0, tz=timezone.utc)
+        if since_minutes is not None
+        else None
+    )
+
+    module_results: list[dict[str, Any]] = []
+    blocked_modules: list[dict[str, Any]] = []
+    csvx_paths: dict[str, str] = {}
+    all_entries: list[dict[str, Any]] = []
+    total_before_filter = 0
+
+    for idx, (logger_type, logger_name) in enumerate(specs):
+        module_label = f"{logger_type}/{logger_name}"
+        if "safety" in logger_type.lower() or "safety" in logger_name.lower():
+            blocked_info = {
+                "logger_type": logger_type,
+                "logger_name": logger_name,
+                "module": module_label,
+                "status": "blocked_safety",
+                "error_code": "SAFETY_LOGGER_BLOCKED",
+                "error_summary": f"Logger module '{logger_type} / {logger_name}' is blocked by immutable safety policy.",
+            }
+            blocked_modules.append(blocked_info)
+            module_results.append(blocked_info)
+            continue
+
+        remaining = deadline - time.monotonic()
+        if remaining <= 1.0:
+            module_results.append(
+                {
+                    "logger_type": logger_type,
+                    "logger_name": logger_name,
+                    "module": module_label,
+                    "status": "skipped_timeout",
+                    "error_summary": "Total aggregate logger time budget exhausted.",
+                }
+            )
+            continue
+
+        remaining_count = max(1, len(specs) - idx)
+        per_module_timeout = max(5, int(min(remaining, max(15.0, remaining / remaining_count))))
+        single = read_logger(
+            target=target,
+            logger_type=logger_type,
+            logger_name=logger_name,
+            fmt=".csvx",
+            output_path=output_path,
+            pvi_transfer_path=pvi_transfer_path,
+            config=loaded_config,
+            targets_file=targets_file,
+            target_ip=target_ip,
+            target_role=target_role,
+            require_config_opt_in=require_config_opt_in,
+            timeout_seconds=per_module_timeout,
+            summary_limit=1,
+            keep_temp_files=keep_temp_files,
+            repo_root=repo_root,
+        )
+
+        if not single.get("ok"):
+            module_results.append(
+                {
+                    "logger_type": logger_type,
+                    "logger_name": logger_name,
+                    "module": module_label,
+                    "status": "missing_or_empty",
+                    "output_path": single.get("output_path"),
+                    "error_summary": single.get("error_summary"),
+                }
+            )
+            continue
+
+        out_file = Path(str(single["output_path"]))
+        csvx_paths[module_label] = str(out_file)
+        try:
+            parsed = _extract_compact_entries(out_file, module_label)
+        except Exception as exc:
+            module_results.append(
+                {
+                    "logger_type": logger_type,
+                    "logger_name": logger_name,
+                    "module": module_label,
+                    "status": "parse_error",
+                    "output_path": str(out_file),
+                    "error_summary": repr(exc),
+                }
+            )
+            continue
+
+        total_before_filter += len(parsed)
+        matched_in_module = 0
+        for entry in parsed:
+            if _normalize_severity_rank(entry.get("severity")) < min_rank:
+                continue
+            if cutoff_dt is not None:
+                entry_dt = _parse_logger_timestamp(entry.get("timestamp"))
+                if entry_dt is None or entry_dt < cutoff_dt:
+                    continue
+            all_entries.append(entry)
+            matched_in_module += 1
+
+        module_results.append(
+            {
+                "logger_type": logger_type,
+                "logger_name": logger_name,
+                "module": module_label,
+                "status": "ok" if parsed else "missing_or_empty",
+                "output_path": str(out_file),
+                "total_entries": len(parsed),
+                "filtered_entries": matched_in_module,
+            }
+        )
+
+    def _sort_key(entry: dict[str, Any]) -> tuple[int, float, str]:
+        dt = _parse_logger_timestamp(entry.get("timestamp"))
+        if dt is not None:
+            return (1, dt.timestamp(), str(entry.get("timestamp") or ""))
+        return (0, 0.0, str(entry.get("timestamp") or ""))
+
+    all_entries.sort(key=_sort_key, reverse=True)
+    selected = all_entries[:bounded_max]
+
+    succeeded_count = sum(1 for item in module_results if item["status"] == "ok")
+    if succeeded_count == 0 and blocked_modules:
+        ok = False
+        error_code = "SAFETY_LOGGER_BLOCKED"
+        error_summary = blocked_modules[0]["error_summary"]
+    elif succeeded_count == 0:
+        ok = False
+        error_code = "LOGGER_AGGREGATE_EMPTY"
+        error_summary = "No requested logger modules could be retrieved."
+    else:
+        ok = True
+        error_code = None
+        error_summary = None
+
+    return {
+        "command": "ReadLoggerAggregate",
+        "mode": "aggregate",
+        "ok": ok,
+        "target": target,
+        "min_severity": min_sev,
+        "since_minutes": since_minutes,
+        "max_entries": bounded_max,
+        "total_entries_before_filter": total_before_filter,
+        "total_entries_after_filter": len(all_entries),
+        "returned_entries": len(selected),
+        "entries": selected,
+        "modules": module_results,
+        "blocked_modules": blocked_modules,
+        "csvx_paths": csvx_paths,
+        "elapsed_seconds": round(time.monotonic() - started, 3),
+        **({"error_code": error_code} if error_code else {}),
+        **({"error_summary": error_summary} if error_summary else {}),
+    }
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:

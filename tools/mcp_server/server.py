@@ -122,6 +122,8 @@ def classify_exception(exc: BaseException) -> tuple[str, bool, str, list[str]]:
         ]
     if message.startswith("INVALID_TARGET_NAME"):
         return "INVALID_TARGET_NAME", False, "validation", ["Use only letters, digits, dot, underscore, and hyphen in target names."]
+    if message.startswith("CONFIRMATION_REQUIRED"):
+        return "CONFIRMATION_REQUIRED", False, "policy", ["Pass execute=true to confirm the state-changing action."]
     if isinstance(exc, PermissionError):
         return "POLICY_DENIED", False, "policy", ["Review the target role, access policy, execute flag, and active test session."]
     if isinstance(exc, (ValueError, KeyError, FileNotFoundError)):
@@ -248,7 +250,15 @@ def _handle_tools_call(params: dict[str, Any], operation_id: str | None = None) 
         isinstance(arguments.get(key), str) and bool(arguments[key].strip())
         for key in ("target", "environment")
     )
-    if risk_level in EXPLICIT_TARGET_RISK_LEVELS and not has_explicit_target:
+    skip_explicit_target = (
+        str(name) == "plc_manage_arsim"
+        and isinstance(arguments, dict)
+        and (
+            str(arguments.get("action") or "").lower() in {"list", "clean"}
+            or bool(str(arguments.get("run_id") or "").strip())
+        )
+    )
+    if risk_level in EXPLICIT_TARGET_RISK_LEVELS and not has_explicit_target and not skip_explicit_target:
         validation_errors.append(
             {
                 "path": "$.target",
@@ -292,11 +302,18 @@ def _handle_tools_call(params: dict[str, Any], operation_id: str | None = None) 
     tool_name = str(name)
     try:
         lock_keys = lock_keys_for_tool(tool_name, arguments)
-        context = resolve_scope_context(arguments)
+        if tool_name in {"plc_init_project_config", "plc_manage_arsim"}:
+            try:
+                context = resolve_scope_context(arguments)
+            except (ValueError, OSError):
+                context = {"target": arguments.get("target"), "project_path": arguments.get("project_path")}
+        else:
+            context = resolve_scope_context(arguments)
     except (ValueError, OSError) as exc:
         return text_result({"ok": False, "tool": tool_name, "error": str(exc),
                             "error_code": "CONFIGURATION_ERROR", "stage": "configuration"}, is_error=True)
-    if TOOL_RISK_LEVELS.get(tool_name) == "target_change":
+    is_readonly_manage = tool_name == "plc_manage_arsim" and str(arguments.get("action") or "").lower() == "list"
+    if TOOL_RISK_LEVELS.get(tool_name) == "target_change" and not is_readonly_manage:
         allowed, retry_after = check_target_change_rate_limit(lock_keys)
         if not allowed:
             payload = {
