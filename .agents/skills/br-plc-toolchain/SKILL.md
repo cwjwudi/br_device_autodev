@@ -7,6 +7,7 @@ description: Use the B&R PLC MCP tools and public PviClient Python SDK to build,
 
 ## 1. Project & Deployment Baseline
 
+- When onboarding an unfamiliar project, call `plc_inspect_project(project_path=..., check_integrity=true)` first to inspect AS version, CPU/AR/SimulationIP, safety hardware presence, TaskClass topology, and global declarations without manually reading XML files. After editing `.pkg`, `.prg`, or `Cpu.sw`, re-run `plc_inspect_project(check_integrity=true)` to catch dangling references or malformed XML before building.
 - Read the project `br-auto-dev.json`; do not guess the project, target, toolchain, IP, or test values. If a new project lacks `br-auto-dev.json`, run `plc_init_project_config(project_path=..., execute=false)` to preview discovered `.apj`/Config/toolchain settings and `execute=true` to write it.
 - Use `plc_validate_environment` and `plc_doctor`, then `plc_build_project` with `build_ruc_package=true`.
 - For a fresh ARsim, check `plc_check_arsim_occupancy`, then call `plc_provision_arsim` with the explicit target and `execute=true` (pass `replace_existing=true` only to replace an owned instance of the same project target). Use `plc_manage_arsim` (`list` with `execute=false`; `stop`/`restart`/`clean` with `execute=true`) to inspect, safely stop/restart, and clean up `codex-arsim` instances.
@@ -22,9 +23,10 @@ description: Use the B&R PLC MCP tools and public PviClient Python SDK to build,
 Choose the lightest interface that fits the task:
 
 1. **Simple single-point query or control**:
-   - Use MCP tools `plc_read_runtime_variable` / `plc_write_runtime_variable` directly (plus `plc_runtime_health` and `plc_get_runtime_variable_info` when checking connection health, data type, or writability).
+   - Use MCP tools `plc_read_runtime_variable` / `plc_write_runtime_variable` directly (plus `plc_runtime_health` and `plc_get_runtime_variable_info(expand=true)` when checking connection health, data type, writability, or expanding structure/array leaf paths).
+   - For interactive multi-parameter writes (up to 20 variables), prefer MCP `plc_write_pvi_batch` (all-or-nothing preflight + single readback wait) instead of looping `plc_write_runtime_variable`.
 2. **Synchronous multi-object snapshot (up to 128 variables)**:
-   - Call MCP `plc_read_pvi_batch` directly. Do **not** loop `plc_read_runtime_variable` one by one.
+   - Call MCP `plc_read_pvi_batch` directly. Do **not** loop `plc_read_runtime_variable` one by one. Use `plc_list_runtime_variables` paging freely (30s cache; pass `refresh=true` only when forcing a fresh scan).
 3. **State-machine stalls & transient timing capture (down to 20 ms, up to 128 variables)**:
    - Call MCP `plc_start_pvi_trace` (minimum `interval_ms=20`, up to `128` variables) -> trigger state change via write -> monitor with `plc_get_pvi_trace_status` -> finish with `plc_stop_pvi_trace` / `plc_read_pvi_trace`.
    - For post-mortem analysis of large `var/traces/*.jsonl` files (state transition timelines, dropped-sample intervals, anomaly aggregation), write a read-only Python analysis script against the `trace_file` path.

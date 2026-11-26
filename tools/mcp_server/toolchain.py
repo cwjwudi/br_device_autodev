@@ -1830,12 +1830,19 @@ def plc_list_runtime_variables(arguments: dict[str, Any]) -> dict[str, Any]:
         pattern=str(arguments.get("pattern") or "*"),
         limit=int(arguments.get("limit") or 200),
         offset=int(arguments.get("offset") or 0),
+        refresh=arguments.get("refresh") is True,
     )
 
 
 def plc_get_runtime_variable_info(arguments: dict[str, Any]) -> dict[str, Any]:
     service, target = _ensure_runtime_target(arguments)
-    return service.variable_info(target, _runtime_ref(arguments))
+    return service.variable_info(
+        target,
+        _runtime_ref(arguments),
+        expand=arguments.get("expand") is True,
+        max_depth=int(arguments.get("max_depth") or 3),
+        max_fields=int(arguments.get("max_fields") or 128),
+    )
 
 
 def plc_read_runtime_variable(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -1893,6 +1900,32 @@ def plc_write_runtime_variable(arguments: dict[str, Any]) -> dict[str, Any]:
         _runtime_ref(arguments),
         arguments.get("value"),
         execute=arguments.get("execute") is True,
+        session_id=arguments.get("session_id"),
+    )
+
+
+def plc_write_pvi_batch(arguments: dict[str, Any]) -> dict[str, Any]:
+    from br_plc_toolchain.backends.pvi import parse_variable_ref
+
+    raw_writes = arguments.get("writes")
+    if not isinstance(raw_writes, list) or not raw_writes:
+        raise ValueError("writes must be a non-empty array of {variable, value} objects")
+    pairs = [
+        (parse_variable_ref(str(item["variable"])), item["value"])
+        for item in raw_writes
+    ]
+    service, target = _ensure_runtime_target(arguments)
+    readback_wait_ms = (
+        int(arguments["readback_wait_ms"])
+        if arguments.get("readback_wait_ms") is not None
+        else 50
+    )
+    return service.write_many(
+        target,
+        pairs,
+        execute=arguments.get("execute") is True,
+        stop_on_error=True,
+        readback_wait_ms=readback_wait_ms,
         session_id=arguments.get("session_id"),
     )
 
@@ -2014,6 +2047,20 @@ def plc_manage_arsim(arguments: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def plc_inspect_project(arguments: dict[str, Any]) -> dict[str, Any]:
+    from br_plc_toolchain.project import inspect_project
+
+    return inspect_project(
+        project_path=str(arguments.get("project_path") or ""),
+        config=str(arguments["config"]).strip() if arguments.get("config") else None,
+        include_files=arguments.get("include_files") is True,
+        check_integrity=(
+            arguments.get("check_integrity") is not False
+        ),
+        repo_root=REPO_ROOT,
+    )
+
+
 def plc_init_project_config(arguments: dict[str, Any]) -> dict[str, Any]:
     import project_init
 
@@ -2035,6 +2082,7 @@ TOOLS = {
     "plc_check_arsim_occupancy": plc_check_arsim_occupancy,
     "plc_provision_arsim": plc_provision_arsim,
     "plc_manage_arsim": plc_manage_arsim,
+    "plc_inspect_project": plc_inspect_project,
     "plc_init_project_config": plc_init_project_config,
     "plc_doctor": plc_doctor,
     "plc_validate_environment": plc_validate_environment,
@@ -2081,5 +2129,6 @@ TOOLS = {
     "plc_open_test_session": plc_open_test_session,
     "plc_close_test_session": plc_close_test_session,
     "plc_write_runtime_variable": plc_write_runtime_variable,
+    "plc_write_pvi_batch": plc_write_pvi_batch,
     "plc_control_runtime": plc_control_runtime,
 }

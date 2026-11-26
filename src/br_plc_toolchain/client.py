@@ -207,6 +207,7 @@ class PviClient:
         pattern: str = "*",
         limit: int = 200,
         offset: int = 0,
+        refresh: bool = False,
     ) -> dict[str, Any]:
         """List online task or global variable names matching a glob pattern."""
         self._ensure_open()
@@ -217,12 +218,84 @@ class PviClient:
             pattern=pattern,
             limit=limit,
             offset=offset,
+            refresh=refresh,
         )
 
-    def variable_info(self, variable: VariableRef | str) -> dict[str, Any]:
+    def variable_info(
+        self,
+        variable: VariableRef | str,
+        *,
+        expand: bool = False,
+        max_depth: int = 3,
+        max_fields: int = 128,
+    ) -> dict[str, Any]:
         """Return online PVI type, readability, writability, and metadata for one variable."""
         self._ensure_open()
-        return self.service.variable_info(self.target_name, self._to_ref(variable))
+        return self.service.variable_info(
+            self.target_name,
+            self._to_ref(variable),
+            expand=expand,
+            max_depth=max_depth,
+            max_fields=max_fields,
+        )
+
+    def expand_variable(
+        self,
+        variable: VariableRef | str,
+        *,
+        max_depth: int = 3,
+        max_fields: int = 128,
+    ) -> dict[str, Any]:
+        """Expand a structure or array variable into leaf PVI variable paths."""
+        return self.variable_info(
+            variable,
+            expand=True,
+            max_depth=max_depth,
+            max_fields=max_fields,
+        )
+
+    def read_structure(
+        self,
+        variable: VariableRef | str,
+        *,
+        max_depth: int = 2,
+        max_fields: int = 128,
+    ) -> dict[str, Any]:
+        """Expand a structure/array variable and read its readable leaf paths via read_chunked."""
+        self._ensure_open()
+        ref = self._to_ref(variable)
+        expanded = self.expand_variable(ref, max_depth=max_depth, max_fields=max_fields)
+        fields = expanded.get("fields") or []
+        readable_paths = [
+            str(item["canonical"])
+            for item in fields
+            if isinstance(item, dict) and item.get("canonical") and item.get("readable", True)
+        ]
+        if not readable_paths:
+            return {
+                "ok": False,
+                "target": self.target_name,
+                "variable": ref.canonical,
+                "expansion_source": expanded.get("expansion_source", "unavailable"),
+                "truncated": bool(expanded.get("truncated", False)),
+                "total_discovered": int(expanded.get("total_discovered", 0)),
+                "fields": fields,
+                "values": {},
+                "errors": {},
+                "note": expanded.get("expansion_note") or "No readable leaf fields were discovered.",
+            }
+        read_res = self.read_chunked(readable_paths)
+        return {
+            "ok": bool(read_res.get("ok")),
+            "target": self.target_name,
+            "variable": ref.canonical,
+            "expansion_source": expanded.get("expansion_source", "pvi"),
+            "truncated": bool(expanded.get("truncated", False)),
+            "total_discovered": int(expanded.get("total_discovered", len(fields))),
+            "fields": fields,
+            "values": read_res.get("values") or {},
+            "errors": read_res.get("errors") or {},
+        }
 
     def read(self, variable: VariableRef | str) -> dict[str, Any]:
         """Read a single PLC variable via the policy-checked RuntimePviService."""
@@ -299,8 +372,9 @@ class PviClient:
         execute: bool = True,
         session_id: str | None = None,
         stop_on_error: bool = True,
+        readback_wait_ms: int = 50,
     ) -> dict[str, Any]:
-        """Write multiple variables sequentially, each audited through RuntimePviService.write."""
+        """Write multiple variables through RuntimePviService.write_many with preflight validation."""
         self._ensure_open()
         if isinstance(writes, Mapping):
             pairs = list(writes.items())
@@ -316,38 +390,15 @@ class PviClient:
         if not pairs:
             raise ValueError("writes must be non-empty")
 
-        results: list[dict[str, Any]] = []
-        for variable, value in pairs:
-            ref = self._to_ref(variable)
-            try:
-                res = self.service.write(
-                    self.target_name,
-                    ref,
-                    value,
-                    execute=execute,
-                    session_id=session_id,
-                )
-                results.append(res)
-                if stop_on_error and not res.get("ok"):
-                    break
-            except Exception as exc:
-                if stop_on_error:
-                    raise
-                results.append(
-                    {
-                        "ok": False,
-                        "target": self.target_name,
-                        "variable": ref.canonical,
-                        "error": str(exc),
-                        "error_type": type(exc).__name__,
-                    }
-                )
-        return {
-            "ok": bool(results) and all(bool(item.get("ok")) for item in results),
-            "target": self.target_name,
-            "count": len(results),
-            "results": results,
-        }
+        ref_pairs = [(self._to_ref(variable), value) for variable, value in pairs]
+        return self.service.write_many(
+            self.target_name,
+            ref_pairs,
+            execute=execute,
+            stop_on_error=stop_on_error,
+            readback_wait_ms=readback_wait_ms,
+            session_id=session_id,
+        )
 
     def start_trace(
         self,

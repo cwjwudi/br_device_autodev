@@ -302,7 +302,7 @@ def _handle_tools_call(params: dict[str, Any], operation_id: str | None = None) 
     tool_name = str(name)
     try:
         lock_keys = lock_keys_for_tool(tool_name, arguments)
-        if tool_name in {"plc_init_project_config", "plc_manage_arsim"}:
+        if tool_name in {"plc_init_project_config", "plc_manage_arsim", "plc_inspect_project"}:
             try:
                 context = resolve_scope_context(arguments)
             except (ValueError, OSError):

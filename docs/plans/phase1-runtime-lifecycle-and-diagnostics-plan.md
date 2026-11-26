@@ -1,6 +1,6 @@
 # Phase 1 修改计划：ARsim 生命周期、PLC 运行态控制、Logger 聚合诊断与配置脚手架
 
-状态：待实施。本文档仅描述拟议修改与验收标准，不代表相关能力已上线。  
+状态：已完成并通过验收（`0.16.0a1`，验收报告见 [phase1-verification-20261124.md](../verification/phase1-verification-20261124.md)）。  
 前置依赖：完成 [roadmap-2026-11.md](roadmap-2026-11.md) 中的 Phase 0 基线核对。  
 预计交付版本：`0.16.0a1`
 

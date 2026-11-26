@@ -109,6 +109,8 @@ def resolve_scope_context(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def lock_keys_for_tool(tool: str, arguments: dict[str, Any]) -> list[str]:
+    if tool == "plc_inspect_project":
+        return []
     if tool == "plc_init_project_config":
         raw_proj = str(arguments.get("project_path") or "").strip()
         if not raw_proj:

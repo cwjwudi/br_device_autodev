@@ -205,6 +205,27 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         ),
     },
     {
+        "name": "plc_inspect_project",
+        "description": "Read-only parser and static integrity checker for an Automation Studio project (.apj, Physical.pkg, Config.pkg, Cpu.pkg, Cpu.sw, Hardware.hw, Logical packages/programs). Reports CPU/AR/SimulationIP, safety hardware presence, TaskClass topology, global declarations, and dangling/malformed XML issues without invoking BR.AS.Build.exe.",
+        "inputSchema": required_schema(
+            object_schema(
+                {
+                    "include_files": {
+                        "type": "boolean",
+                        "description": "Include each task's .prg source file list in the response. Defaults to false for compact output.",
+                        "default": False,
+                    },
+                    "check_integrity": {
+                        "type": "boolean",
+                        "description": "Run static integrity checks (malformed XML, BOM/encoding errors, duplicate Package.pkg objects, missing referenced files, broken Cpu.sw task sources). Defaults to true.",
+                        "default": True,
+                    },
+                }
+            ),
+            "project_path",
+        ),
+    },
+    {
         "name": "plc_init_project_config",
         "description": "Auto-discover an Automation Studio .apj, Physical/Physical.pkg configurations, SimulationIPAddress, and matching toolchain to preview (execute=false) or write (execute=true) br-auto-dev.json.",
         "inputSchema": required_schema(
@@ -805,7 +826,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "name": "plc_list_runtime_variables",
-        "description": "Scan online task or global variable names through PVI, then return a bounded page. Each page repeats the full scan; pattern is a case-sensitive glob, not a regex. Counts can change if the PLC image changes.",
+        "description": "Scan online task or global variable names through PVI, then return a bounded page. Uses a 30-second per-(scope, task) in-memory cache so paging does not repeat full scans; pass refresh=true to force a fresh scan. Pattern is a case-sensitive glob, not a regex.",
         "inputSchema": runtime_schema(
             {
                 "scope": {"type": "string", "enum": ["task", "global"], "default": "task"},
@@ -813,18 +834,42 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "pattern": {"type": "string", "default": "*"},
                 "limit": {"type": "integer", "minimum": 1, "maximum": 5000, "default": 200},
                 "offset": {"type": "integer", "minimum": 0, "default": 0},
+                "refresh": {
+                    "type": "boolean",
+                    "description": "Force a fresh PVI variable scan instead of using the 30-second cache.",
+                    "default": False,
+                },
             },
             "target",
         ),
     },
     {
         "name": "plc_get_runtime_variable_info",
-        "description": "Read online PVI type, access rights and metadata for a discovered variable.",
+        "description": "Read online PVI type, access rights and metadata for a discovered variable. Pass expand=true to expand structure or array variables into leaf variable paths.",
         "inputSchema": runtime_schema(
             {
                 "scope": {"type": "string", "enum": ["task", "global"], "default": "task"},
                 "task": {"type": "string"},
                 "name": {"type": "string", "minLength": 1},
+                "expand": {
+                    "type": "boolean",
+                    "description": "Expand structure or array members into leaf variable paths.",
+                    "default": False,
+                },
+                "max_depth": {
+                    "type": "integer",
+                    "description": "Maximum nesting depth when expand=true.",
+                    "minimum": 1,
+                    "maximum": 16,
+                    "default": 3,
+                },
+                "max_fields": {
+                    "type": "integer",
+                    "description": "Maximum leaf fields returned when expand=true.",
+                    "minimum": 1,
+                    "maximum": 512,
+                    "default": 128,
+                },
             },
             "target", "name",
         ),
@@ -923,6 +968,42 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         ),
     },
     {
+        "name": "plc_write_pvi_batch",
+        "description": "Preflight-validate and write up to 20 PLC variables in one policy-enforced Runtime PVI batch with unified readback verification. Any preflight failure rejects the entire batch before writing. Requires explicit target and execute=true; production is permanently denied.",
+        "inputSchema": runtime_schema(
+            {
+                "writes": {
+                    "type": "array",
+                    "description": "Up to 20 write objects such as {\"variable\":\"Main:bStart\",\"value\":true}. Whole-structure writes are rejected.",
+                    "minItems": 1,
+                    "maxItems": 20,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "variable": {"type": "string", "minLength": 1},
+                            "value": {},
+                        },
+                        "required": ["variable", "value"],
+                        "additionalProperties": False,
+                    },
+                },
+                "readback_wait_ms": {
+                    "type": "integer",
+                    "description": "Milliseconds to pump PVI events once after all writes before reading back values.",
+                    "minimum": 0,
+                    "maximum": 5000,
+                    "default": 50,
+                },
+                "session_id": {"type": "string"},
+                "execute": {
+                    "type": "boolean",
+                    "description": "Must be set to true to perform the batch write.",
+                },
+            },
+            "target", "writes", "execute",
+        ),
+    },
+    {
         "name": "plc_control_runtime",
         "description": "Trigger a policy-checked PLC/ARsim Warmstart or Coldstart via PVI (with controlled PVITransfer fallback), clear cached PVI objects, and wait for runtime recovery. Requires execute=true; production is permanently denied.",
         "inputSchema": runtime_schema(
@@ -954,6 +1035,7 @@ TOOL_RISK_LEVELS: dict[str, str] = {
     "plc_check_arsim_occupancy": "readonly",
     "plc_provision_arsim": "target_change",
     "plc_manage_arsim": "target_change",
+    "plc_inspect_project": "readonly",
     "plc_init_project_config": "project_write",
     "plc_doctor": "readonly",
     "plc_validate_environment": "readonly",
@@ -1000,6 +1082,7 @@ TOOL_RISK_LEVELS: dict[str, str] = {
     "plc_open_test_session": "target_change",
     "plc_close_test_session": "local_write",
     "plc_write_runtime_variable": "target_change",
+    "plc_write_pvi_batch": "target_change",
     "plc_control_runtime": "target_change",
 }
 
@@ -1007,6 +1090,7 @@ TOOL_BACKENDS: dict[str, str] = {
     "plc_check_arsim_occupancy": "p802 occupancy sampler",
     "plc_provision_arsim": "PVITransfer offline commissioning",
     "plc_manage_arsim": "ARsim registry & process manager",
+    "plc_inspect_project": "project/topology.py",
     "plc_init_project_config": "project_init.py",
     "plc_doctor": "MCP native diagnostics",
     "plc_validate_environment": "MCP native diagnostics",
@@ -1053,6 +1137,7 @@ TOOL_BACKENDS: dict[str, str] = {
     "plc_open_test_session": "runtime test-session policy",
     "plc_close_test_session": "runtime test-session policy",
     "plc_write_runtime_variable": "persistent PVI runtime + policy",
+    "plc_write_pvi_batch": "persistent PVI runtime + policy",
     "plc_control_runtime": "persistent PVI runtime + policy",
 }
 

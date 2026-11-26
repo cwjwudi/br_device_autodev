@@ -12,7 +12,8 @@ import time
 from concurrent.futures import Future, TimeoutError as FutureTimeoutError
 from ctypes import byref, create_string_buffer, sizeof
 from dataclasses import dataclass
-from typing import Any, Callable
+from datetime import UTC, datetime
+from typing import Any, Callable, Mapping
 
 from .models import PviTarget, Scope, VariableRef
 from .values import coerce_write_value, json_safe, values_equal
@@ -84,6 +85,8 @@ class PviWorker:
         self._cpu: Any = None
         self._tasks: dict[str, Any] = {}
         self._variables: dict[tuple[str, str | None, str], Any] = {}
+        self._var_list_cache: dict[tuple[str, str | None], tuple[float, str, list[str]]] = {}
+        self._var_list_cache_ttl_s: float = 30.0
         self._manager_connected = False
         self._cpu_connected = False
         self._last_cpu_error: int | None = None
@@ -227,6 +230,7 @@ class PviWorker:
             self._cpu_connected = False
             self._tasks.clear()
             self._variables.clear()
+            self._var_list_cache.clear()
             # pvipy drops its registered object list when PVI Manager
             # disconnects.  Reusing this hierarchy produces invalid LinkID
             # errors after the manager restarts, so force a fresh worker.
@@ -241,6 +245,7 @@ class PviWorker:
         self._cpu_connected = error == 0
         if error != 0:
             self._variables.clear()
+            self._var_list_cache.clear()
 
     def _do_events(self) -> None:
         if self._connection is None:
@@ -345,15 +350,32 @@ class PviWorker:
         pattern: str = "*",
         limit: int = 200,
         offset: int = 0,
+        refresh: bool = False,
     ) -> dict[str, Any]:
         VariableRef(name="_list", scope=scope, task=task).validate()
-        parent = self._get_task(str(task)) if scope == "task" else self._cpu
-        source = _read_variable_names(parent)
+        cache_key = (scope, task if scope == "task" else None)
+        now = time.monotonic()
+        cached = self._var_list_cache.get(cache_key)
+        if (
+            not refresh
+            and cached is not None
+            and (now - cached[0]) < self._var_list_cache_ttl_s
+        ):
+            _, cached_at_iso, source = cached
+            cache_hit = True
+        else:
+            parent = self._get_task(str(task)) if scope == "task" else self._cpu
+            source = _read_variable_names(parent)
+            cached_at_iso = datetime.now(UTC).isoformat()
+            self._var_list_cache[cache_key] = (now, cached_at_iso, source)
+            cache_hit = False
+
         matched = [name for name in source if fnmatch.fnmatchcase(name, pattern)]
         effective_limit = max(1, min(limit, 5000))
         offset = max(0, offset)
         page = matched[offset:offset + effective_limit]
         next_offset = offset + len(page)
+        has_more = next_offset < len(matched)
         return {
             "ok": True,
             "target": self.target.name,
@@ -361,10 +383,15 @@ class PviWorker:
             "task": task,
             "pattern": pattern,
             "total_matches": len(matched),
+            "total_matched": len(matched),
             "offset": offset,
             "limit": effective_limit,
-            "truncated": next_offset < len(matched),
-            "next_offset": next_offset if next_offset < len(matched) else None,
+            "has_more": has_more,
+            "truncated": has_more,
+            "next_offset": next_offset if has_more else None,
+            "cache_hit": cache_hit,
+            "cached_at": cached_at_iso,
+            "cache_ttl_seconds": self._var_list_cache_ttl_s,
             "variables": page,
         }
 
@@ -385,10 +412,192 @@ class PviWorker:
     def _ref_dict(ref: VariableRef) -> dict[str, Any]:
         return {"scope": ref.scope, "task": ref.task, "name": ref.name, "variable": ref.canonical}
 
-    def _variable_info(self, ref: VariableRef) -> dict[str, Any]:
+    @staticmethod
+    def _member_depth(member_suffix: str) -> int:
+        stripped = member_suffix.lstrip(".")
+        if not stripped:
+            return 0
+        return stripped.count(".") + 1
+
+    @staticmethod
+    def _expand_array_indices(indices: Any) -> list[str]:
+        if not indices or not isinstance(indices, (list, tuple)):
+            return []
+        if len(indices) == 1:
+            low, high = int(indices[0][0]), int(indices[0][1])
+            return [f"[{i}]" for i in range(low, high + 1)]
+        if len(indices) == 2:
+            lo1, hi1 = int(indices[0][0]), int(indices[0][1])
+            lo2, hi2 = int(indices[1][0]), int(indices[1][1])
+            return [f"[{i},{j}]" for i in range(lo1, hi1 + 1) for j in range(lo2, hi2 + 1)]
+        return []
+
+    def _expand_variable_leaves(
+        self,
+        ref: VariableRef,
+        variable: Any,
+        *,
+        data_type: str,
+        is_array: bool,
+        is_structure: bool,
+        max_depth: int,
+        max_fields: int,
+    ) -> dict[str, Any]:
+        max_depth = max(1, min(int(max_depth), 16))
+        max_fields = max(1, min(int(max_fields), 512))
+        parent_readable = bool(variable.readable)
+        parent_writable = bool(variable.writable)
+
+        fields: list[dict[str, Any]] = []
+        total_discovered = 0
+        truncated = False
+
+        def add_leaf(
+            suffix: str,
+            leaf_type: str,
+            readable: bool,
+            writable: bool,
+        ) -> None:
+            nonlocal total_discovered, truncated
+            total_discovered += 1
+            if len(fields) >= max_fields:
+                truncated = True
+                return
+            if not suffix:
+                full_name = ref.name
+            elif suffix.startswith(".") or suffix.startswith("["):
+                full_name = f"{ref.name}{suffix}"
+            else:
+                full_name = f"{ref.name}.{suffix}"
+            leaf_ref = VariableRef(name=full_name, scope=ref.scope, task=ref.task)
+            fields.append(
+                {
+                    "canonical": leaf_ref.canonical,
+                    "name": full_name,
+                    "data_type": leaf_type,
+                    "readable": readable,
+                    "writable": writable,
+                }
+            )
+
+        if is_structure:
+            struct_members = getattr(variable, "_struct_members", None)
+            if isinstance(struct_members, Mapping) and struct_members:
+                for member_key, member_td in struct_members.items():
+                    suffix = str(getattr(member_td, "name", None) or member_key)
+                    if not suffix.startswith(".") and not suffix.startswith("["):
+                        suffix = f".{suffix}"
+                    depth = self._member_depth(suffix)
+                    if depth > max_depth:
+                        truncated = True
+                        continue
+                    vt = getattr(member_td, "vt", None)
+                    leaf_type = (
+                        str(vt.value)
+                        if hasattr(vt, "value")
+                        else (str(vt) if vt is not None else "unknown")
+                    )
+                    member_at = str(getattr(member_td, "at", "") or "")
+                    readable = ("r" in member_at) if member_at else parent_readable
+                    writable = ("w" in member_at) if member_at else parent_writable
+
+                    arr_indices = None
+                    get_indices = getattr(member_td, "get_array_indices", None)
+                    if callable(get_indices):
+                        try:
+                            arr_indices = get_indices()
+                        except Exception:
+                            arr_indices = None
+
+                    if arr_indices:
+                        elem_suffixes = self._expand_array_indices(arr_indices)
+                        if elem_suffixes:
+                            for elem_idx in elem_suffixes:
+                                add_leaf(f"{suffix}{elem_idx}", leaf_type, readable, writable)
+                            continue
+                    add_leaf(suffix, leaf_type, readable, writable)
+
+                return {
+                    "expanded": True,
+                    "expansion_source": "pvi",
+                    "max_depth": max_depth,
+                    "max_fields": max_fields,
+                    "total_discovered": total_discovered,
+                    "truncated": truncated,
+                    "fields": fields,
+                }
+
+            return {
+                "expanded": True,
+                "expansion_source": "unavailable",
+                "max_depth": max_depth,
+                "max_fields": max_fields,
+                "total_discovered": 0,
+                "truncated": False,
+                "fields": [],
+                "expansion_note": (
+                    "PVI did not expose structure member descriptors for this variable; "
+                    "inspect the project .typ definition to determine member paths."
+                ),
+            }
+
+        if is_array:
+            type_desc = getattr(variable, "_type_description", None)
+            arr_indices = None
+            get_indices = getattr(type_desc, "get_array_indices", None) if type_desc is not None else None
+            if callable(get_indices):
+                try:
+                    arr_indices = get_indices()
+                except Exception:
+                    arr_indices = None
+            elem_suffixes = self._expand_array_indices(arr_indices) if arr_indices else []
+            if elem_suffixes:
+                elem_type = data_type.split("[", 1)[0] if isinstance(data_type, str) else str(data_type)
+                for elem_idx in elem_suffixes:
+                    add_leaf(elem_idx, elem_type, parent_readable, parent_writable)
+                return {
+                    "expanded": True,
+                    "expansion_source": "pvi",
+                    "max_depth": max_depth,
+                    "max_fields": max_fields,
+                    "total_discovered": total_discovered,
+                    "truncated": truncated,
+                    "fields": fields,
+                }
+            return {
+                "expanded": True,
+                "expansion_source": "unavailable",
+                "max_depth": max_depth,
+                "max_fields": max_fields,
+                "total_discovered": 0,
+                "truncated": False,
+                "fields": [],
+                "expansion_note": "PVI did not expose array index bounds for this variable.",
+            }
+
+        add_leaf("", str(data_type), parent_readable, parent_writable)
+        return {
+            "expanded": True,
+            "expansion_source": "pvi",
+            "max_depth": max_depth,
+            "max_fields": max_fields,
+            "total_discovered": total_discovered,
+            "truncated": truncated,
+            "fields": fields,
+        }
+
+    def _variable_info(
+        self,
+        ref: VariableRef,
+        expand: bool = False,
+        max_depth: int = 3,
+        max_fields: int = 128,
+    ) -> dict[str, Any]:
         variable = self._get_variable(ref)
         data_type = variable.dataType
-        return {
+        is_array = bool(variable.isArray)
+        is_structure = bool(variable.isStructure)
+        info: dict[str, Any] = {
             "ok": True,
             "target": self.target.name,
             **self._ref_dict(ref),
@@ -396,11 +605,24 @@ class PviWorker:
             "data_type": data_type,
             "readable": variable.readable,
             "writable": variable.writable,
-            "is_array": variable.isArray,
-            "is_structure": variable.isStructure,
+            "is_array": is_array,
+            "is_structure": is_structure,
             "attributes": json_safe(variable.attributes),
             "descriptor": json_safe(variable.descriptor),
         }
+        if expand:
+            info.update(
+                self._expand_variable_leaves(
+                    ref,
+                    variable,
+                    data_type=str(data_type),
+                    is_array=is_array,
+                    is_structure=is_structure,
+                    max_depth=max_depth,
+                    max_fields=max_fields,
+                )
+            )
+        return info
 
     def _read(self, ref: VariableRef) -> dict[str, Any]:
         variable = self._get_variable(ref)
@@ -468,14 +690,69 @@ class PviWorker:
             result["warning"] = "PVI write completed, but readback is unavailable for this variable."
         return result
 
-    def _write_many(self, writes: list[tuple[VariableRef, Any]]) -> dict[str, Any]:
-        results: list[dict[str, Any]] = []
-        for ref, value in writes:
+    def _write_many(
+        self,
+        writes: list[tuple[VariableRef, Any]],
+        readback_wait_ms: int = 50,
+    ) -> dict[str, Any]:
+        prepared: list[tuple[int, VariableRef, Any, str, Any, Any]] = []
+        results: list[dict[str, Any] | None] = [None] * len(writes)
+
+        for idx, (ref, value) in enumerate(writes):
             try:
-                results.append(self._write(ref, value))
+                variable = self._get_variable(ref)
+                data_type = variable.dataType
+                if not variable.writable:
+                    raise PermissionError(f"Variable {ref.canonical!r} is not writable")
+                before = variable.value if variable.readable else None
+                coerced = coerce_write_value(value, data_type)
+                variable.value = coerced
+                prepared.append((idx, ref, variable, str(data_type), before, coerced))
             except Exception as exc:
-                results.append({"ok": False, **self._ref_dict(ref), "error": str(exc)})
-        return {"ok": all(item["ok"] for item in results), "atomic": False, "results": results}
+                results[idx] = {"ok": False, **self._ref_dict(ref), "error": str(exc)}
+
+        if prepared:
+            wait_s = max(0.0, float(readback_wait_ms) / 1000.0)
+            if wait_s > 0:
+                self._pump_for(wait_s)
+            else:
+                self._do_events()
+
+            for idx, ref, variable, data_type, before, coerced in prepared:
+                try:
+                    readback = variable.value if variable.readable else None
+                    verified = values_equal(coerced, readback) if variable.readable else None
+                    entry: dict[str, Any] = {
+                        "ok": True,
+                        "target": self.target.name,
+                        **self._ref_dict(ref),
+                        "pvi_path": variable.name,
+                        "data_type": data_type,
+                        "before": json_safe(before),
+                        "requested": json_safe(coerced),
+                        "readback": json_safe(readback),
+                        "verified": verified,
+                    }
+                    if verified is False:
+                        entry["warning_code"] = "PVI_READBACK_MISMATCH"
+                        entry["warning"] = (
+                            "PVI write completed, but readback does not match the requested value."
+                        )
+                    elif verified is None:
+                        entry["warning_code"] = "PVI_READBACK_UNAVAILABLE"
+                        entry["warning"] = (
+                            "PVI write completed, but readback is unavailable for this variable."
+                        )
+                    results[idx] = entry
+                except Exception as exc:
+                    results[idx] = {"ok": False, **self._ref_dict(ref), "error": str(exc)}
+
+        final_results = [item for item in results if item is not None]
+        return {
+            "ok": bool(final_results) and all(item["ok"] for item in final_results),
+            "atomic": False,
+            "results": final_results,
+        }
 
     @staticmethod
     def _extract_run_state(raw_status: Any) -> str | None:
@@ -591,6 +868,7 @@ class PviWorker:
                 LOG.debug("Failed to unlink cached object %r during restart", obj, exc_info=True)
         self._variables.clear()
         self._tasks.clear()
+        self._var_list_cache.clear()
 
         # Wait briefly for the reboot transition to begin so we do not read stale pre-restart RUN state
         deadline = started + wait_timeout
@@ -675,6 +953,7 @@ class PviWorker:
                     LOG.debug("Failed to unlink %r", obj, exc_info=True)
         self._variables.clear()
         self._tasks.clear()
+        self._var_list_cache.clear()
         if self._connection is not None:
             try:
                 self._connection.stop()

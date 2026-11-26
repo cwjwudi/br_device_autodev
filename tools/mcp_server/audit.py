@@ -27,6 +27,7 @@ PVI_ACCESS_TOOLS = {
     "plc_get_runtime_variable_info",
     "plc_read_runtime_variable",
     "plc_write_runtime_variable",
+    "plc_write_pvi_batch",
     "plc_control_runtime",
     "plc_start_pvi_trace",
     "plc_get_pvi_trace_status",

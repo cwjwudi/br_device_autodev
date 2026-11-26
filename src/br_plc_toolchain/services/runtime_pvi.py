@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from br_plc_toolchain.backends.pvi import PviSessionManager, PviTarget, VariableRef
+from br_plc_toolchain.backends.pvi.values import coerce_write_value
 from br_plc_toolchain.config.loader import (
     REPO_ROOT,
     create_ephemeral_target_config,
@@ -20,6 +21,7 @@ from br_plc_toolchain.policy import RuntimePolicy, TestSessionManager
 
 TARGET_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 MAX_READ_BATCH = 128
+MAX_WRITE_BATCH = 20
 
 
 def validate_target_name(name: str) -> str:
@@ -162,11 +164,19 @@ class RuntimePviService:
         pattern: str = "*",
         limit: int = 200,
         offset: int = 0,
+        refresh: bool = False,
     ) -> dict[str, Any]:
         target, _ = self._resolve(target_name)
-        result = self.manager.call(
-            target, "list_variables", scope=scope, task=task, pattern=pattern, limit=limit, offset=offset
-        )
+        kwargs: dict[str, Any] = {
+            "scope": scope,
+            "task": task,
+            "pattern": pattern,
+            "limit": limit,
+            "offset": offset,
+        }
+        if refresh:
+            kwargs["refresh"] = True
+        result = self.manager.call(target, "list_variables", **kwargs)
         with self._lock:
             target_catalog = self._discovered.setdefault(target_name, {})
             for name in result.get("variables", []):
@@ -177,9 +187,22 @@ class RuntimePviService:
                 )
         return result
 
-    def variable_info(self, target_name: str, ref: VariableRef) -> dict[str, Any]:
+    def variable_info(
+        self,
+        target_name: str,
+        ref: VariableRef,
+        *,
+        expand: bool = False,
+        max_depth: int = 3,
+        max_fields: int = 128,
+    ) -> dict[str, Any]:
         target, _ = self._resolve(target_name)
-        info = self.manager.call(target, "variable_info", ref=ref)
+        kwargs: dict[str, Any] = {"ref": ref}
+        if expand:
+            kwargs["expand"] = True
+            kwargs["max_depth"] = max_depth
+            kwargs["max_fields"] = max_fields
+        info = self.manager.call(target, "variable_info", **kwargs)
         with self._lock:
             self._discovered.setdefault(target_name, {})[ref.canonical] = dict(info)
         return info
@@ -313,6 +336,102 @@ class RuntimePviService:
         result["access_decision"] = decision.to_dict()
         result["session_id"] = session_id
         return result
+
+    def write_many(
+        self,
+        target_name: str,
+        writes: list[tuple[VariableRef, Any]],
+        *,
+        execute: bool,
+        stop_on_error: bool = True,
+        readback_wait_ms: int = 50,
+        session_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Preflight-validate and write up to MAX_WRITE_BATCH variables.
+
+        When stop_on_error=True (default), every item is preflighted for ref validity,
+        writability, type coercion (rejecting whole-structure writes), and RuntimePolicy
+        authorization BEFORE any variable is written; any failure rejects the entire batch.
+        """
+        if not writes:
+            raise ValueError("writes must be a non-empty list")
+        if len(writes) > MAX_WRITE_BATCH:
+            raise ValueError(f"writes may contain at most {MAX_WRITE_BATCH} items")
+        target, config = self._resolve(target_name)
+
+        preflight_ok: list[tuple[int, VariableRef, Any, dict[str, Any]]] = []
+        preflight_errors: dict[int, tuple[VariableRef, Exception]] = {}
+
+        for index, (ref, value) in enumerate(writes):
+            try:
+                ref.validate()
+                info = self.variable_info(target_name, ref)
+                data_type = str(info.get("data_type") or "")
+                if info.get("is_structure") is True or isinstance(value, dict):
+                    raise ValueError(
+                        f"Structure writes are not supported by pvipy for {ref.canonical!r}; write leaf fields instead."
+                    )
+                if data_type:
+                    coerce_write_value(value, data_type)
+                before = (
+                    self.manager.call(target, "read", ref=ref)
+                    if bool(info.get("readable", True))
+                    else {"value": None}
+                )
+                decision = self.policy.authorize_write(
+                    config=config,
+                    variable=ref.canonical,
+                    current_value=before.get("value"),
+                    requested_value=value,
+                    writable=bool(info.get("writable")),
+                    execute=execute,
+                    session_valid=False,
+                )
+                self.policy.require(decision)
+                preflight_ok.append((index, ref, value, decision.to_dict()))
+            except Exception as exc:
+                if stop_on_error:
+                    raise
+                preflight_errors[index] = (ref, exc)
+
+        results_by_index: dict[int, dict[str, Any]] = {}
+        for index, (ref, exc) in preflight_errors.items():
+            results_by_index[index] = {
+                "ok": False,
+                "target": target.name,
+                "variable": ref.canonical,
+                "error": str(exc),
+                "error_type": type(exc).__name__,
+            }
+
+        if preflight_ok:
+            worker_pairs = [(ref, value) for _, ref, value, _ in preflight_ok]
+            worker_result = self.manager.call(
+                target,
+                "write_many",
+                writes=worker_pairs,
+                readback_wait_ms=max(0, int(readback_wait_ms)),
+            )
+            worker_items = list(worker_result.get("results") or [])
+            for pos, (index, ref, _value, decision_dict) in enumerate(preflight_ok):
+                item = (
+                    dict(worker_items[pos])
+                    if pos < len(worker_items)
+                    else {"ok": False, "target": target.name, "variable": ref.canonical, "error": "Missing batch write result"}
+                )
+                item["access_decision"] = decision_dict
+                item["session_id"] = session_id
+                results_by_index[index] = item
+
+        ordered = [results_by_index[i] for i in range(len(writes))]
+        return {
+            "ok": bool(ordered) and all(bool(item.get("ok")) for item in ordered),
+            "target": target.name,
+            "atomic": False,
+            "count": len(ordered),
+            "results": ordered,
+            "writes": ordered,
+        }
 
     def restart_target(
         self,

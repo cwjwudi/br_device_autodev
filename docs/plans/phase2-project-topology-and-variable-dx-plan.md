@@ -1,6 +1,6 @@
 # Phase 2 修改计划：AS 工程拓扑解析、结构体变量展开与在线调试效率优化
 
-状态：待实施。本文档仅描述拟议修改与验收标准，不代表相关能力已上线。  
+状态：已完成并通过验收（`0.17.0a1`，验收报告见 [phase2-verification-20261126.md](../verification/phase2-verification-20261126.md)）。  
 前置依赖：建议在完成 [Phase 1](phase1-runtime-lifecycle-and-diagnostics-plan.md) 后实施。  
 预计交付版本：`0.17.0a1`
 

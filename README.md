@@ -151,13 +151,14 @@ with PviClient.from_project(r"C:\path\to\project", target="arsim") as plc:
 <!-- BEGIN GENERATED MCP TOOL CATALOG -->
 当前 MCP 工具清单：
 
-MCP server version: `0.16.0a1`
+MCP server version: `0.17.0a1`
 
 | MCP Tool | Risk | Backend | Confirmation | Description |
 | --- | --- | --- | --- | --- |
 | `plc_check_arsim_occupancy` | `readonly` | `p802 occupancy sampler` | - | Sample local ARsim address conflicts using p802 TCP/UDP occupancy rules; free is not a reservation. |
 | `plc_provision_arsim` | `target_change` | `PVITransfer offline commissioning` | `execute=true` | Install the project's ARsim RUC into a new isolated working directory and start it on the configured free loopback IP. Optionally replaces an owned instance of the same project target when replace_existing=true. |
 | `plc_manage_arsim` | `target_change` | `ARsim registry & process manager` | `execute=true` | Manage codex-arsim instances registered in var/arsim/instances.json: list live status (read-only with execute=false), safely stop or restart owned instances with executable-path verification, or clean stopped codex-arsim directories. |
+| `plc_inspect_project` | `readonly` | `project/topology.py` | - | Read-only parser and static integrity checker for an Automation Studio project (.apj, Physical.pkg, Config.pkg, Cpu.pkg, Cpu.sw, Hardware.hw, Logical packages/programs). Reports CPU/AR/SimulationIP, safety hardware presence, TaskClass topology, global declarations, and dangling/malformed XML issues without invoking BR.AS.Build.exe. |
 | `plc_init_project_config` | `project_write` | `project_init.py` | `execute=true` | Auto-discover an Automation Studio .apj, Physical/Physical.pkg configurations, SimulationIPAddress, and matching toolchain to preview (execute=false) or write (execute=true) br-auto-dev.json. |
 | `plc_doctor` | `readonly` | `MCP native diagnostics` | - | Check local Python, PowerShell, Automation Studio, PVITransfer, PVI Python dependency, target config, project/config, ARsim loader, and generated-output write access. |
 | `plc_validate_environment` | `readonly` | `MCP native diagnostics` | - | Validate the project configuration, toolchain, and target without connecting to a PLC. |
@@ -181,14 +182,15 @@ MCP server version: `0.16.0a1`
 | `plc_discover_runtime_target` | `local_write` | `persistent PVI runtime` | - | Connect through persistent PVI without source code or a policy file. Unknown physical targets are read-only; test roles must be explicitly declared. |
 | `plc_runtime_health` | `readonly` | `persistent PVI runtime` | - | Return persistent PVI Manager, CPU, runtime, license and cache status. |
 | `plc_list_runtime_tasks` | `readonly` | `persistent PVI runtime` | - | List tasks from the running PLC image through PVI, independent of local source code. |
-| `plc_list_runtime_variables` | `readonly` | `persistent PVI runtime` | - | Scan online task or global variable names through PVI, then return a bounded page. Each page repeats the full scan; pattern is a case-sensitive glob, not a regex. Counts can change if the PLC image changes. |
-| `plc_get_runtime_variable_info` | `readonly` | `persistent PVI runtime` | - | Read online PVI type, access rights and metadata for a discovered variable. |
+| `plc_list_runtime_variables` | `readonly` | `persistent PVI runtime` | - | Scan online task or global variable names through PVI, then return a bounded page. Uses a 30-second per-(scope, task) in-memory cache so paging does not repeat full scans; pass refresh=true to force a fresh scan. Pattern is a case-sensitive glob, not a regex. |
+| `plc_get_runtime_variable_info` | `readonly` | `persistent PVI runtime` | - | Read online PVI type, access rights and metadata for a discovered variable. Pass expand=true to expand structure or array variables into leaf variable paths. |
 | `plc_read_runtime_variable` | `readonly` | `persistent PVI runtime` | - | Read an online PVI variable. Missing external policy defaults to safe read-only discovery. |
 | `plc_start_pvi_trace` | `local_write` | `Runtime PVI TraceManager` | - | Start a read-only asynchronous Runtime PVI trace for up to 128 explicitly named variables (minimum 20 ms interval). Data is retained locally and queried by trace id. |
 | `plc_get_pvi_trace_status` | `readonly` | `Runtime PVI TraceManager` | - | Return a compact status summary for a Runtime PVI trace. |
 | `plc_read_pvi_trace` | `readonly` | `Runtime PVI TraceManager` | - | Read a bounded time range from a Runtime PVI trace as compact columnar rows. |
 | `plc_stop_pvi_trace` | `local_write` | `Runtime PVI TraceManager` | - | Stop a Runtime PVI trace and return its final compact summary. Idempotent for completed traces. |
 | `plc_write_runtime_variable` | `target_change` | `persistent PVI runtime + policy` | `execute=true` | Write a discovered variable under the project PVI policy; requires execute=true. |
+| `plc_write_pvi_batch` | `target_change` | `persistent PVI runtime + policy` | `execute=true` | Preflight-validate and write up to 20 PLC variables in one policy-enforced Runtime PVI batch with unified readback verification. Any preflight failure rejects the entire batch before writing. Requires explicit target and execute=true; production is permanently denied. |
 | `plc_control_runtime` | `target_change` | `persistent PVI runtime + policy` | `execute=true` | Trigger a policy-checked PLC/ARsim Warmstart or Coldstart via PVI (with controlled PVITransfer fallback), clear cached PVI objects, and wait for runtime recovery. Requires execute=true; production is permanently denied. |
 
 

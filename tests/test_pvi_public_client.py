@@ -95,6 +95,22 @@ class FakeBackendManager:
                 "readback": value,
                 "verified": True,
             }
+        if operation == "write_many":
+            results = []
+            for ref, value in arguments["writes"]:
+                before = self.values.get(ref.canonical)
+                self.values[ref.canonical] = value
+                results.append(
+                    {
+                        "ok": True,
+                        "variable": ref.canonical,
+                        "before": before,
+                        "requested": value,
+                        "readback": value,
+                        "verified": True,
+                    }
+                )
+            return {"ok": True, "atomic": False, "results": results}
         raise AssertionError(f"Unexpected operation: {operation}")
 
     def worker_state(self, target: PviTarget) -> dict[str, Any]:
